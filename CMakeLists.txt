@@ -9,6 +9,8 @@ endif ()
 project(libfluid)
 
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -pedantic -fno-omit-frame-pointer -fsanitize=address -g -O2 -march=native -fopenmp")
 set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -lasan")
@@ -23,6 +25,8 @@ find_package(glm REQUIRED)
 find_package(mio REQUIRED)
 find_package(OpenCL REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
 
 
 #find_package(BoostCompute CONFIG REQUIRED)
@@ -43,6 +47,10 @@ target_link_libraries(main PRIVATE Catch2::Catch2)
 target_link_libraries(main PRIVATE glm)
 target_link_libraries(main PRIVATE mio::mio)
 target_link_libraries(main PRIVATE OpenCL::OpenCL)
+target_link_libraries(main PRIVATE stdc++fs)
+target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
+
+
 
 include(CTest)
 include(Catch)

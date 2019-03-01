@@ -18,33 +18,32 @@
 
 namespace surface {
 
+	using glm::tvec3;
 
-	typedef glm::vec3 vec3t;
-	typedef float num_t;
-
-
+	template<typename N>
 	struct Triangle {
-		vec3t v0;
-		vec3t v1;
-		vec3t v2;
+		tvec3<N> v0;
+		tvec3<N> v1;
+		tvec3<N> v2;
 
-		explicit Triangle(const vec3t &v0, const vec3t &v1, const vec3t &v2) :
+		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
 				v0(v0), v1(v1), v2(v2) {}
 
 	};
 
-
+	template<typename N>
 	struct Cell {
-		std::array<vec3t, 8> p;
+		std::array<tvec3<N>, 8> p;
 
-		explicit Cell(const std::array<vec3t, 8> &p) : p(p) {}
+		explicit Cell(const std::array<tvec3<N>, 8> &p) : p(p) {}
 	};
 
+	template<typename N>
 	struct GridCell {
-		std::array<vec3t, 8> p;
-		std::array<num_t, 8> val;
+		std::array<tvec3<N>, 8> p;
+		std::array<N, 8> val;
 
-		explicit GridCell(const std::array<vec3t, 8> &p, const std::array<num_t, 8> &val) :
+		explicit GridCell(const std::array<tvec3<N>, 8> &p, const std::array<N, 8> &val) :
 				p(p), val(val) {}
 	};
 
@@ -351,17 +350,17 @@ namespace surface {
 
 
 
-	vec3t lerp(double isolevel,
-	           vec3t p1, vec3t p2,
-	           double v1, double v2) {
-		if (abs(isolevel - v1) < 0.00001) return p1;
-		if (abs(isolevel - v2) < 0.00001) return p2;
-		if (abs(v1 - v2) < 0.00001) return p1;
+	template<typename N>
+	tvec3<N> lerp(N isolevel, tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
+		if (std::abs(isolevel - v1) < 0.00001) return p1;
+		if (std::abs(isolevel - v2) < 0.00001) return p2;
+		if (std::abs(v1 - v2) < 0.00001) return p1;
 		return p1 + (p2 - p1) * ((isolevel - v1) / (v2 - v1));
 	}
 
 	//http://paulbourke.net/geometry/polygonise/
-	void polygonise(GridCell g, double isolevel, std::vector<Triangle> &sink) {
+	template<typename N>
+	void polygonise(GridCell<N> g, N isolevel, std::vector<Triangle<N>> &sink) {
 
 
 		int ci = 0;
@@ -375,22 +374,22 @@ namespace surface {
 		if (g.val[7] < isolevel) ci |= 128;
 
 		/* Cube is entirely in/out of the surface */
-		if (edgeTable[ci] == 0) std::vector<Triangle>();
+		if (edgeTable[ci] == 0) std::vector<Triangle<N>>();
 
-		vec3t vs[12];
+		tvec3<N> vs[12];
 		/* Find the vertices where the surface intersects the cube */
-		if (edgeTable[ci] & 1) vs[0] = lerp(isolevel, g.p[0], g.p[1], g.val[0], g.val[1]);
-		if (edgeTable[ci] & 2) vs[1] = lerp(isolevel, g.p[1], g.p[2], g.val[1], g.val[2]);
-		if (edgeTable[ci] & 4) vs[2] = lerp(isolevel, g.p[2], g.p[3], g.val[2], g.val[3]);
-		if (edgeTable[ci] & 8) vs[3] = lerp(isolevel, g.p[3], g.p[0], g.val[3], g.val[0]);
-		if (edgeTable[ci] & 16) vs[4] = lerp(isolevel, g.p[4], g.p[5], g.val[4], g.val[5]);
-		if (edgeTable[ci] & 32) vs[5] = lerp(isolevel, g.p[5], g.p[6], g.val[5], g.val[6]);
-		if (edgeTable[ci] & 64) vs[6] = lerp(isolevel, g.p[6], g.p[7], g.val[6], g.val[7]);
-		if (edgeTable[ci] & 128) vs[7] = lerp(isolevel, g.p[7], g.p[4], g.val[7], g.val[4]);
-		if (edgeTable[ci] & 256) vs[8] = lerp(isolevel, g.p[0], g.p[4], g.val[0], g.val[4]);
-		if (edgeTable[ci] & 512) vs[9] = lerp(isolevel, g.p[1], g.p[5], g.val[1], g.val[5]);
-		if (edgeTable[ci] & 1024) vs[10] = lerp(isolevel, g.p[2], g.p[6], g.val[2], g.val[6]);
-		if (edgeTable[ci] & 2048) vs[11] = lerp(isolevel, g.p[3], g.p[7], g.val[3], g.val[7]);
+		if (edgeTable[ci] & 1 << 0) vs[0] = lerp(isolevel, g.p[0], g.p[1], g.val[0], g.val[1]);
+		if (edgeTable[ci] & 1 << 1) vs[1] = lerp(isolevel, g.p[1], g.p[2], g.val[1], g.val[2]);
+		if (edgeTable[ci] & 1 << 2) vs[2] = lerp(isolevel, g.p[2], g.p[3], g.val[2], g.val[3]);
+		if (edgeTable[ci] & 1 << 3) vs[3] = lerp(isolevel, g.p[3], g.p[0], g.val[3], g.val[0]);
+		if (edgeTable[ci] & 1 << 4) vs[4] = lerp(isolevel, g.p[4], g.p[5], g.val[4], g.val[5]);
+		if (edgeTable[ci] & 1 << 5) vs[5] = lerp(isolevel, g.p[5], g.p[6], g.val[5], g.val[6]);
+		if (edgeTable[ci] & 1 << 6) vs[6] = lerp(isolevel, g.p[6], g.p[7], g.val[6], g.val[7]);
+		if (edgeTable[ci] & 1 << 7) vs[7] = lerp(isolevel, g.p[7], g.p[4], g.val[7], g.val[4]);
+		if (edgeTable[ci] & 1 << 8) vs[8] = lerp(isolevel, g.p[0], g.p[4], g.val[0], g.val[4]);
+		if (edgeTable[ci] & 1 << 9) vs[9] = lerp(isolevel, g.p[1], g.p[5], g.val[1], g.val[5]);
+		if (edgeTable[ci] & 1 << 10) vs[10] = lerp(isolevel, g.p[2], g.p[6], g.val[2], g.val[6]);
+		if (edgeTable[ci] & 1 << 11) vs[11] = lerp(isolevel, g.p[3], g.p[7], g.val[3], g.val[7]);
 
 		for (size_t i = 0; triTable[ci][i] != -1; i += 3)
 			sink.emplace_back(
@@ -400,29 +399,30 @@ namespace surface {
 	}
 
 
-	const static std::array<glm::vec3, 8> &verticies = {
-			vec3t(0, 0, 0),
-			vec3t(1, 0, 0),
-			vec3t(1, 1, 0),
-			vec3t(0, 1, 0),
-			vec3t(0, 0, 1),
-			vec3t(1, 0, 1),
-			vec3t(1, 1, 1),
-			vec3t(0, 1, 1),
-	};
+	template<typename N>
+	std::vector<Cell<N>> createLattice(size_t size,
+									   int xMin, int xMax,
+									   int yMin, int yMax,
+									   int zMin, int zMax) {
 
-	std::vector<Cell> createLattice(size_t size,
-	                                int xMin, int xMax,
-	                                int yMin, int yMax,
-	                                int zMin, int zMax) {
+		const static std::array<glm::vec3, 8> &verticies = {
+				tvec3<N>(0, 0, 0),
+				tvec3<N>(1, 0, 0),
+				tvec3<N>(1, 1, 0),
+				tvec3<N>(0, 1, 0),
+				tvec3<N>(0, 0, 1),
+				tvec3<N>(1, 0, 1),
+				tvec3<N>(1, 1, 1),
+				tvec3<N>(0, 1, 1),
+		};
 
-		std::vector<Cell> gs;
+		std::vector<Cell<N>> gs;
 		for (int x = xMin; x < xMax; x += size) {
 			for (int y = yMin; y < yMax; y += size) {
 				for (int z = zMin; z < zMax; z += size) {
 					auto offset = glm::vec3(x, y, z) * size;
-					std::array<vec3t, 8> vs = verticies;
-					for (vec3t &v : vs) v = (v * size) + offset;
+					std::array<tvec3<N>, 8> vs = verticies;
+					for (tvec3<N> &v : vs) v = (v * size) + offset;
 					gs.emplace_back(vs);
 				}
 			}
@@ -431,16 +431,19 @@ namespace surface {
 	}
 
 
-	std::vector<Triangle>
-	parameterise(std::vector<Cell> cs, const std::function<num_t(vec3t &)> &f) {
-		std::vector<Triangle> triangles;
+	template<typename N>
+	std::vector<Triangle<N>> parameterise(
+			std::vector<Cell<N>> cs,
+			const std::function<N(tvec3<N> &)> &f) {
+
+		std::vector<Triangle<N>> triangles;
 
 //#pragma omp parallel
 		for (size_t i = 0; i < cs.size(); ++i) {
 			auto c = cs[i];
-			std::array<num_t, 8> ns{};
+			std::array<N, 8> ns{};
 			std::transform(c.p.begin(), c.p.end(), ns.begin(), f);
-			polygonise(GridCell(c.p, ns), 100.f, triangles);
+			polygonise(GridCell<N>(c.p, ns), 100.f, triangles);
 		}
 
 
