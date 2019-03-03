@@ -13,6 +13,7 @@
 #include "surface.hpp"
 #include "boost/compute.hpp"
 #include "mio/mmap.hpp"
+#include "omp.h"
 
 
 typedef float num_t;
@@ -34,9 +35,18 @@ template<typename T, typename N>
 constexpr size_t probe_particle_size() {
 	typedef fluid::Particle<T, N> PTN;
 	return sizeof(PTN::t) + sizeof(PTN::type) + sizeof(PTN::mass) +
-		   sizeof(PTN::position.x) + sizeof(PTN::position.y) + sizeof(PTN::position.z) +
-		   sizeof(PTN::velocity.x) + sizeof(PTN::velocity.y) + sizeof(PTN::velocity.z);
+	       sizeof(PTN::position.x) + sizeof(PTN::position.y) + sizeof(PTN::position.z) +
+	       sizeof(PTN::velocity.x) + sizeof(PTN::velocity.y) + sizeof(PTN::velocity.z);
 }
+
+template<typename N>
+constexpr size_t probe_triangle_size() {
+	typedef surface::Triangle<N> TN;
+	return sizeof(TN::v0.x) + sizeof(TN::v0.y) + sizeof(TN::v0.z) +
+	       sizeof(TN::v1.x) + sizeof(TN::v1.y) + sizeof(TN::v1.z) +
+	       sizeof(TN::v2.x) + sizeof(TN::v2.y) + sizeof(TN::v2.z);
+}
+
 
 template<typename T, typename N>
 void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &xs) {
@@ -44,6 +54,7 @@ void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &x
 	size_t offset = 0;
 	long init = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 	offset = write_t(sink, init, offset);
+	offset = write_t(sink, xs.size(), offset);
 	for (const fluid::Particle<T, N> &p :  xs) {
 		offset = write_t(sink, p.t, offset);
 		offset = write_t(sink, p.type, offset);
@@ -57,6 +68,44 @@ void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &x
 	}
 }
 
+template<typename N>
+void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs) {
+	using namespace std::chrono;
+	size_t offset = 0;
+	long init = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+	offset = write_t(sink, init, offset);
+	offset = write_t(sink, xs.size(), offset);
+	for (const surface::Triangle<N> &t :  xs) {
+		offset = write_t(sink, t.v0.x, offset);
+		offset = write_t(sink, t.v0.y, offset);
+		offset = write_t(sink, t.v0.z, offset);
+		offset = write_t(sink, t.v1.x, offset);
+		offset = write_t(sink, t.v1.y, offset);
+		offset = write_t(sink, t.v1.z, offset);
+		offset = write_t(sink, t.v2.x, offset);
+		offset = write_t(sink, t.v2.y, offset);
+		offset = write_t(sink, t.v2.z, offset);
+	}
+}
+
+
+mio::mmap_sink mkMmf(const std::experimental::filesystem::path &path, const size_t length) {
+	const auto pathStr = path.string();
+	std::ofstream file(pathStr, std::ios::out | std::ios::trunc);
+	std::string s(length, ' ');
+	file << s;
+
+	std::error_code error;
+	mio::mmap_sink sink = mio::make_mmap_sink(pathStr, 0, mio::map_entire_file, error);
+	if (error) {
+		std::cout << "MMF(" << path << ") failed:" << error.message() << std::endl;
+		exit(1);
+	} else {
+		std::cout << "MMF(" << path << ") size: "
+		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+	}
+	return sink;
+}
 
 int main(int argc, char *argv[]) {
 	using namespace std;
@@ -74,14 +123,16 @@ int main(int argc, char *argv[]) {
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 
 	std::random_device rd;
-	std::mt19937 mt(rd());
+	std::mt19937 mt(12345);
 	std::uniform_real_distribution<num_t> dist(0, 600.f);
 
-	size_t pcount = 3000;
+
+	omp_set_num_threads(4);
+	size_t pcount = 7000;
 
 	for (size_t i = 0; i < pcount; ++i) {
 		xs.emplace_back(i, fluid::Fluid, 1.0,
-						tvec3<num_t>(dist(mt), dist(mt), dist(mt)), tvec3<num_t>(0));
+		                tvec3<num_t>(i * dist(mt), dist(mt) / 2, dist(mt)), tvec3<num_t>(0));
 	}
 	float i = 0;
 
@@ -91,89 +142,88 @@ int main(int argc, char *argv[]) {
 				float d = (sin(i) * 200);
 				return fluid::Response<num_t>(
 						tvec3<num_t>(
-								glm::clamp(x.getOrigin().x, (num_t) -500 + d, (num_t) 500.f + d),
+								glm::clamp(x.getOrigin().x, (num_t) -500 + d,(num_t) 500.f + d),
 								glm::clamp(x.getOrigin().y, (num_t) -500, (num_t) 500.f),
 								glm::clamp(x.getOrigin().z, (num_t) -500, (num_t) 500.f)),
 						x.getVelocity());
 			}
 	};
 
-	std::unique_ptr<fluid::SphSolver<size_t, num_t >> solver(
-			new fluid::SphSolver<size_t, num_t>(0.1, 1000));
+
 
 	std::cout << "Mark" << std::endl;
 
 
-	std::string ipcMmf = "ipc.mmf";
-	std::ofstream file(ipcMmf, ios::out | ios::trunc);
-	string s(pcount * probe_particle_size<size_t, num_t>() + sizeof(long), ' ');
-	file << s;
+	auto mmfPSink = mkMmf(std::experimental::filesystem::current_path() /= "particles.mmf",
+	                      pcount * probe_particle_size<size_t, num_t>() + sizeof(long) * 2);
+
+	auto mmfTSink = mkMmf(std::experimental::filesystem::current_path() /= "triangles.mmf",
+	                      probe_triangle_size<num_t>() * 500000 + sizeof(long));
 
 
-	std::error_code error;
-	mio::mmap_sink mmfSink = mio::make_mmap_sink(ipcMmf, 0, mio::map_entire_file, error);
-	if (error) {
-		std::cout << "MMF failed:" << error.message() << std::endl;
-		exit(1);
-	} else {
-		std::cout << "MMF size: " << (double) mmfSink.size() / (1024 * 1024) << "MB" << " p size="
-				  << probe_particle_size<size_t, num_t>() << std::endl;
-		std::cout << "MMF @ `"
-				  << std::experimental::filesystem::current_path().string() + "/" + ipcMmf << "`"
-				  << std::endl;
 
-	}
 
 	std::cout << "Go" << std::endl;
 
 
-	const std::vector<surface::Cell<num_t>> &lattice = surface::createLattice<num_t>(10,
-																					 0, 500,
-																					 0, 500,
-																					 0, 500);
+	const std::vector<surface::Cell<num_t>> &lattice =
+			surface::createLattice<num_t>(10,
+			                              -50, 50,
+			                              -50, 50,
+			                              -50, 50);
 
+	std::unique_ptr<fluid::SphSolver<size_t, num_t >> solver(
+			new fluid::SphSolver<size_t, num_t>(0.1, 400)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
 	hrc::time_point start = hrc::now();
-	for (size_t j = 0; j < 50000; ++j) {
+	for (size_t j = 0; j < 10000; ++j) {
 
 
 		i += M_PI / 50;
 		hrc::time_point t1 = hrc::now();
-		solver->advance(0.0083, 5, xs,
-						[](const fluid::Particle<size_t, num_t> &x) {
-							return tvec3<num_t>(0, x.mass * 9.8, 0);
-						}, colliders
+		solver->advance(0.0083, 2, xs,
+		                [](const fluid::Particle<size_t, num_t> &x) {
+			                return tvec3<num_t>(0, x.mass * 9.8, 0);
+		                }, colliders
 		);
 		hrc::time_point t2 = hrc::now();
 
 
 		hrc::time_point s1 = hrc::now();
-//
-//		std::vector<tvec3<num_t>> pts;
-//		std::transform(xs.begin(), xs.end(), std::back_inserter(pts),
-//					   [](const fluid::Particle<size_t, num_t> &a) { return a.position; });
-//		unibn::Octree<tvec3<num_t>> octree;
-//		octree.initialize(pts);
-//
-//		auto triangles = surface::parameterise<num_t>(
-//				lattice, [&octree, &xs](const tvec3<num_t> &a) -> num_t {
-//					std::vector<uint32_t> results;
-//					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(
-//							a, 25.f, results);
-//					num_t v = 0;
-//					for (uint32_t &result : results)
-//						v += ((100 * 100) / glm::length2(
-//								xs[result].position - a)) * 2;
-//					return v;
-//				});
-//
+
+		std::vector<tvec3<num_t>> pts;
+		std::transform(xs.begin(), xs.end(), std::back_inserter(pts),
+		               [](const fluid::Particle<size_t, num_t> &a) { return a.position; });
+
+
+		unibn::Octree<tvec3<num_t>> octree;
+		octree.initialize(pts);
+
+		auto triangles = surface::parameterise<num_t>(100.f,
+				lattice, [&octree, &xs](const tvec3<num_t> &a) -> num_t {
+					std::vector<uint32_t> results;
+					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, 30.f, results);
+					num_t v = 0;
+					for (uint32_t &result : results)
+						v += ((100 * 100) / glm::length2(xs[result].position - a)) * 2;
+					return v;
+				});
+		std::cout << "Lattice= " << lattice.size()  << " Trigs=" << triangles.size() << std::endl;
+
+		write_triangles(mmfTSink, triangles);
+
+
+//		for (auto t : triangles) {
+//			std::cout << "[" << t << "]" << std::endl;
+//		}
+
 		hrc::time_point s2 = hrc::now();
 
 
 		hrc::time_point mmt1 = hrc::now();
-		write_particles(mmfSink, xs);
+		write_particles(mmfPSink, xs);
 		hrc::time_point mmt2 = hrc::now();
 
 //		sleep(1);
@@ -183,12 +233,12 @@ int main(int argc, char *argv[]) {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-				  << "solver:" << (solve / 1000000.0) << "ms "
-				  << "param:" << (param / 1000000.0) << "ms "
-				  << "mmf:" << (mmf / 1000000.0) << "ms "
-				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms "
-				  //				  << "Ts= " << triangles.size() << " "
-				  << std::endl;
+		          << "solver:" << (solve / 1000000.0) << "ms "
+		          << "param:" << (param / 1000000.0) << "ms "
+		          << "mmf:" << (mmf / 1000000.0) << "ms "
+		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms "
+		          << "Ts= " << triangles.size() << " "
+		          << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();

@@ -29,6 +29,15 @@ namespace surface {
 		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
 				v0(v0), v1(v1), v2(v2) {}
 
+		friend std::ostream &operator<<(std::ostream &os, const Triangle &triangle) {
+			os << "T("
+			   << glm::to_string(triangle.v0) << ","
+			   << glm::to_string(triangle.v1) << ","
+			   << glm::to_string(triangle.v2)
+			   << ")";
+			return os;
+		}
+
 	};
 
 	template<typename N>
@@ -360,10 +369,9 @@ namespace surface {
 
 	//http://paulbourke.net/geometry/polygonise/
 	template<typename N>
-	void polygonise(GridCell<N> g, N isolevel, std::vector<Triangle<N>> &sink) {
+	void polygonise(const GridCell<N> &g, const N isolevel, std::vector<Triangle<N>> &sink) {
 
-
-		int ci = 0;
+		size_t ci = 0;
 		if (g.val[0] < isolevel) ci |= 1;
 		if (g.val[1] < isolevel) ci |= 2;
 		if (g.val[2] < isolevel) ci |= 4;
@@ -376,7 +384,7 @@ namespace surface {
 		/* Cube is entirely in/out of the surface */
 		if (edgeTable[ci] == 0) std::vector<Triangle<N>>();
 
-		tvec3<N> vs[12];
+		std::array<tvec3<N>, 12> vs;
 		/* Find the vertices where the surface intersects the cube */
 		if (edgeTable[ci] & 1 << 0) vs[0] = lerp(isolevel, g.p[0], g.p[1], g.val[0], g.val[1]);
 		if (edgeTable[ci] & 1 << 1) vs[1] = lerp(isolevel, g.p[1], g.p[2], g.val[1], g.val[2]);
@@ -401,11 +409,11 @@ namespace surface {
 
 	template<typename N>
 	std::vector<Cell<N>> createLattice(size_t size,
-									   int xMin, int xMax,
-									   int yMin, int yMax,
-									   int zMin, int zMax) {
+	                                   int xMin, int xMax,
+	                                   int yMin, int yMax,
+	                                   int zMin, int zMax) {
 
-		const static std::array<glm::vec3, 8> &verticies = {
+		const static std::array<tvec3<N>, 8> &verticies = {
 				tvec3<N>(0, 0, 0),
 				tvec3<N>(1, 0, 0),
 				tvec3<N>(1, 1, 0),
@@ -417,12 +425,12 @@ namespace surface {
 		};
 
 		std::vector<Cell<N>> gs;
-		for (int x = xMin; x < xMax; x += size) {
-			for (int y = yMin; y < yMax; y += size) {
-				for (int z = zMin; z < zMax; z += size) {
-					auto offset = glm::vec3(x, y, z) * size;
+		for (int x = xMin; x < xMax; x += 1) {
+			for (int y = yMin; y < yMax; y += 1) {
+				for (int z = zMin; z < zMax; z += 1) {
+					auto offset = tvec3<N>(x, y, z) * static_cast<N>(size);
 					std::array<tvec3<N>, 8> vs = verticies;
-					for (tvec3<N> &v : vs) v = (v * size) + offset;
+					for (tvec3<N> &v : vs) v = (v * static_cast<N>(size)) + offset;
 					gs.emplace_back(vs);
 				}
 			}
@@ -432,9 +440,9 @@ namespace surface {
 
 
 	template<typename N>
-	std::vector<Triangle<N>> parameterise(
-			std::vector<Cell<N>> cs,
-			const std::function<N(tvec3<N> &)> &f) {
+	std::vector<Triangle<N>> parameterise(const N isolevel,
+	                                      std::vector<Cell<N>> cs,
+	                                      const std::function<N(tvec3<N> &)> &f) {
 
 		std::vector<Triangle<N>> triangles;
 
@@ -442,8 +450,16 @@ namespace surface {
 		for (size_t i = 0; i < cs.size(); ++i) {
 			auto c = cs[i];
 			std::array<N, 8> ns{};
-			std::transform(c.p.begin(), c.p.end(), ns.begin(), f);
-			polygonise(GridCell<N>(c.p, ns), 100.f, triangles);
+
+			for (size_t j = 0; j < 8; ++j)
+				ns[j] = f(c.p[j]);
+
+
+//			std::transform(c.p.begin(), c.p.end(), ns.begin(), f);
+//#pragma omp critical
+			{
+				polygonise(GridCell<N>(c.p, ns), isolevel, triangles);
+			}
 		}
 
 
