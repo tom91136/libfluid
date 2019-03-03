@@ -18,43 +18,6 @@
 
 namespace surface {
 
-	using glm::tvec3;
-
-	template<typename N>
-	struct Triangle {
-		tvec3<N> v0;
-		tvec3<N> v1;
-		tvec3<N> v2;
-
-		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
-				v0(v0), v1(v1), v2(v2) {}
-
-		friend std::ostream &operator<<(std::ostream &os, const Triangle &triangle) {
-			os << "T("
-			   << glm::to_string(triangle.v0) << ","
-			   << glm::to_string(triangle.v1) << ","
-			   << glm::to_string(triangle.v2)
-			   << ")";
-			return os;
-		}
-
-	};
-
-	template<typename N>
-	struct Cell {
-		std::array<tvec3<N>, 8> p;
-
-		explicit Cell(const std::array<tvec3<N>, 8> &p) : p(p) {}
-	};
-
-	template<typename N>
-	struct GridCell {
-		std::array<tvec3<N>, 8> p;
-		std::array<N, 8> val;
-
-		explicit GridCell(const std::array<tvec3<N>, 8> &p, const std::array<N, 8> &val) :
-				p(p), val(val) {}
-	};
 
 	//<editor-fold>
 	static const std::array<int, 256> edgeTable = {
@@ -357,7 +320,43 @@ namespace surface {
 
 
 
+	using glm::tvec3;
 
+	template<typename N>
+	struct Triangle {
+		tvec3<N> v0;
+		tvec3<N> v1;
+		tvec3<N> v2;
+
+		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
+				v0(v0), v1(v1), v2(v2) {}
+
+		friend std::ostream &operator<<(std::ostream &os, const Triangle &triangle) {
+			os << "T("
+			   << glm::to_string(triangle.v0) << ","
+			   << glm::to_string(triangle.v1) << ","
+			   << glm::to_string(triangle.v2)
+			   << ")";
+			return os;
+		}
+
+	};
+
+	template<typename N>
+	struct Cell {
+		std::array<tvec3<N>, 8> p;
+
+		explicit Cell(const std::array<tvec3<N>, 8> &p) : p(p) {}
+	};
+
+	template<typename N>
+	struct GridCell {
+		std::array<tvec3<N>, 8> p;
+		std::array<N, 8> val;
+
+		explicit GridCell(const std::array<tvec3<N>, 8> &p, const std::array<N, 8> &val) :
+				p(p), val(val) {}
+	};
 
 	template<typename N>
 	tvec3<N> lerp(N isolevel, tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
@@ -407,58 +406,150 @@ namespace surface {
 	}
 
 
+	template<typename T>
+	class Lattice {
+	public:
+		Lattice(const size_t d1 = 0,
+		        const size_t d2 = 0,
+		        const size_t d3 = 0, T const &t = T()) :
+				d1(d1), d2(d2), d3(d3), data(d1 * d2 * d3, t) {}
+
+		T &operator()(size_t i, size_t j, size_t k) {
+			return data[i * d2 * d3 + j * d3 + k];
+		}
+
+		T const &operator()(size_t i, size_t j, size_t k) const {
+			return data[i * d2 * d3 + j * d3 + k];
+		}
+
+		size_t xSize() const { return d1; }
+
+		size_t ySize() const { return d2; }
+
+		size_t zSize() const { return d3; }
+
+		size_t size() const { return data.size(); }
+
+
+	private:
+		const size_t d1, d2, d3;
+		std::vector<T> data;
+	};
+
+
 	template<typename N>
-	std::vector<Cell<N>> createLattice(size_t size,
-	                                   int xMin, int xMax,
-	                                   int yMin, int yMax,
-	                                   int zMin, int zMax) {
+	using MCLattice = Lattice<tvec3<N> >;
 
-		const static std::array<tvec3<N>, 8> &verticies = {
-				tvec3<N>(0, 0, 0),
-				tvec3<N>(1, 0, 0),
-				tvec3<N>(1, 1, 0),
-				tvec3<N>(0, 1, 0),
-				tvec3<N>(0, 0, 1),
-				tvec3<N>(1, 0, 1),
-				tvec3<N>(1, 1, 1),
-				tvec3<N>(0, 1, 1),
-		};
+	template<typename N>
+	MCLattice<N> createLattice(
+			const size_t xSize,
+			const size_t ySize,
+			const size_t zSize,
+			const N offset, const N factor) {
 
-		std::vector<Cell<N>> gs;
-		for (int x = xMin; x < xMax; x += 1) {
-			for (int y = yMin; y < yMax; y += 1) {
-				for (int z = zMin; z < zMax; z += 1) {
-					auto offset = tvec3<N>(x, y, z) * static_cast<N>(size);
-					std::array<tvec3<N>, 8> vs = verticies;
-					for (tvec3<N> &v : vs) v = (v * static_cast<N>(size)) + offset;
-					gs.emplace_back(vs);
+		MCLattice<N> lattice =
+				MCLattice<N>(xSize, ySize, zSize, tvec3<N>(0));
+
+		for (size_t x = 0; x < xSize; ++x) {
+			for (size_t y = 0; y < ySize; ++y) {
+				for (size_t z = 0; z < zSize; ++z) {
+					auto vec = tvec3<N>(
+							static_cast<N>(x) * factor + offset,
+							static_cast<N>(y) * factor + offset,
+							static_cast<N>(z) * factor + offset);
+					lattice(x, y, z) = vec;
 				}
 			}
 		}
-		return gs;
+		return lattice;
 	}
-
 
 	template<typename N>
 	std::vector<Triangle<N>> parameterise(const N isolevel,
-	                                      std::vector<Cell<N>> cs,
+	                                      MCLattice<N> lattice,
 	                                      const std::function<N(tvec3<N> &)> &f) {
 
+		Lattice<N> field = Lattice<N>(lattice.xSize(), lattice.ySize(), lattice.zSize(), 0);
+
+#pragma omp parallel for collapse(3)
+		for (size_t x = 0; x < lattice.xSize(); ++x) {
+			for (size_t y = 0; y < lattice.ySize(); ++y) {
+				for (size_t z = 0; z < lattice.zSize(); ++z) {
+					field(x, y, z) = f(lattice(x, y, z));
+				}
+			}
+		}
+
+		const static std::array<std::tuple<size_t, size_t, size_t>, 8> &verticies = {
+				std::make_tuple(0, 0, 0),
+				std::make_tuple(1, 0, 0),
+				std::make_tuple(1, 1, 0),
+				std::make_tuple(0, 1, 0),
+				std::make_tuple(0, 0, 1),
+				std::make_tuple(1, 0, 1),
+				std::make_tuple(1, 1, 1),
+				std::make_tuple(0, 1, 1),
+		};
 		std::vector<Triangle<N>> triangles;
 
-//#pragma omp parallel
-		for (size_t i = 0; i < cs.size(); ++i) {
-			auto c = cs[i];
-			std::array<N, 8> ns{};
 
-			for (size_t j = 0; j < 8; ++j)
-				ns[j] = f(c.p[j]);
+#pragma omp declare reduction (merge : std::vector<Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+#pragma omp parallel for collapse(3) reduction(merge: triangles)
+		for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
+			for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
+				for (size_t z = 0; z < lattice.zSize() - 1; ++z) {
 
+					std::array<N, 8> ns{};
+					std::array<tvec3<N>, 8> vs{};
 
-//			std::transform(c.p.begin(), c.p.end(), ns.begin(), f);
-//#pragma omp critical
-			{
-				polygonise(GridCell<N>(c.p, ns), isolevel, triangles);
+					for (size_t j = 0; j < 8; ++j) {
+
+						size_t ox = x + std::get<0>(verticies[j]);
+						size_t oy = y + std::get<1>(verticies[j]);
+						size_t oz = z + std::get<2>(verticies[j]);
+
+						vs[j] = lattice(ox, oy, oz);
+						ns[j] = field(ox, oy, oz);
+
+					}
+
+					size_t ci = 0;
+					if (ns[0] < isolevel) ci |= 1;
+					if (ns[1] < isolevel) ci |= 2;
+					if (ns[2] < isolevel) ci |= 4;
+					if (ns[3] < isolevel) ci |= 8;
+					if (ns[4] < isolevel) ci |= 16;
+					if (ns[5] < isolevel) ci |= 32;
+					if (ns[6] < isolevel) ci |= 64;
+					if (ns[7] < isolevel) ci |= 128;
+
+					/* Cube is entirely in/out of the surface */
+					if (edgeTable[ci] == 0) std::vector<Triangle<N>>();
+
+					std::array<tvec3<N>, 12> xs;
+					/* Find the vertices where the surface intersects the cube */
+					if (edgeTable[ci] & 1 << 0) xs[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
+					if (edgeTable[ci] & 1 << 1) xs[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
+					if (edgeTable[ci] & 1 << 2) xs[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
+					if (edgeTable[ci] & 1 << 3) xs[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
+					if (edgeTable[ci] & 1 << 4) xs[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
+					if (edgeTable[ci] & 1 << 5) xs[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
+					if (edgeTable[ci] & 1 << 6) xs[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
+					if (edgeTable[ci] & 1 << 7) xs[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
+					if (edgeTable[ci] & 1 << 8) xs[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
+					if (edgeTable[ci] & 1 << 9) xs[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
+					if (edgeTable[ci] & 1 << 10)
+						xs[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
+					if (edgeTable[ci] & 1 << 11)
+						xs[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
+
+					for (size_t i = 0; triTable[ci][i] != -1; i += 3)
+						triangles.emplace_back(
+								xs[triTable[ci][i]],
+								xs[triTable[ci][i + 1]],
+								xs[triTable[ci][i + 2]]);
+
+				}
 			}
 		}
 

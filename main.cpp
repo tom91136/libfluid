@@ -107,6 +107,25 @@ mio::mmap_sink mkMmf(const std::experimental::filesystem::path &path, const size
 	return sink;
 }
 
+template<typename N>
+size_t makeCube(size_t offset, N spacing, const size_t count,
+                tvec3<N> origin,
+                std::vector<fluid::Particle<size_t, num_t >> &xs) {
+
+	auto len = static_cast<size_t>(std::cbrt(count));
+
+	for (size_t x = 0; x < len / 2; ++x) {
+		for (size_t y = 0; y < len; ++y) {
+			for (size_t z = 0; z < len; ++z) {
+				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
+				xs.emplace_back(++offset, fluid::Fluid, 1.0, pos, tvec3<num_t>(0));
+			}
+		}
+	}
+	return offset;
+}
+
+
 int main(int argc, char *argv[]) {
 	using namespace std;
 	using namespace std::chrono;
@@ -128,27 +147,31 @@ int main(int argc, char *argv[]) {
 
 
 	omp_set_num_threads(4);
-	size_t pcount = 7000;
+	size_t pcount = 7000 * 3;
+	size_t iter = 1000;
 
-	for (size_t i = 0; i < pcount; ++i) {
-		xs.emplace_back(i, fluid::Fluid, 1.0,
-		                tvec3<num_t>(i * dist(mt), dist(mt) / 2, dist(mt)), tvec3<num_t>(0));
-	}
+	size_t offset;
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+//	offset = makeCube(offset, pcount / 2, tvec3<num_t>(300), xs);
+
+
 	float i = 0;
 
 
-	std::vector<std::function<const fluid::Response<num_t>(fluid::Ray<num_t> &)> > colliders = {
+	std::vector<std::function<const fluid::Response<num_t>(
+			fluid::Ray<num_t> &)> > colliders = {
 			[&i](const fluid::Ray<num_t> &x) -> fluid::Response<num_t> {
-				float d = (sin(i) * 200);
+				float d =  (sin(i) * 200);
 				return fluid::Response<num_t>(
 						tvec3<num_t>(
-								glm::clamp(x.getOrigin().x, (num_t) -500 + d,(num_t) 500.f + d),
+								glm::clamp(x.getOrigin().x, (num_t) -500 + d,
+								           (num_t) 500.f + d),
 								glm::clamp(x.getOrigin().y, (num_t) -500, (num_t) 500.f),
 								glm::clamp(x.getOrigin().z, (num_t) -500, (num_t) 500.f)),
 						x.getVelocity());
 			}
 	};
-
 
 
 	std::cout << "Mark" << std::endl;
@@ -161,24 +184,21 @@ int main(int argc, char *argv[]) {
 	                      probe_triangle_size<num_t>() * 500000 + sizeof(long));
 
 
-
-
 	std::cout << "Go" << std::endl;
 
 
-	const std::vector<surface::Cell<num_t>> &lattice =
-			surface::createLattice<num_t>(10,
-			                              -50, 50,
-			                              -50, 50,
-			                              -50, 50);
+	const surface::MCLattice<num_t> &lattice =
+			surface::createLattice<num_t>(100, 100, 100,
+			                              -500, 10.f);
 
-	std::unique_ptr<fluid::SphSolver<size_t, num_t >> solver(
-			new fluid::SphSolver<size_t, num_t>(0.1, 400)); // less = less space between particle
+	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(
+			new fluid::SphSolver<size_t, num_t>(0.1,
+			                                    550)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
 	hrc::time_point start = hrc::now();
-	for (size_t j = 0; j < 10000; ++j) {
+	for (size_t j = 0; j < iter; ++j) {
 
 
 		i += M_PI / 50;
@@ -202,17 +222,23 @@ int main(int argc, char *argv[]) {
 		octree.initialize(pts);
 
 		auto triangles = surface::parameterise<num_t>(100.f,
-				lattice, [&octree, &xs](const tvec3<num_t> &a) -> num_t {
+		                                              lattice, [&octree, &xs](
+						const tvec3<num_t> &a) -> num_t {
 					std::vector<uint32_t> results;
-					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, 30.f, results);
+					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, 24.f, results);
 					num_t v = 0;
 					for (uint32_t &result : results)
-						v += ((100 * 100) / glm::length2(xs[result].position - a)) * 2;
+						v += ((100 * 100) /
+						      glm::length2(xs[result].position - a)) * 2;
 					return v;
 				});
-		std::cout << "Lattice= " << lattice.size()  << " Trigs=" << triangles.size() << std::endl;
+		std::cout <<
+		          "\n\tLattice   = " << lattice.size() <<
+		          "\n\tTriangles = " << triangles.size() <<
+		          "\n\tParticles = " << xs.size() <<
+		          std::endl;
 
-		write_triangles(mmfTSink, triangles);
+
 
 
 //		for (auto t : triangles) {
@@ -223,6 +249,7 @@ int main(int argc, char *argv[]) {
 
 
 		hrc::time_point mmt1 = hrc::now();
+		write_triangles(mmfTSink, triangles);
 		write_particles(mmfPSink, xs);
 		hrc::time_point mmt2 = hrc::now();
 
@@ -237,7 +264,6 @@ int main(int argc, char *argv[]) {
 		          << "param:" << (param / 1000000.0) << "ms "
 		          << "mmf:" << (mmf / 1000000.0) << "ms "
 		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms "
-		          << "Ts= " << triangles.size() << " "
 		          << std::endl;
 	}
 	hrc::time_point end = hrc::now();
