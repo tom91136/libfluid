@@ -24,7 +24,7 @@ namespace fluid {
 	using glm::tvec3;
 
 
-	enum Type{
+	enum Type {
 		Fluid = 5, Obstacle = 6
 	};
 
@@ -37,7 +37,8 @@ namespace fluid {
 		tvec3<N> velocity;
 		std::unique_ptr<std::vector<uint32_t >> neighbours;
 
-		explicit Particle(T t,Type type, N mass, const tvec3<N> &position, const tvec3<N> &velocity) :
+		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
+		                  const tvec3<N> &velocity) :
 				t(t), type(type), mass(mass), position(position), velocity(velocity) {
 			neighbours = std::make_unique<std::vector<uint32_t >>();
 
@@ -53,9 +54,9 @@ namespace fluid {
 
 		bool operator==(const Particle &rhs) const {
 			return t == rhs.t &&
-				   mass == rhs.mass &&
-				   position == rhs.position &&
-				   velocity == rhs.velocity;
+			       mass == rhs.mass &&
+			       position == rhs.position &&
+			       velocity == rhs.velocity;
 		}
 
 		bool operator!=(const Particle &rhs) const {
@@ -167,32 +168,38 @@ namespace fluid {
 	public:
 
 		void advance(N dt, size_t iteration,
-					 std::vector<Particle<T, N>> &xs,
-					 const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
-					 const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
+		             std::vector<Particle<T, N>> &xs,
+		             const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
+		             const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
 		) {
+
+			using namespace std::chrono;
+			using hrc = high_resolution_clock;
 
 
 			std::vector<Atom<T, N>> atoms;
 
 			std::transform(xs.begin(), xs.end(), std::back_inserter(atoms),
-						   [constForce, dt, this](Particle<T, N> &p) {
-							   auto a = Atom<T, N>(&p);
-							   a.velocity = constForce(p) * dt + p.velocity;
-							   a.now = (a.velocity * dt) + (p.position / scale);
-							   return a;
-						   });
+			               [constForce, dt, this](Particle<T, N> &p) {
+				               auto a = Atom<T, N>(&p);
+				               a.velocity = constForce(p) * dt + p.velocity;
+				               a.now = (a.velocity * dt) + (p.position / scale);
+				               return a;
+			               });
 
 			// create Octree for fast lookup
 			std::vector<tvec3<N>> pts;
 			std::transform(atoms.begin(), atoms.end(), std::back_inserter(pts),
-						   [](const Atom<T, N> &a) { return a.now; });
+			               [](const Atom<T, N> &a) { return a.now; });
 
 			unibn::Octree<tvec3<N>> octree;
 			octree.initialize(pts);
 
+//			size_t maxN = 0;
+			hrc::time_point nns = hrc::now();
+
 //			// NN search
-#pragma omp parallel for
+#pragma omp parallel for simd
 			for (size_t i = 0; i < atoms.size(); ++i) {
 				Atom<T, N> &a = atoms[i];
 				octree.template radiusNeighbors<unibn::L2Distance<tvec3<N>>>(
@@ -201,15 +208,28 @@ namespace fluid {
 				a.neighbours->reserve(a.particle->neighbours->size());
 				a.p6ks->reserve(a.particle->neighbours->size());
 				a.skgs->reserve(a.particle->neighbours->size());
+
+//				if (maxN < a.particle->neighbours->size())
+//					maxN = a.particle->neighbours->size();
+
 				for (uint32_t &idx : (*a.particle->neighbours))
 					a.neighbours->emplace_back(&atoms[idx]);
 
 			}
+//			std::cout << "Max NN=" << maxN << std::endl;
+
+
+			hrc::time_point nne = hrc::now();
+			auto nn = duration_cast<nanoseconds>(nne - nns).count();
+
+			std::cout << "\tNN: " << (nn / 1000000.0) << "ms" << std::endl;
+
+			hrc::time_point kerns = hrc::now();
 
 			for (size_t j = 0; j < iteration; ++j) {
 
 				// solve for lambda
-#pragma omp parallel for
+#pragma omp parallel for simd
 				for (size_t i = 0; i < atoms.size(); ++i) {
 					Atom<T, N> &a = atoms[i];
 					N rho = 0.f;
@@ -230,7 +250,7 @@ namespace fluid {
 				}
 
 				// solve for delta p
-#pragma omp parallel for
+#pragma omp parallel for simd
 				for (size_t i = 0; i < atoms.size(); ++i) {
 					Atom<T, N> &a = atoms[i];
 					a.deltaP = tvec3<N>(0);
@@ -238,7 +258,7 @@ namespace fluid {
 					for (size_t l = 0; l < a.neighbours->size(); ++l) {
 						Atom<T, N> *b = (*a.neighbours)[l];
 						N corr = -CorrK *
-								 std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
+						         std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
 						N factor = (a.lambda + b->lambda + corr) / RHO;
 						a.deltaP = (*a.skgs)[l] * factor + a.deltaP;
 					}
@@ -246,17 +266,16 @@ namespace fluid {
 					auto current = Response<N>((a.now + a.deltaP) * scale, a.velocity);
 					for (const auto &f : colliders) {
 						Ray<N> ray = Ray<N>(a.particle->position,
-											current.getPosition(),
-											current.getVelocity());
+						                    current.getPosition(),
+						                    current.getVelocity());
 						current = f(ray);
 					}
 
 					a.now = current.getPosition() / scale;
 					a.velocity = current.getVelocity();
 				}
-
-
 			}
+
 
 			// finalise
 			for (Atom<T, N> &a : atoms) {
@@ -264,6 +283,13 @@ namespace fluid {
 				a.particle->position = a.now * scale;
 				a.particle->velocity = (deltaX * (1.f / dt) + a.velocity) * VD;
 			}
+
+			hrc::time_point kerne = hrc::now();
+
+			auto kern = duration_cast<nanoseconds>(kerne - kerns).count();
+			std::cout << "\tKern: " << (kern / 1000000.0) << "ms" << std::endl;
+
+
 		}
 
 

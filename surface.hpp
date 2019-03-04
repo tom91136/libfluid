@@ -471,7 +471,7 @@ namespace surface {
 
 		Lattice<N> field = Lattice<N>(lattice.xSize(), lattice.ySize(), lattice.zSize(), 0);
 
-#pragma omp parallel for collapse(3)
+#pragma omp parallel for simd collapse(3)
 		for (size_t x = 0; x < lattice.xSize(); ++x) {
 			for (size_t y = 0; y < lattice.ySize(); ++y) {
 				for (size_t z = 0; z < lattice.zSize(); ++z) {
@@ -494,7 +494,7 @@ namespace surface {
 
 
 #pragma omp declare reduction (merge : std::vector<Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-#pragma omp parallel for collapse(3) reduction(merge: triangles)
+#pragma omp parallel for simd collapse(3) reduction(merge: triangles)
 		for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
 			for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
 				for (size_t z = 0; z < lattice.zSize() - 1; ++z) {

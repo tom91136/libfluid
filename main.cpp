@@ -3,6 +3,7 @@
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
 
+
 #include <memory>
 #include <chrono>
 #include <random>
@@ -11,7 +12,8 @@
 #include <experimental/filesystem>
 #include "fluid.hpp"
 #include "surface.hpp"
-#include "boost/compute.hpp"
+#include "cl.hpp"
+
 #include "mio/mmap.hpp"
 #include "omp.h"
 
@@ -126,43 +128,84 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 }
 
 
-int main(int argc, char *argv[]) {
-	using namespace std;
-	using namespace std::chrono;
-
+void checkClNN3() {
 	namespace compute = boost::compute;
-	compute::device deviceDevice = compute::system::default_device();
 	std::cout << "OpenCL devices: " << std::endl;
 
 	for (const auto &device : compute::system::devices()) {
 		std::cout << "\t" << device.name() << std::endl;
 	}
-	std::cout << "\tDefault: " << deviceDevice.name() << std::endl;
 
-	std::vector<fluid::Particle<size_t, num_t >> xs;
+	compute::device defaultDevice = compute::system::default_device();
+	std::cout << "\tDefault: " << defaultDevice.name() << std::endl;
+
+	auto clo = new CLOps(defaultDevice);
+
 
 	std::random_device rd;
 	std::mt19937 mt(12345);
 	std::uniform_real_distribution<num_t> dist(0, 600.f);
 
 
-	omp_set_num_threads(4);
-	size_t pcount = 7000 * 3;
-	size_t iter = 1000;
+	std::vector<tvec3<num_t >> data;
+	for (int m = 0; m < 10000; ++m)
+		data.emplace_back(dist(mt), dist(mt), dist(mt));
 
-	size_t offset;
+
+	unibn::Octree<tvec3<num_t>> octree;
+	octree.initialize(data);
+
+	// compile once
+	clo->nn3<num_t>(30.f, 1000, data);
+
+	using namespace std::chrono;
+	using hrc = high_resolution_clock;
+
+	hrc::time_point cls = hrc::now();
+	clo->nn3<num_t>(30.f, 1000, data);
+	hrc::time_point cle = hrc::now();
+
+
+	hrc::time_point cpus = hrc::now();
+	std::vector<std::vector<uint32_t >> drain(data.size());
+#pragma omp parallel for
+	for (size_t m = 0; m < data.size(); ++m)
+		octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(data[m], 30.f, drain[m]);
+
+	hrc::time_point cpue = hrc::now();
+
+	auto cl = duration_cast<nanoseconds>(cle - cls).count();
+	auto cpu = duration_cast<nanoseconds>(cpue - cpus).count();
+
+	std::cout << "CL  : " << (cl / 1000000.0) << "ms"
+	          << "CPU : " << (cpu / 1000000.0) << "ms "
+	          << drain.size() << std::endl;
+}
+
+
+//#define DO_SURFACE
+
+int main(int argc, char *argv[]) {
+
+	using namespace std::chrono;
+	using hrc = high_resolution_clock;
+
+	omp_set_num_threads(4);
+	size_t pcount = 6000 * 2;
+	size_t iter = 100;
+
+
+	std::vector<fluid::Particle<size_t, num_t >> xs;
+	size_t offset = 0;
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
-//	offset = makeCube(offset, pcount / 2, tvec3<num_t>(300), xs);
-
 
 	float i = 0;
-
 
 	std::vector<std::function<const fluid::Response<num_t>(
 			fluid::Ray<num_t> &)> > colliders = {
 			[&i](const fluid::Ray<num_t> &x) -> fluid::Response<num_t> {
-				float d =  (sin(i) * 200);
+				float d = (sin(i) * 200);
 				return fluid::Response<num_t>(
 						tvec3<num_t>(
 								glm::clamp(x.getOrigin().x, (num_t) -500 + d,
@@ -183,27 +226,25 @@ int main(int argc, char *argv[]) {
 	auto mmfTSink = mkMmf(std::experimental::filesystem::current_path() /= "triangles.mmf",
 	                      probe_triangle_size<num_t>() * 500000 + sizeof(long));
 
-
 	std::cout << "Go" << std::endl;
 
+	float D = 10.f;
+	auto P = static_cast<size_t>(1000.f / D);
 
-	const surface::MCLattice<num_t> &lattice =
-			surface::createLattice<num_t>(100, 100, 100,
-			                              -500, 10.f);
+	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -500, D);
 
 	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(
-			new fluid::SphSolver<size_t, num_t>(0.1,
-			                                    550)); // less = less space between particle
+			new fluid::SphSolver<size_t, num_t>(0.1, 650)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 
-
 		i += M_PI / 50;
+
 		hrc::time_point t1 = hrc::now();
-		solver->advance(0.0083, 2, xs,
+		solver->advance(static_cast<num_t> (0.0083 * 1.25), 2, xs,
 		                [](const fluid::Particle<size_t, num_t> &x) {
 			                return tvec3<num_t>(0, x.mass * 9.8, 0);
 		                }, colliders
@@ -212,6 +253,9 @@ int main(int argc, char *argv[]) {
 
 
 		hrc::time_point s1 = hrc::now();
+
+
+#ifdef DO_SURFACE
 
 		std::vector<tvec3<num_t>> pts;
 		std::transform(xs.begin(), xs.end(), std::back_inserter(pts),
@@ -225,7 +269,7 @@ int main(int argc, char *argv[]) {
 		                                              lattice, [&octree, &xs](
 						const tvec3<num_t> &a) -> num_t {
 					std::vector<uint32_t> results;
-					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, 24.f, results);
+					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, 35.f, results);
 					num_t v = 0;
 					for (uint32_t &result : results)
 						v += ((100 * 100) /
@@ -233,23 +277,21 @@ int main(int argc, char *argv[]) {
 					return v;
 				});
 		std::cout <<
-		          "\n\tLattice   = " << lattice.size() <<
+		          "\tLattice   = " << lattice.size() <<
 		          "\n\tTriangles = " << triangles.size() <<
 		          "\n\tParticles = " << xs.size() <<
 		          std::endl;
 
-
-
-
 //		for (auto t : triangles) {
 //			std::cout << "[" << t << "]" << std::endl;
 //		}
+		write_triangles(mmfTSink, triangles);
 
+#endif
 		hrc::time_point s2 = hrc::now();
 
 
 		hrc::time_point mmt1 = hrc::now();
-		write_triangles(mmfTSink, triangles);
 		write_particles(mmfPSink, xs);
 		hrc::time_point mmt2 = hrc::now();
 
@@ -260,9 +302,9 @@ int main(int argc, char *argv[]) {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-		          << "solver:" << (solve / 1000000.0) << "ms "
-		          << "param:" << (param / 1000000.0) << "ms "
-		          << "mmf:" << (mmf / 1000000.0) << "ms "
+		          << "Solver:" << (solve / 1000000.0) << "ms "
+		          << "Surface:" << (param / 1000000.0) << "ms "
+		          << "IPC:" << (mmf / 1000000.0) << "ms "
 		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms "
 		          << std::endl;
 	}
@@ -277,7 +319,5 @@ int main(int argc, char *argv[]) {
 
 	xs.clear();
 
-
 	return EXIT_SUCCESS;
-
 }
