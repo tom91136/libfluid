@@ -5,6 +5,7 @@
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
 
+
 #include <ostream>
 #include <functional>
 #include <vector>
@@ -35,13 +36,13 @@ namespace fluid {
 	struct Particle {
 		T t;
 		Type type;
-		N mass{};
+		N mass;
 		tvec3<N> position;
 		tvec3<N> velocity;
 //		std::unique_ptr<std::vector<uint32_t >> neighbours;
 
 		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
-						  const tvec3<N> &velocity) :
+		                  const tvec3<N> &velocity) :
 				t(t), type(type), mass(mass), position(position), velocity(velocity) {
 //			neighbours = std::make_unique<std::vector<uint32_t >>();
 
@@ -57,9 +58,9 @@ namespace fluid {
 
 		bool operator==(const Particle &rhs) const {
 			return t == rhs.t &&
-				   mass == rhs.mass &&
-				   position == rhs.position &&
-				   velocity == rhs.velocity;
+			       mass == rhs.mass &&
+			       position == rhs.position &&
+			       velocity == rhs.velocity;
 		}
 
 		bool operator!=(const Particle &rhs) const {
@@ -105,6 +106,7 @@ namespace fluid {
 		std::unique_ptr<std::vector<Atom<T, N> *>> neighbours;
 		std::unique_ptr<std::vector<N>> p6ks;
 		std::unique_ptr<std::vector<tvec3<N>>> skgs;
+		N mass;
 		tvec3<N> now;
 		N lambda;
 		tvec3<N> deltaP;
@@ -127,11 +129,21 @@ namespace fluid {
 	template<typename T, typename N>
 	struct AtomCloud {
 		const std::vector<Atom<T, N>> &pts;
-		AtomCloud(const std::vector<Atom<T, N>> &pts) : pts(pts) {}
+		const N scale;
+
+		AtomCloud(const std::vector<Atom<T, N>> &pts,	const N scale) : pts(pts), scale(scale) {}
+
 		inline size_t kdtree_get_point_count() const { return pts.size(); }
+
 		inline N kdtree_get_pt(const size_t idx, const size_t dim) const {
-			return pts[idx].now[dim];
+
+//			if (dim == 0) return pts[idx].now.x;
+//			else if (dim == 1) return pts[idx].now.y;
+//			else return pts[idx].now.z;
+
+			return pts[idx].now[dim] * scale;
 		}
+
 		template<class BBOX>
 		bool kdtree_get_bbox(BBOX &) const { return false; }
 	};
@@ -176,16 +188,16 @@ namespace fluid {
 		const tvec3<N> spikyKernelGradient(tvec3<N> x, tvec3<N> y, N &r) {
 			r = glm::distance(x, y);
 			return !(r <= h && r >= EPSILON) ?
-				   tvec3<N>(0) :
-				   (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
+			       tvec3<N>(0) :
+			       (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
 		}
 
 	public:
 
 		void advance(N dt, size_t iteration,
-					 std::vector<Particle<T, N>> &xs,
-					 const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
-					 const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
+		             std::vector<Particle<T, N>> &xs,
+		             const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
+		             const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
 		) {
 
 			using namespace std::chrono;
@@ -195,29 +207,35 @@ namespace fluid {
 			std::vector<Atom<T, N>> atoms;
 
 			std::transform(xs.begin(), xs.end(), std::back_inserter(atoms),
-						   [constForce, dt, this](Particle<T, N> &p) {
-							   auto a = Atom<T, N>(&p);
-							   a.velocity = constForce(p) * dt + p.velocity;
-							   a.now = (a.velocity * dt) + (p.position / scale);
-							   return a;
-						   });
+			               [constForce, dt, this](Particle<T, N> &p) {
+				               auto a = Atom<T, N>(&p);
+				               a.velocity = constForce(p) * dt + p.velocity;
+				               a.mass = p.mass;
+				               a.now = (a.velocity * dt) + (p.position / scale);
+				               return a;
+			               });
 
 
 			hrc::time_point nns = hrc::now();
 
-			// create Octree for fast lookup
-//			std::vector<tvec3<N>> pts;
-//			std::transform(atoms.begin(), atoms.end(), std::back_inserter(pts),
-//						   [](const Atom<T, N> &a) { return a.now; });
-//
-//			unibn::Octree<tvec3<N>> octree;
-//			octree.initialize(pts);
+			const N truncation = 30.f;
+#ifndef FLANN
 
+
+			std::vector<tvec3<N>> pts;
+			std::transform(atoms.begin(), atoms.end(), std::back_inserter(pts),
+			               [truncation](const Atom<T, N> &a) { return a.now * truncation; });
+
+			unibn::Octree<tvec3<N>> octree;
+			octree.initialize(pts);
+#else
 
 			using namespace nanoflann;
+//			std::vector<tvec3<N>> pts;
+//			std::transform(atoms.begin(), atoms.end(), std::back_inserter(pts),
+//						   [thingy](const Atom<T, N> &a) { return a.now * thingy; });
 
-
-			const AtomCloud<T, N> cloud = AtomCloud<T, N>(atoms);
+			const AtomCloud<T, N> cloud = AtomCloud<T, N>(atoms, truncation);
 			typedef KDTreeSingleIndexAdaptor<
 					L2_Simple_Adaptor<N, AtomCloud<T, N> >,
 					AtomCloud<T, N>, 3> kd_tree_t;
@@ -227,15 +245,32 @@ namespace fluid {
 
 			nanoflann::SearchParams params;
 			params.sorted = false;
-
+#endif
 
 //			// NN search
 #pragma omp parallel for simd
 			for (size_t i = 0; i < atoms.size(); ++i) {
 				Atom<T, N> &a = atoms[i];
 
+
+
+#ifndef FLANN
+				std::vector<uint32_t> neighbours;
+				octree.template radiusNeighbors<unibn::L2Distance<tvec3<N>>>(
+						a.now * truncation, (float) (h2 * truncation), neighbours);
+				a.neighbours->reserve(neighbours.size());
+				a.p6ks->reserve(neighbours.size());
+				a.skgs->reserve(neighbours.size());
+				for (uint32_t &idx : neighbours)
+					a.neighbours->emplace_back(&atoms[idx]);
+
+
+				#else
 				std::vector<std::pair<size_t, N> > drain;
-				index.radiusSearch(&a.now[0], h2, drain, params);
+
+				auto origin = a.now * truncation;
+
+				index.radiusSearch(&origin[0], h2 * truncation, drain, params);
 				a.neighbours->reserve(drain.size());
 				a.p6ks->reserve(drain.size());
 				a.skgs->reserve(drain.size());
@@ -243,14 +278,7 @@ namespace fluid {
 					a.neighbours->emplace_back(&atoms[p.first]);
 
 
-//				std::vector<uint32_t > neighbours;
-//				octree.template radiusNeighbors<unibn::L2Distance<tvec3<N>>>(
-//						a.now, (float) h2, neighbours);
-//				a.neighbours->reserve(neighbours.size());
-//				a.p6ks->reserve(neighbours.size());
-//				a.skgs->reserve(neighbours.size());
-//				for (uint32_t &idx : neighbours)
-//					a.neighbours->emplace_back(&atoms[idx]);
+#endif
 
 			}
 
@@ -268,6 +296,7 @@ namespace fluid {
 #pragma omp parallel for simd
 				for (size_t i = 0; i < atoms.size(); ++i) {
 					Atom<T, N> &a = atoms[i];
+					// Rho : density of a particle
 					N rho = 0.f;
 					auto norm2V = tvec3<N>(0);
 					for (size_t l = 0; l < a.neighbours->size(); ++l) {
@@ -275,7 +304,7 @@ namespace fluid {
 						N r;
 						tvec3<N> skg = spikyKernelGradient(a.now, b->now, r);
 						N p6k = poly6Kernel(r);
-						rho += b->particle->mass * p6k;
+						rho += b->mass * p6k;
 						norm2V += skg * (1.f / RHO);
 						(*a.skgs)[l] = skg;
 						(*a.p6ks)[l] = p6k;
@@ -294,7 +323,7 @@ namespace fluid {
 					for (size_t l = 0; l < a.neighbours->size(); ++l) {
 						Atom<T, N> *b = (*a.neighbours)[l];
 						N corr = -CorrK *
-								 std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
+						         std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
 						N factor = (a.lambda + b->lambda + corr) / RHO;
 						a.deltaP = (*a.skgs)[l] * factor + a.deltaP;
 					}
@@ -317,6 +346,7 @@ namespace fluid {
 			for (Atom<T, N> &a : atoms) {
 				auto deltaX = a.now - a.particle->position / scale;
 				a.particle->position = a.now * scale;
+				a.particle->mass = a.mass;
 				a.particle->velocity = (deltaX * (1.f / dt) + a.velocity) * VD;
 			}
 
