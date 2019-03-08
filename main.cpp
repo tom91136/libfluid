@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 
-		i += M_PI / 50;
+		i += glm::pi<num_t>() / 50;
 
 		hrc::time_point t1 = hrc::now();
 		solver->advance(static_cast<num_t> (0.0083 * 1), 2, xs,
