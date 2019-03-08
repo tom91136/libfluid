@@ -11,7 +11,7 @@
 #include <random>
 #include <iostream>
 #include <fstream>
-#include <experimental/filesystem>
+//#include <experimental/filesystem>
 #include "fluid.hpp"
 #include "surface.hpp"
 #include "cl.hpp"
@@ -94,8 +94,8 @@ void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs
 }
 
 
-mio::mmap_sink mkMmf(const std::experimental::filesystem::path &path, const size_t length) {
-	const auto pathStr = path.string();
+mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
+	const auto pathStr = path;//.string();
 	std::ofstream file(pathStr, std::ios::out | std::ios::trunc);
 	std::string s(length, ' ');
 	file << s;
@@ -341,10 +341,10 @@ int main(int argc, char *argv[]) {
 	std::cout << "Mark" << std::endl;
 
 
-	auto mmfPSink = mkMmf(std::experimental::filesystem::current_path() /= "particles.mmf",
+	auto mmfPSink = mkMmf("particles.mmf",
 	                      pcount * probe_particle_size<size_t, num_t>() + sizeof(long) * 2);
 
-	auto mmfTSink = mkMmf(std::experimental::filesystem::current_path() /= "triangles.mmf",
+	auto mmfTSink = mkMmf("triangles.mmf",
 	                      probe_triangle_size<num_t>() * 500000 + sizeof(long));
 
 	std::cout << "Go" << std::endl;

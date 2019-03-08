@@ -13,17 +13,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
--Wall -pedantic \
--fno-omit-frame-pointer -fsanitize=address \
--O2 -march=native \
--fopenmp \
--g")
-set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -lasan")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -pedantic \
--Ofast -funsafe-math-optimizations -march=native \
--fopenmp \
--g")
+
 
 #set(MSGPACK_ENABLE_STATIC true)
 #set(MSGPACK_ENABLE_SHARED false)
@@ -35,6 +25,22 @@ find_package(OpenCL REQUIRED)
 find_package(OpenMP  REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+if(OpenMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
+-Wall -pedantic \
+-fno-omit-frame-pointer -fsanitize=address \
+-O2 -march=native \
+-fopenmp \
+-g")
+set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -lasan")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -pedantic \
+-Ofast -funsafe-math-optimizations -march=native \
+-fopenmp \
+-g")
 
 #find_package(BoostCompute CONFIG REQUIRED)
 
@@ -54,7 +60,7 @@ target_link_libraries(main PRIVATE Catch2::Catch2)
 target_link_libraries(main PRIVATE glm)
 target_link_libraries(main PRIVATE mio::mio)
 target_link_libraries(main PRIVATE OpenCL::OpenCL)
-target_link_libraries(main PRIVATE stdc++fs)
+#target_link_libraries(main PRIVATE stdc++fs)
 target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
 
 
