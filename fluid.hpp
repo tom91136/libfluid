@@ -248,8 +248,8 @@ namespace fluid {
 #endif
 
 //			// NN search
-#pragma omp parallel for simd
-			for (size_t i = 0; i < atoms.size(); ++i) {
+#pragma omp parallel for
+			for (int i = 0; i < atoms.size(); ++i) {
 				Atom<T, N> &a = atoms[i];
 
 
@@ -293,8 +293,8 @@ namespace fluid {
 			for (size_t j = 0; j < iteration; ++j) {
 
 				// solve for lambda
-#pragma omp parallel for simd
-				for (size_t i = 0; i < atoms.size(); ++i) {
+#pragma omp parallel for
+				for (int i = 0; i < atoms.size(); ++i) {
 					Atom<T, N> &a = atoms[i];
 					// Rho : density of a particle
 					N rho = 0.f;
@@ -315,8 +315,8 @@ namespace fluid {
 				}
 
 				// solve for delta p
-#pragma omp parallel for simd
-				for (size_t i = 0; i < atoms.size(); ++i) {
+#pragma omp parallel for
+				for (int i = 0; i < atoms.size(); ++i) {
 					Atom<T, N> &a = atoms[i];
 					a.deltaP = tvec3<N>(0);
 

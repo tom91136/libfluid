@@ -73,6 +73,25 @@ void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &x
 	}
 }
 
+template<typename T, typename N>
+void print_particle_size() {
+	using namespace std::chrono;
+	typedef fluid::Particle<T, N> PTN;
+	std::cout  
+		<< "\tinit = " <<  sizeof(long) << "\n"
+		<< "\tsize = " <<  sizeof(std::vector<PTN>::size_type) << "\n"
+		<< "\tp.t = " <<  sizeof(PTN::t) << "\n"
+		<< "\tp.type = " <<  sizeof(PTN::type) << "\n"
+		<< "\tp.mass = " <<  sizeof(PTN::mass) << "\n"
+		<< "\tp.position.x = " <<  sizeof(PTN::position.x) << "\n"
+		<< "\tp.position.y = " <<  sizeof(PTN::position.y) << "\n"
+		<< "\tp.position.z = " <<  sizeof(PTN::position.z) << "\n"
+		<< "\tp.velocity.x = " <<  sizeof(PTN::velocity.x) << "\n"
+		<< "\tp.velocity.y = " <<  sizeof(PTN::velocity.y) << "\n"
+		<< "\tp.velocity.z = " <<  sizeof(PTN::velocity.z) << "\n"
+	<< std::endl;
+}
+
 template<typename N>
 void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs) {
 	using namespace std::chrono;
@@ -306,6 +325,8 @@ int main(int argc, char *argv[]) {
 //	checkClNN3();
 //	checkClNN3();
 
+
+	print_particle_size<size_t, num_t>();
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
