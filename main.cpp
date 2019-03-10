@@ -313,12 +313,7 @@ void checkClNN3() {
 }
 
 
-//#define DO_SURFACE
-
-
-
-
-
+#define DO_SURFACE
 
 
 
@@ -336,7 +331,7 @@ int main(int argc, char *argv[]) {
 
 	omp_set_num_threads(4);
 	size_t pcount = 6000 * 3;
-	size_t iter = 5000;
+	size_t iter = 1;
 
 
 	for (const auto &t : {particleType, triangleType, headerType}) {
@@ -391,7 +386,7 @@ int main(int argc, char *argv[]) {
 
 	std::cout << "Go" << std::endl;
 
-	float D = 30.f;
+	float D = 20.f;
 	auto P = static_cast<size_t>(2000.f / D);
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);

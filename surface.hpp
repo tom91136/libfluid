@@ -7,6 +7,7 @@
 #include <functional>
 #include <vector>
 #include <numeric>
+#include <map>
 #include <iostream>
 #include <algorithm>
 #include "glm/ext.hpp"
@@ -349,6 +350,57 @@ namespace surface {
 		explicit Cell(const std::array<tvec3<N>, 8> &p) : p(p) {}
 	};
 
+
+	//https://github.com/opengl-tutorials/ogl/blob/master/common/vboindexer.cpp
+	template<typename N>
+	struct PackedVertex {
+		tvec3<N> position;
+		bool operator<(const PackedVertex that) const {
+			return memcmp((void *) this, (void *) &that, sizeof(PackedVertex)) > 0;
+		};
+	};
+
+	template<typename N>
+	bool getSimilarVertexIndex_fast(
+			PackedVertex<N> &packed,
+			std::map<PackedVertex<N>, unsigned short> &VertexToOutIndex,
+			unsigned short &result
+	) {
+		typename std::map<PackedVertex<N>, unsigned short>::iterator it = VertexToOutIndex.find(
+				packed);
+		if (it == VertexToOutIndex.end()) {
+			return false;
+		} else {
+			result = it->second;
+			return true;
+		}
+	}
+
+	template<typename N>
+	void indexVBO(
+			std::vector<tvec3<N>> &in_vertices,
+			std::vector<unsigned short> &out_indices,
+			std::vector<tvec3<N>> &out_vertices
+	) {
+		std::map<PackedVertex<N>, unsigned short> VertexToOutIndex;
+		// For each input vertex
+		for (size_t i = 0; i < in_vertices.size(); i++) {
+			PackedVertex<N> packed = {in_vertices[i]};
+			// Try to find a similar vertex in out_XXXX
+			unsigned short index;
+			bool found = getSimilarVertexIndex_fast(packed, VertexToOutIndex, index);
+			if (found) { // A similar vertex is already in the VBO, use it instead !
+				out_indices.push_back(index);
+			} else { // If not, it needs to be added in the output data.
+				out_vertices.push_back(in_vertices[i]);
+				unsigned short newindex = (unsigned short) out_vertices.size() - 1;
+				out_indices.push_back(newindex);
+				VertexToOutIndex[packed] = newindex;
+			}
+		}
+	}
+
+
 	template<typename N>
 	struct GridCell {
 		std::array<tvec3<N>, 8> p;
@@ -410,8 +462,8 @@ namespace surface {
 	class Lattice {
 	public:
 		Lattice(const size_t d1 = 0,
-		        const size_t d2 = 0,
-		        const size_t d3 = 0, T const &t = T()) :
+				const size_t d2 = 0,
+				const size_t d3 = 0, T const &t = T()) :
 				d1(d1), d2(d2), d3(d3), data(d1 * d2 * d3, t) {}
 
 		T &operator()(size_t i, size_t j, size_t k) {
@@ -466,8 +518,8 @@ namespace surface {
 
 	template<typename N>
 	std::vector<Triangle<N>> parameterise(const N isolevel,
-	                                      MCLattice<N> lattice,
-	                                      const std::function<N(tvec3<N> &)> &f) {
+										  MCLattice<N> lattice,
+										  const std::function<N(tvec3<N> &)> &f) {
 
 		Lattice<N> field = Lattice<N>(lattice.xSize(), lattice.ySize(), lattice.zSize(), 0);
 
@@ -490,11 +542,16 @@ namespace surface {
 				std::make_tuple(1, 1, 1),
 				std::make_tuple(0, 1, 1),
 		};
+
+
 		std::vector<Triangle<N>> triangles;
+		std::vector<tvec3<N>> points;
 
 
-// #pragma omp declare reduction (merge : std::vector<Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-//#pragma omp parallel for collapse(3) reduction(merge: triangles)
+#ifndef _MSC_VER
+#pragma omp declare reduction (merge : std::vector<Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+#pragma omp parallel for collapse(3) reduction(merge: triangles)
+#endif
 		for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
 			for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
 				for (size_t z = 0; z < lattice.zSize() - 1; ++z) {
@@ -543,15 +600,34 @@ namespace surface {
 					if (edgeTable[ci] & 1 << 11)
 						xs[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
 
-					for (size_t i = 0; triTable[ci][i] != -1; i += 3)
+					for (size_t i = 0; triTable[ci][i] != -1; i += 3) {
+//						points.emplace_back(xs[triTable[ci][i + 0]]);
+//						points.emplace_back(xs[triTable[ci][i + 1]]);
+//						points.emplace_back(xs[triTable[ci][i + 2]]);
+
 						triangles.emplace_back(
 								xs[triTable[ci][i]],
 								xs[triTable[ci][i + 1]],
 								xs[triTable[ci][i + 2]]);
+					}
+
 
 				}
 			}
 		}
+
+//		using hrc = std::chrono::high_resolution_clock;
+//		hrc::time_point mmt1 = hrc::now();
+//
+//		std::vector<unsigned short> out_indices;
+//		std::vector<tvec3<N>> out_vertices;
+//		indexVBO(points, out_indices, out_vertices);
+//
+//		hrc::time_point mmt2 = hrc::now();
+//		auto solve = std::chrono::duration_cast<std::chrono::nanoseconds>(mmt2 - mmt1).count();
+//
+//		std::cout << triangles.size() * 3 << " " << out_indices.size() << " " << out_vertices.size()
+//				  << " " << (solve / 1000000.0) << "ms" << std::endl;
 
 
 		return triangles;

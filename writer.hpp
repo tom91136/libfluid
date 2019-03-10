@@ -29,7 +29,6 @@ namespace writer {
 				Type d;
 				unsigned char bytes[size];
 			} u{f(s)};
-			// XXX int is used for performance
 			for (size_t i = 0; i < size; i++) sink[offset + i] = u.bytes[i];
 			return offset + size;
 		}
