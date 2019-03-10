@@ -19,96 +19,102 @@
 
 #include "mio/mmap.hpp"
 #include "omp.h"
+#include <nlohmann/json.hpp>
+#include "writer.hpp"
 
+using json = nlohmann::json;
 
 typedef float num_t;
 using glm::tvec3;
 
-template<typename T>
-size_t write_t(mio::mmap_sink &sink, T x, size_t offset) {
-	union {
-		T d;
-		unsigned char bytes[sizeof(T)];
-	} u{};
-	u.d = x;
-	for (size_t i = 0; i < sizeof(T); ++i)
-		sink[offset + i] = u.bytes[i];
-	return offset + sizeof(T);
-}
+
+static const char t_[] = "t";
+static const char type_[] = "type";
+static const char mass_[] = "mass";
+static const char position_x_[] = "position.x";
+static const char position_y_[] = "position.y";
+static const char position_z_[] = "position.z";
+static const char velocity_x_[] = "velocity.x";
+static const char velocity_y_[] = "velocity.y";
+static const char velocity_z_[] = "velocity.z";
 
 template<typename T, typename N>
-constexpr size_t probe_particle_size() {
-	typedef fluid::Particle<T, N> PTN;
-	return sizeof(PTN::t) + sizeof(PTN::type) + sizeof(PTN::mass) +
-	       sizeof(PTN::position.x) + sizeof(PTN::position.y) + sizeof(PTN::position.z) +
-	       sizeof(PTN::velocity.x) + sizeof(PTN::velocity.y) + sizeof(PTN::velocity.z);
+const static inline auto particleEntries() {
+	return writer::makeEntries(
+			ENTRY(t_, CLS(fluid::Particle<T, N>), t),
+			ENTRY(type_, CLS(fluid::Particle<T, N>), type),
+			ENTRY(mass_, CLS(fluid::Particle<T, N>), mass),
+			ENTRY(position_x_, CLS(fluid::Particle<T, N>), position.x),
+			ENTRY(position_y_, CLS(fluid::Particle<T, N>), position.y),
+			ENTRY(position_z_, CLS(fluid::Particle<T, N>), position.z),
+			ENTRY(velocity_x_, CLS(fluid::Particle<T, N>), velocity.x),
+			ENTRY(velocity_y_, CLS(fluid::Particle<T, N>), velocity.y),
+			ENTRY(velocity_z_, CLS(fluid::Particle<T, N>), velocity.z)
+	);
 }
+
+static const char v0_x_[] = "v0.x";
+static const char v0_y_[] = "v0.y";
+static const char v0_z_[] = "v0.z";
+static const char v1_x_[] = "v1.x";
+static const char v1_y_[] = "v1.y";
+static const char v1_z_[] = "v1.z";
+static const char v2_x_[] = "v2.x";
+static const char v2_y_[] = "v2.y";
+static const char v2_z_[] = "v2.z";
 
 template<typename N>
-constexpr size_t probe_triangle_size() {
-	typedef surface::Triangle<N> TN;
-	return sizeof(TN::v0.x) + sizeof(TN::v0.y) + sizeof(TN::v0.z) +
-	       sizeof(TN::v1.x) + sizeof(TN::v1.y) + sizeof(TN::v1.z) +
-	       sizeof(TN::v2.x) + sizeof(TN::v2.y) + sizeof(TN::v2.z);
+const static inline auto triangleEntries() {
+	return writer::makeEntries(
+			ENTRY(v0_x_, CLS(surface::Triangle<N>), v0.x),
+			ENTRY(v0_y_, CLS(surface::Triangle<N>), v0.y),
+			ENTRY(v0_z_, CLS(surface::Triangle<N>), v0.z),
+			ENTRY(v1_x_, CLS(surface::Triangle<N>), v1.x),
+			ENTRY(v1_y_, CLS(surface::Triangle<N>), v1.y),
+			ENTRY(v1_z_, CLS(surface::Triangle<N>), v1.z),
+			ENTRY(v2_x_, CLS(surface::Triangle<N>), v2.x),
+			ENTRY(v2_y_, CLS(surface::Triangle<N>), v2.y),
+			ENTRY(v2_z_, CLS(surface::Triangle<N>), v2.z)
+	);
 }
 
+
+static const char timestamp_[] = "timestamp";
+static const char entries_[] = "entries";
+
+struct Header {
+	long timestamp;
+	size_t entries;
+
+	explicit Header(size_t entries) : timestamp(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::system_clock::now().time_since_epoch()).count()
+	), entries(entries) {}
+};
+
+const static inline auto headerEntries() {
+	return writer::makeEntries(
+			ENTRY(timestamp_, CLS(Header), timestamp),
+			ENTRY(entries_, CLS(Header), entries)
+	);
+}
 
 template<typename T, typename N>
 void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &xs) {
-	using namespace std::chrono;
-	size_t offset = 0;
-	long init = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-	offset = write_t(sink, init, offset);
-	offset = write_t(sink, xs.size(), offset);
-	for (const fluid::Particle<T, N> &p :  xs) {
-		offset = write_t(sink, p.t, offset);
-		offset = write_t(sink, p.type, offset);
-		offset = write_t(sink, p.mass, offset);
-		offset = write_t(sink, p.position.x, offset);
-		offset = write_t(sink, p.position.y, offset);
-		offset = write_t(sink, p.position.z, offset);
-		offset = write_t(sink, p.velocity.x, offset);
-		offset = write_t(sink, p.velocity.y, offset);
-		offset = write_t(sink, p.velocity.z, offset);
-	}
-}
 
-template<typename T, typename N>
-void print_particle_size() {
-	using namespace std::chrono;
-	typedef fluid::Particle<T, N> PTN;
-	std::cout  
-		<< "\tinit = " <<  sizeof(long) << "\n"
-		<< "\tsize = " <<  sizeof(std::vector<PTN>::size_type) << "\n"
-		<< "\tp.t = " <<  sizeof(PTN::t) << "\n"
-		<< "\tp.type = " <<  sizeof(PTN::type) << "\n"
-		<< "\tp.mass = " <<  sizeof(PTN::mass) << "\n"
-		<< "\tp.position.x = " <<  sizeof(PTN::position.x) << "\n"
-		<< "\tp.position.y = " <<  sizeof(PTN::position.y) << "\n"
-		<< "\tp.position.z = " <<  sizeof(PTN::position.z) << "\n"
-		<< "\tp.velocity.x = " <<  sizeof(PTN::velocity.x) << "\n"
-		<< "\tp.velocity.y = " <<  sizeof(PTN::velocity.y) << "\n"
-		<< "\tp.velocity.z = " <<  sizeof(PTN::velocity.z) << "\n"
-	<< std::endl;
+	Header header = Header(xs.size());
+	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
+	for (const fluid::Particle<T, N> &p :  xs) {
+		offset = writer::writePacked(sink, p, offset, particleEntries<T, N>());
+	}
 }
 
 template<typename N>
 void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs) {
-	using namespace std::chrono;
-	size_t offset = 0;
-	long init = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-	offset = write_t(sink, init, offset);
-	offset = write_t(sink, xs.size(), offset);
+	Header header = Header(xs.size());
+	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
 	for (const surface::Triangle<N> &t :  xs) {
-		offset = write_t(sink, t.v0.x, offset);
-		offset = write_t(sink, t.v0.y, offset);
-		offset = write_t(sink, t.v0.z, offset);
-		offset = write_t(sink, t.v1.x, offset);
-		offset = write_t(sink, t.v1.y, offset);
-		offset = write_t(sink, t.v1.z, offset);
-		offset = write_t(sink, t.v2.x, offset);
-		offset = write_t(sink, t.v2.y, offset);
-		offset = write_t(sink, t.v2.z, offset);
+		offset = writer::writePacked(sink, t, offset, triangleEntries<N>());
 	}
 }
 
@@ -307,18 +313,37 @@ void checkClNN3() {
 }
 
 
-#define DO_SURFACE
+//#define DO_SURFACE
+
+
+
+
+
+
 
 
 
 int main(int argc, char *argv[]) {
 
+
+	auto particleType = writer::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
+	auto triangleType = writer::writeMetaPacked<decltype(triangleEntries<num_t>())>();
+	auto headerType = writer::writeMetaPacked<decltype(headerEntries())>();
+
+
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(3);
-	size_t pcount = 6000 * 4;
-	size_t iter = 15000;
+	omp_set_num_threads(4);
+	size_t pcount = 6000 * 3;
+	size_t iter = 5000;
+
+
+	for (const auto &t : {particleType, triangleType, headerType}) {
+		std::cout << "size=" << t.first << std::endl;
+		std::cout << t.second.dump(3) << std::endl;
+	}
+
 
 
 //	checkClNN3();
@@ -326,7 +351,6 @@ int main(int argc, char *argv[]) {
 //	checkClNN3();
 
 
-	print_particle_size<size_t, num_t>();
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
@@ -362,15 +386,12 @@ int main(int argc, char *argv[]) {
 	std::cout << "Mark" << std::endl;
 
 
-	auto mmfPSink = mkMmf("particles.mmf",
-	                      pcount * probe_particle_size<size_t, num_t>() + sizeof(long) * 2);
-
-	auto mmfTSink = mkMmf("triangles.mmf",
-	                      probe_triangle_size<num_t>() * 500000 + sizeof(long));
+	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
+	auto mmfTSink = mkMmf("triangles.mmf", 500000 * triangleType.first + headerType.first);
 
 	std::cout << "Go" << std::endl;
 
-	float D = 22.f;
+	float D = 30.f;
 	auto P = static_cast<size_t>(2000.f / D);
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
@@ -398,8 +419,6 @@ int main(int argc, char *argv[]) {
 
 
 #ifdef DO_SURFACE
-
-
 
 
 		num_t NR = 32.f;
@@ -468,15 +487,19 @@ int main(int argc, char *argv[]) {
 //		for (auto t : triangles) {
 //			std::cout << "[" << t << "]" << std::endl;
 //		}
-		write_triangles(mmfTSink, triangles);
 
 #endif
 		hrc::time_point s2 = hrc::now();
 
 
 		hrc::time_point mmt1 = hrc::now();
+#ifdef DO_SURFACE
+		write_triangles(mmfTSink, triangles);
+#endif
 		write_particles(mmfPSink, xs);
 		hrc::time_point mmt2 = hrc::now();
+
+
 
 //		sleep(1);
 
