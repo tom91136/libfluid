@@ -116,7 +116,7 @@ namespace writer {
 		return write(w, s, offset, std::get<Is>(xs)...);
 	}
 
-	template<typename W, class S, class ...Rest, size_t ...Is>
+	template<typename W, class S, class ...Rest>
 	inline const static size_t
 	writePacked(W &w, const S &s, const size_t offset, const Entries<Rest...> &e) {
 		return writePacked_impl(w, s, offset, e.args, std::index_sequence_for<Rest...>());
