@@ -11,6 +11,7 @@
 #include <vector>
 #include <numeric>
 #include <chrono>
+#include <unordered_map>
 #include <iostream>
 #include <algorithm>
 #include "glm/ext.hpp"
@@ -67,6 +68,7 @@ namespace fluid {
 			return !(rhs == *this);
 		}
 	};
+
 
 	template<typename N>
 	struct Ray {
@@ -126,12 +128,122 @@ namespace fluid {
 		}
 	};
 
+
+	template<typename T, typename N>
+	class GridNN {
+
+
+		glm::tvec3<N> pMin;
+		glm::tvec3<N> pMax;
+		glm::tvec3<int> cellMax;
+		std::vector<glm::tvec3<N>> offsets = std::vector<glm::tvec3<N>>();
+
+		const std::vector<Atom<T, N>> &xs;
+
+	public:
+
+
+		float rescale(float x, float a0, float a1, float b0, float b1) {
+			return ((x - a0) / (a1 - a0)) * (b1 - b0) + b0;
+		}
+
+		int asIndex(glm::tvec3<int> v) {
+			return v.x + (v.y * cellMax.x) + v.z * (cellMax.x * cellMax.y);
+		}
+
+//		glm::tvec3<int> subscript(Particle<T, N> p) {
+//			int i = std::round(rescale(p.position.x,
+//			                           pMin.x, pMax.x, 0.0f, cellMax.x - 1));
+//			int j = std::round(rescale(p.position.y,
+//			                           pMin.y, pMax.y, 0.0f, cellMax.y - 1));
+//			int k = std::round(rescale(p.position.z,
+//			                           pMin.z, pMax.z, 0.0f, cellMax.z - 1));
+//
+//			return glm::tvec3<int>(i, j, k);
+//		}
+
+		static constexpr auto CELL_SIZE = 0.1 ;
+
+		struct AtomCompare {
+			bool operator()(const glm::tvec3<int> &lhs, const glm::tvec3<int> &rhs) const {
+				return memcmp((void *) &lhs, (void *) &rhs, sizeof(glm::tvec3<int>)) > 0;
+			}
+		};
+
+
+		typedef std::unordered_multimap<size_t, size_t> SMap;
+		SMap M;
+
+
+		size_t hash(glm::tvec3<N> a) {
+			size_t res = 17;
+			res = res * 31 + std::hash<int>()(round(a.x / CELL_SIZE));
+			res = res * 31 + std::hash<int>()(round(a.y / CELL_SIZE));
+			res = res * 31 + std::hash<int>()(round(a.z / CELL_SIZE));
+			return res;
+		}
+
+		GridNN(const std::vector<Atom<T, N>> &xs) : xs(xs) {
+
+			//[CL] discretizeParticlePositions
+			//[CL] prefixSum->scan
+			//[CL] countSortParticlesByCell
+			//[CL] findParticleBins
+			// ..
+			// [CL]forAllNeighbors
+
+
+			N H = 0.1f;
+			N H2 = H * 2;
+			std::vector<N> off = {  -H, 0.f, H };
+			for (size_t x = 0; x < off.size(); ++x)
+				for (size_t y = 0; y < off.size(); ++y)
+					for (size_t z = 0; z < off.size(); ++z)
+						offsets.push_back(tvec3<N>(off[x], off[y], off[z]));
+
+			for (size_t i = 0; i < xs.size(); ++i) {
+				const Atom<T, N> &p = xs[i];
+
+				for (const auto ov : offsets) {
+					M.insert({hash(p.now + ov), p.particle->t});
+				}
+
+
+//				M.insert({hash(p.now), p.particle->t});
+			}
+
+
+
+
+		}
+
+
+		size_t length() {
+			return M.size();
+		}
+
+
+		void find(const Atom<T, N> &p, N radius, std::vector<size_t> &acc) {
+			auto r2 = radius * radius;
+//			for (const auto ov : offsets) {
+				auto ret = M.equal_range(hash(p.now ));
+				for (auto it = ret.first; it != ret.second; ++it) {
+					if (glm::distance2(xs[it->second].now, p.now) <= r2) {
+						acc.push_back(it->second);
+					}
+				}
+//			}
+		}
+
+
+	};
+
 	template<typename T, typename N>
 	struct AtomCloud {
 		const std::vector<Atom<T, N>> &pts;
 		const N scale;
 
-		AtomCloud(const std::vector<Atom<T, N>> &pts,	const N scale) : pts(pts), scale(scale) {}
+		AtomCloud(const std::vector<Atom<T, N>> &pts, const N scale) : pts(pts), scale(scale) {}
 
 		inline size_t kdtree_get_point_count() const { return pts.size(); }
 
@@ -215,6 +327,13 @@ namespace fluid {
 				               return a;
 			               });
 
+			hrc::time_point gnn = hrc::now();
+			GridNN<T, N> rtn = GridNN<T, N>(atoms);
+			std::cout << "\tGNN done " << std::endl;
+			hrc::time_point gnne = hrc::now();
+			auto nng = duration_cast<nanoseconds>(gnne - gnn).count();
+			std::cout << "\tGNN: " << (nng / 1000000.0) << "ms -> " << rtn.length() << std::endl;
+
 
 			hrc::time_point nns = hrc::now();
 
@@ -224,7 +343,7 @@ namespace fluid {
 
 			std::vector<tvec3<N>> pts;
 			std::transform(atoms.begin(), atoms.end(), std::back_inserter(pts),
-			               [truncation](const Atom<T, N> &a) { return a.now * truncation; });
+						   [truncation](const Atom<T, N> &a) { return a.now * truncation; });
 
 			unibn::Octree<tvec3<N>> octree;
 			octree.initialize(pts);
@@ -253,7 +372,6 @@ namespace fluid {
 				Atom<T, N> &a = atoms[i];
 
 
-
 #ifndef FLANN
 				std::vector<uint32_t> neighbours;
 				octree.template radiusNeighbors<unibn::L2Distance<tvec3<N>>>(
@@ -265,18 +383,45 @@ namespace fluid {
 					a.neighbours->emplace_back(&atoms[idx]);
 
 
-				#else
-				std::vector<std::pair<size_t, N> > drain;
+#else
 
-				auto origin = a.now * truncation;
+				std::vector<size_t> n2;
+				rtn.find(a, h2, n2);
+				a.neighbours->reserve(n2.size());
+				a.p6ks->reserve(n2.size());
+				a.skgs->reserve(n2.size());
+				for (const size_t t : n2)
+					a.neighbours->emplace_back(&atoms[t]);
 
-				index.radiusSearch(&origin[0], h2 * truncation, drain, params);
-				a.neighbours->reserve(drain.size());
-				a.p6ks->reserve(drain.size());
-				a.skgs->reserve(drain.size());
-				for (const std::pair<size_t, N> &p : drain)
-					a.neighbours->emplace_back(&atoms[p.first]);
+//				octree.template radiusNeighbors<unibn::L2Distance<tvec3<N>>>(
+//						a.now * truncation, (float) (h2 * truncation), n2);
 
+
+//				std::cout << ">>" << a.particle->t << std::endl;
+//				std::cout << "GNN[";
+//				for (size_t &idx : n2)
+//					std::cout << idx << ' ';
+//				std::cout << "]" << std::endl;
+
+
+//				std::cout << "\tNNC: " <<  neighbours.size() << std::endl;
+
+
+//				std::vector<std::pair<size_t, N> > drain;
+//
+//				auto origin = a.now * truncation;
+//
+//				index.radiusSearch(&origin[0], h2 * truncation, drain, params);
+//				a.neighbours->reserve(drain.size());
+//				a.p6ks->reserve(drain.size());
+//				a.skgs->reserve(drain.size());
+//				for (const std::pair<size_t, N> &p : drain)
+//					a.neighbours->emplace_back(&atoms[p.first]);
+
+//				std::cout << "OCT[";
+//				for (const std::pair<size_t, N> &p : drain)
+//					std::cout << p.first << ' ';
+//				std::cout << "]" << std::endl;
 
 #endif
 
@@ -331,8 +476,8 @@ namespace fluid {
 					auto current = Response<N>((a.now + a.deltaP) * scale, a.velocity);
 					for (const auto &f : colliders) {
 						Ray<N> ray = Ray<N>(a.particle->position,
-											current.getPosition(),
-											current.getVelocity());
+						                    current.getPosition(),
+						                    current.getVelocity());
 						current = f(ray);
 					}
 

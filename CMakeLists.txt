@@ -46,6 +46,10 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}    \
 -g")
 
 
+#  -fprofile-generate=./pgo \
+#  -fprofile-use=./pgo -fprofile-correction \
+
+
 if (MSVC)
     message(STATUS "Using MSVC")
     # StringPooling: true == /GF  false == /GF-

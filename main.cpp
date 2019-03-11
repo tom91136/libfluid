@@ -313,9 +313,16 @@ void checkClNN3() {
 }
 
 
-#define DO_SURFACE
+//#define DO_SURFACE
 
 
+
+void writeFile(std::string filename, std::string content) {
+	std::ofstream file;
+	file.open(filename);
+	file << content;
+	file.close();
+}
 
 
 int main(int argc, char *argv[]) {
@@ -325,20 +332,21 @@ int main(int argc, char *argv[]) {
 	auto triangleType = writer::writeMetaPacked<decltype(triangleEntries<num_t>())>();
 	auto headerType = writer::writeMetaPacked<decltype(headerEntries())>();
 
-
-	using namespace std::chrono;
-	using hrc = high_resolution_clock;
-
-	omp_set_num_threads(4);
-	size_t pcount = 6000 * 3;
-	size_t iter = 1;
-
+	writeFile("header.json", headerType.second.dump(1));
+	writeFile("particle.json", particleType.second.dump(1));
+	writeFile("triangle.json", triangleType.second.dump(1));
 
 	for (const auto &t : {particleType, triangleType, headerType}) {
 		std::cout << "size=" << t.first << std::endl;
 		std::cout << t.second.dump(3) << std::endl;
 	}
 
+	using namespace std::chrono;
+	using hrc = high_resolution_clock;
+
+	omp_set_num_threads(1);
+	size_t pcount = 6000  * 3;
+	size_t iter = 100;
 
 
 //	checkClNN3();

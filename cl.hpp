@@ -26,6 +26,24 @@ public:
 
 	}
 
+	compute::program make_shnn(const compute::context &context) {
+		const char source[] =
+				BOOST_COMPUTE_STRINGIZE_SOURCE(
+				// @formatter:off
+				kernel void shnn(
+							float radius,
+							int size,
+							global const float4 *input,
+							int maxSize,
+							global int *output) {
+
+				    // TODO
+				}
+				// @formatter:on
+				);
+		return compute::program::build_with_source(source, context);
+	}
+
 	compute::program make_sph_program(const compute::context &context) {
 		const char source[] =
 				BOOST_COMPUTE_STRINGIZE_SOURCE(
@@ -68,6 +86,8 @@ public:
 				);
 		return compute::program::build_with_source(source, context);
 	}
+
+
 
 	template<typename N>
 	std::vector<std::vector<size_t>> nn3(
