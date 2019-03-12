@@ -132,15 +132,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-                tvec3<N> origin,
-                std::vector<fluid::Particle<size_t, num_t >> &xs) {
+				tvec3<N> origin,
+				std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -192,130 +192,7 @@ struct PointCloud {
 };
 
 
-void checkClNN3() {
-	namespace compute = boost::compute;
-	std::cout << "OpenCL devices: " << std::endl;
-
-	for (const auto &device : compute::system::devices()) {
-		std::cout << "\t" << device.name() << std::endl;
-
-
-		auto clo = new CLOps(device);
-		clo->doIt();
-
-		for (int j = 0; j < 10; ++j) {
-
-			std::random_device rd;
-			std::mt19937 mt(12345);
-			num_t scale = 10.f;
-
-			std::uniform_real_distribution<num_t> dist(0, 1.f);
-			num_t R = 0.1f;
-
-			std::vector<tvec3<num_t >> data;
-			for (int m = 0; m < 20000; ++m)
-				data.emplace_back(dist(mt), dist(mt), dist(mt));
-
-
-
-			// compile once
-//		clo->nn3<num_t>(30.f, 1000, data);
-
-			using namespace std::chrono;
-			using hrc = high_resolution_clock;
-
-			hrc::time_point cls = hrc::now();
-//		clo->nn3<num_t>(30.f, 1000, data);
-			hrc::time_point cle = hrc::now();
-
-
-			hrc::time_point nnfs = hrc::now();
-
-			{
-				using namespace nanoflann;
-
-
-				std::vector<tvec3<num_t >> scaled;
-
-				std::transform(data.begin(), data.end(), std::back_inserter(scaled),
-				               [scale](const auto x) { return x * scale; });
-
-				PointCloud<num_t> cloud = PointCloud<num_t>(scaled, 1);
-				typedef KDTreeSingleIndexAdaptor<
-						L2_Simple_Adaptor<num_t, PointCloud<num_t> >,
-						PointCloud<num_t>,
-						3
-				> my_kd_tree_t;
-
-				my_kd_tree_t index(3, cloud, KDTreeSingleIndexAdaptorParams(10));
-				index.buildIndex();
-
-
-				nanoflann::SearchParams params;
-				params.sorted = false;
-
-				std::vector<std::vector<std::pair<size_t, num_t>>> drain;
-//#pragma omp parallel for
-				for (size_t m = 0; m < data.size(); ++m) {
-					std::vector<std::pair<size_t, num_t>> drainA;
-					index.radiusSearch(&data[m][0], R * R * scale, drainA, params);
-					drain.push_back(drainA);
-				}
-
-//			std::cout << "D=" << drain.size() << "" <<std::endl;
-			}
-
-
-			hrc::time_point nnfe = hrc::now();
-
-
-			hrc::time_point cpus = hrc::now();
-
-			{
-
-				std::vector<tvec3<num_t >> scaled;
-
-				std::transform(data.begin(), data.end(), std::back_inserter(scaled),
-				               [scale](const auto x) { return x * scale; });
-
-
-				unibn::Octree<tvec3<num_t>> octree;
-				octree.initialize(scaled);
-				std::vector<std::vector<uint32_t >> drain;
-//#pragma omp parallel for
-				for (size_t m = 0; m < data.size(); ++m) {
-					std::vector<uint32_t> drainA;
-					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(data[m], R * scale,
-					                                                        drainA);
-					drain.push_back(drainA);
-				}
-//			std::cout << "D=" << drain.size() << "" <<std::endl;
-			}
-
-			hrc::time_point cpue = hrc::now();
-
-			auto cl = duration_cast<nanoseconds>(cle - cls).count();
-			auto cpu = duration_cast<nanoseconds>(cpue - cpus).count();
-			auto nnf = duration_cast<nanoseconds>(nnfe - nnfs).count();
-
-			std::cout << "CL  : " << (cl / 1000000.0) << "ms "
-			          << "OCT : " << (cpu / 1000000.0) << "ms "
-			          << "NNF : " << (nnf / 1000000.0) << "ms "
-			          << std::endl;
-		}
-
-
-	}
-
-//	compute::device defaultDevice = compute::system::default_device();
-//	std::cout << "\tDefault: " << defaultDevice.name() << std::endl;
-
-
-}
-
-
 #define DO_SURFACE
-
 
 
 void writeFile(std::string filename, std::string content) {
@@ -325,8 +202,17 @@ void writeFile(std::string filename, std::string content) {
 	file.close();
 }
 
-
 int main(int argc, char *argv[]) {
+
+	auto clo = new CLOps();
+	clo->doIt();
+	delete clo;
+
+	return EXIT_SUCCESS;
+}
+
+
+void run() {
 
 
 	auto particleType = writer::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
@@ -337,22 +223,21 @@ int main(int argc, char *argv[]) {
 	writeFile("particle.json", particleType.second.dump(1));
 	writeFile("triangle.json", triangleType.second.dump(1));
 
-	for (const auto &t : {particleType, triangleType, headerType}) {
-		std::cout << "size=" << t.first << std::endl;
-		std::cout << t.second.dump(3) << std::endl;
-	}
+//	for (const auto &t : {particleType, triangleType, headerType}) {
+//		std::cout << "size=" << t.first << std::endl;
+//		std::cout << t.second.dump(3) << std::endl;
+//	}
 
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(1);
-	size_t pcount = 6000  * 3;
+	size_t pcount = 6000 * 3;
 	size_t iter = 0;
 
 
 
-	auto clo = new CLOps(compute::system::default_device());
-	clo->doIt();
+
 
 
 //	checkClNN3();
@@ -382,11 +267,11 @@ int main(int argc, char *argv[]) {
 				return fluid::Response<num_t>(
 						tvec3<num_t>(
 								glm::clamp(x.getOrigin().x, (num_t) -500.f * Xscale + xx,
-								           (num_t) 500.f * Xscale + xx),
+										   (num_t) 500.f * Xscale + xx),
 								glm::clamp(x.getOrigin().y, (num_t) -500.f * Yscale,
-								           (num_t) 500.f * Yscale),
+										   (num_t) 500.f * Yscale),
 								glm::clamp(x.getOrigin().z, (num_t) -500.f * Zscale + zz,
-								           (num_t) 500.f * Zscale + zz)),
+										   (num_t) 500.f * Zscale + zz)),
 						x.getVelocity());
 			}
 	};
@@ -417,9 +302,9 @@ int main(int argc, char *argv[]) {
 
 		hrc::time_point t1 = hrc::now();
 		solver->advance(static_cast<num_t> (0.0083 * 1), 2, xs,
-		                [](const fluid::Particle<size_t, num_t> &x) {
-			                return tvec3<num_t>(0, x.mass * 9.8, 0);
-		                }, colliders
+						[](const fluid::Particle<size_t, num_t> &x) {
+							return tvec3<num_t>(0, x.mass * 9.8, 0);
+						}, colliders
 		);
 		hrc::time_point t2 = hrc::now();
 
@@ -517,12 +402,12 @@ int main(int argc, char *argv[]) {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-		          << "Solver:" << (solve / 1000000.0) << "ms "
-		          << "Surface:" << (param / 1000000.0) << "ms "
-		          << "IPC:" << (mmf / 1000000.0) << "ms "
-		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-		          << xs.size()
-		          << std::endl;
+				  << "Solver:" << (solve / 1000000.0) << "ms "
+				  << "Surface:" << (param / 1000000.0) << "ms "
+				  << "IPC:" << (mmf / 1000000.0) << "ms "
+				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+				  << xs.size()
+				  << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();
@@ -535,5 +420,4 @@ int main(int argc, char *argv[]) {
 
 	xs.clear();
 
-	return EXIT_SUCCESS;
 }

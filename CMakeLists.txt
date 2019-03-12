@@ -75,7 +75,7 @@ endif ()
 
 #find_package(BoostCompute CONFIG REQUIRED)
 
-include_directories(${BoostCompute_INCLUDE_DIRS})
+#include_directories(${BoostCompute_INCLUDE_DIRS})
 
 #add_library(libfluid Octree.hpp library.cpp library.hpp main.cpp library.cpp)
 

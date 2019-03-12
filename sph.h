@@ -12,6 +12,13 @@ typedef cl_uint uint;
 
 #endif
 
+
+typedef struct Config {
+	float h;
+	float scale;
+	uint iteration;
+}  __attribute__ ((aligned)) Config;
+
 typedef struct Atom {
 
 	float3 now;
@@ -28,6 +35,16 @@ typedef struct Atom {
 	uint neighbourCount;
 
 }  __attribute__ ((aligned)) Atom;
+
+typedef struct Result {
+
+	float3 now;
+	float3 velocity;
+
+}  __attribute__ ((aligned)) Result;
+
+
+
 
 
 #endif //LIBFLUID_SPH_H
