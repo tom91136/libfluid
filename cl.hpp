@@ -8,9 +8,16 @@
 #include "boost/compute/algorithm/accumulate.hpp"
 #include "boost/compute/container/vector.hpp"
 #include "boost/compute/types/fundamental.hpp"
+#include "sph.h"
 
 namespace compute = boost::compute;
 using glm::tvec3;
+
+
+using compute::float4_;
+using compute::float_;
+using compute::int_;
+
 
 class CLOps {
 
@@ -106,71 +113,71 @@ public:
 	}
 
 
-	typedef struct {
-		int id;
-		float mass;
-		compute::float4_ now;
-		float lambda;
-		compute::float4_ deltaP;
-		compute::float4_ omega;
-		compute::float4_ velocity;
-		int *neighbours;
-	} Atom;
-
 	void showAtom(Atom atom) {
-		std::cout << "P " << atom.id << " " << atom.mass << " " << atom.lambda << std::endl;
+		std::cout << "P " << atom.id << " " << atom.mass << " " << std::endl;
 	}
 
+
+	inline cl_float3 float3(float x, float y, float z) { return {{x, y, z}}; }
+
+	inline cl_float4 float4(float x, float y, float z, float w) { return {{x, y, z, w}}; }
+
+	inline cl_float3 float3(float x) { return {{x, x, x}}; }
+
+	inline cl_float4 float4(float x) { return {{x, x, x, x}}; }
+
+
 	void doIt() {
-		using compute::float4_;
 
 		auto prog = compute::program::create_with_source_file("../sph.cl", context);
 		prog.build();
 		compute::kernel sph(prog, "sph");
 
-		Atom a = {
-				1, 10,
-				float4_(1.0, 1.0, 1.0, 0),
-				10,
-				float4_(1.0, 1.0, 1.0, 0),
-				float4_(1.0, 1.0, 1.0, 0),
-				float4_(1.0, 1.0, 1.0, 0),
-		};
-		int neighbours[] = {1, 2, 3};
-		a.neighbours = neighbours;
+		cl_float4 f4 = float4(1.f, 1.f, 1.f, 1.f);
 
-		Atom b = {
-				2, 10,
-				float4_(1.0, 1.0, 1.0, 0),
-				10,
-				float4_(1.0, 1.0, 1.0, 0),
-				float4_(1.0, 1.0, 1.0, 0),
-				float4_(1.0, 1.0, 1.0, 0),
+		Atom a = {
+				.now = f4, .mass = 10.f, .id = 10,
+				.neighbourOffset = 0,
+				.neighbourCount = 3
 		};
+		Atom b = {
+				.now = f4, .mass = 20.f, .id = 20,
+				.neighbourOffset = 3,
+				.neighbourCount = 4
+		};
+
+
+		std::cout << "Go! " << sizeof(Atom) << std::endl;
+
 
 		std::vector<Atom> ys = {a, b};
+		std::vector<uint> ns = {1, 2, 3, 4, 5, 6, 42};
+		compute::vector<Atom> atoms(ys.begin(), ys.end(), queue);
+		compute::vector<uint> neighbours(ns.begin(), ns.end(), queue);
+
+		compute::vector<float> output(ys.size(), -1.f, queue);
 
 
-		compute::vector<Atom> input(ys.begin(), ys.end(), queue);
-		compute::vector<int> output(ys.begin(), ys.end(), queue);
 
-		sph.set_arg(0, input.get_buffer());
-		sph.set_arg(1, input.get_buffer());
-		sph.set_arg(2, (int) ys.size());
+
+		sph.set_arg(0, atoms.get_buffer());
+		sph.set_arg(1, neighbours.get_buffer());
+		sph.set_arg(2, (uint) ys.size());
+		sph.set_arg(3, output.get_buffer());
+
 
 		queue.enqueue_1d_range_kernel(sph, 0, ys.size(), 0);
 
 
-		std::vector<Atom> out(ys.size());
-
+		std::vector<float> out(ys.size());
 
 		boost::compute::copy(
-				input.begin(), input.end(), out.begin(),
+				output.begin(), output.end(), out.begin(),
 				queue
 		);
-		std::cout << "vector: [ "<<std::endl;
+		std::cout << "vector: [ " << std::endl;
 		for (auto a : out) {
-			showAtom(a);
+			std::cout << a << ",";
 		}
 		std::cout << "]" << std::endl;
 
@@ -198,7 +205,7 @@ public:
 		std::vector<float4_> ys;
 
 		std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
-					   [](const tvec3<N> &v) { return float4_(v.x, v.y, v.z, 0.f); });
+		               [](const tvec3<N> &v) { return float4_(v.x, v.y, v.z, 0.f); });
 
 		compute::vector<float4_> input(ys.begin(), ys.end(), queue);
 		compute::vector<int> output((size_t) maxN * xs.size(), -1, queue);

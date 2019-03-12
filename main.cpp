@@ -314,7 +314,7 @@ void checkClNN3() {
 }
 
 
-//#define DO_SURFACE
+#define DO_SURFACE
 
 
 
