@@ -48,8 +48,26 @@ public:
 		const char source[] =
 				BOOST_COMPUTE_STRINGIZE_SOURCE(
 				// @formatter:off
+
+				static const float VD = 0.49;// Velocity dampening;
+				static const float RHO = 6378; // Reference density;
+				static const float EPSILON = 0.00000001;
+				static const float CFM_EPSILON = 600.0; // CFM propagation;
+
+				static const float C = 0.00001;
+				static const float VORTICITY_EPSILON = 0.0005;
+				static const float CorrK = 0.0001;
+				static const float CorrN = 4.f;
+
 				struct Atom{
 					// TODO impl
+
+
+					N mass;tvec3<N> now;
+		N lambda;
+		tvec3<N> deltaP;
+		tvec3<N> omega;
+		tvec3<N> velocity;
 				};
 
 				kernel void sph() {
@@ -88,6 +106,77 @@ public:
 	}
 
 
+	typedef struct {
+		int id;
+		float mass;
+		compute::float4_ now;
+		float lambda;
+		compute::float4_ deltaP;
+		compute::float4_ omega;
+		compute::float4_ velocity;
+		int *neighbours;
+	} Atom;
+
+	void showAtom(Atom atom) {
+		std::cout << "P " << atom.id << " " << atom.mass << " " << atom.lambda << std::endl;
+	}
+
+	void doIt() {
+		using compute::float4_;
+
+		auto prog = compute::program::create_with_source_file("../sph.cl", context);
+		prog.build();
+		compute::kernel sph(prog, "sph");
+
+		Atom a = {
+				1, 10,
+				float4_(1.0, 1.0, 1.0, 0),
+				10,
+				float4_(1.0, 1.0, 1.0, 0),
+				float4_(1.0, 1.0, 1.0, 0),
+				float4_(1.0, 1.0, 1.0, 0),
+		};
+		int neighbours[] = {1, 2, 3};
+		a.neighbours = neighbours;
+
+		Atom b = {
+				2, 10,
+				float4_(1.0, 1.0, 1.0, 0),
+				10,
+				float4_(1.0, 1.0, 1.0, 0),
+				float4_(1.0, 1.0, 1.0, 0),
+				float4_(1.0, 1.0, 1.0, 0),
+		};
+
+		std::vector<Atom> ys = {a, b};
+
+
+		compute::vector<Atom> input(ys.begin(), ys.end(), queue);
+		compute::vector<int> output(ys.begin(), ys.end(), queue);
+
+		sph.set_arg(0, input.get_buffer());
+		sph.set_arg(1, input.get_buffer());
+		sph.set_arg(2, (int) ys.size());
+
+		queue.enqueue_1d_range_kernel(sph, 0, ys.size(), 0);
+
+
+		std::vector<Atom> out(ys.size());
+
+
+		boost::compute::copy(
+				input.begin(), input.end(), out.begin(),
+				queue
+		);
+		std::cout << "vector: [ "<<std::endl;
+		for (auto a : out) {
+			showAtom(a);
+		}
+		std::cout << "]" << std::endl;
+
+
+	}
+
 
 	template<typename N>
 	std::vector<std::vector<size_t>> nn3(
@@ -103,10 +192,13 @@ public:
 			this->nn3k = nn3k;
 		}
 
+		auto prog = compute::program::create_with_source_file("../sph.cl", context);
+		prog.build();
+
 		std::vector<float4_> ys;
 
 		std::transform(xs.begin(), xs.end(), std::back_inserter(ys),
-		               [](const tvec3<N> &v) { return float4_(v.x, v.y, v.z, 0.f); });
+					   [](const tvec3<N> &v) { return float4_(v.x, v.y, v.z, 0.f); });
 
 		compute::vector<float4_> input(ys.begin(), ys.end(), queue);
 		compute::vector<int> output((size_t) maxN * xs.size(), -1, queue);

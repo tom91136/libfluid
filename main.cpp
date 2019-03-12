@@ -201,6 +201,7 @@ void checkClNN3() {
 
 
 		auto clo = new CLOps(device);
+		clo->doIt();
 
 		for (int j = 0; j < 10; ++j) {
 
@@ -346,7 +347,12 @@ int main(int argc, char *argv[]) {
 
 	omp_set_num_threads(1);
 	size_t pcount = 6000  * 3;
-	size_t iter = 100;
+	size_t iter = 0;
+
+
+
+	auto clo = new CLOps(compute::system::default_device());
+	clo->doIt();
 
 
 //	checkClNN3();

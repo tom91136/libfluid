@@ -79,7 +79,7 @@ include_directories(${BoostCompute_INCLUDE_DIRS})
 
 #add_library(libfluid Octree.hpp library.cpp library.hpp main.cpp library.cpp)
 
-add_executable(main cl.hpp nanoflann.hpp Octree.hpp writer.hpp surface.hpp fluid.hpp main.cpp)
+add_executable(main cl.hpp nanoflann.hpp sph.cl Octree.hpp writer.hpp surface.hpp fluid.hpp main.cpp)
 add_executable(libfluid test.cpp test-main.cpp)
 
 target_link_libraries(libfluid PRIVATE Catch2::Catch2)
