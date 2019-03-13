@@ -16,10 +16,13 @@ typedef cl_uint uint;
 typedef struct Config {
 	float h;
 	float scale;
+	float dt;
 	uint iteration;
 }  __attribute__ ((aligned)) Config;
 
 typedef struct Atom {
+
+	float3 position;
 
 	float3 now;
 	float3 velocity;
@@ -27,18 +30,18 @@ typedef struct Atom {
 	float3 deltaP;
 	float3 omega;
 
-	float mass;
+	 float mass;
 	float lambda;
 
-	int id;
-	uint neighbourOffset;
-	uint neighbourCount;
+	 int id;
+	 uint neighbourOffset;
+	 uint neighbourCount;
 
 }  __attribute__ ((aligned)) Atom;
 
 typedef struct Result {
 
-	float3 now;
+	float3 position;
 	float3 velocity;
 
 }  __attribute__ ((aligned)) Result;

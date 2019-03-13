@@ -41,20 +41,40 @@ public:
 
 	void doIt() {
 
+		std::cout << "Enumerating OpenCL platforms:" << std::endl;
+
 		std::vector<cl::Platform> platforms;
 		cl::Platform::get(&platforms);
 		auto platform = cl::Platform::getDefault();
-		std::cout << "Enumerating OpenCL platforms:" << std::endl;
 		for (auto &p : platforms) {
-			std::cout << "Platform"
-					  << (platform == p ? "(Default):" : ":")
-					  << p.getInfo<CL_PLATFORM_NAME>()
-					  << "\n\tVendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-					  << "\n\tVersion    : " << p.getInfo<CL_PLATFORM_VERSION>()
-					  << "\n\tProfile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-					  << "\n\tExtensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-					  << std::endl;
+			try {
+
+				std::cout << "Platform"
+				          << (platform == p ? "(Default):" : ":")
+				          << p.getInfo<CL_PLATFORM_NAME>()
+				          << "\n\tVendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+				          << "\n\tVersion    : " << p.getInfo<CL_PLATFORM_VERSION>()
+				          << "\n\tProfile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+				          << "\n\tExtensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+				          << "\n\tDevices    : "
+				          << std::endl;
+				std::vector<cl::Device> devices;
+				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+				for (auto &d : devices) {
+					std::cout
+							<< "\t\tName    : " << d.getInfo<CL_DEVICE_NAME>()
+							<< "\n\t\tType    : " << d.getInfo<CL_DEVICE_TYPE>()
+							<< "\n\t\tVendor  : " << d.getInfo<CL_DEVICE_VENDOR_ID>()
+							<< "\n\t\tVersion : " << d.getInfo<CL_DEVICE_VERSION>()
+							<< std::endl;
+				}
+			} catch (const std::exception &e) {
+				std::cerr << "Enumeration failed:" << p.getInfo<CL_PLATFORM_NAME>() << std::endl;
+			}
 		}
+
+		std::cout << "Using default platform: " << platform.getInfo<CL_PLATFORM_NAME>()
+		          << std::endl;
 
 
 		std::ifstream t("../sph.cl");
@@ -65,7 +85,7 @@ public:
 		cl::Program program(source.str());
 
 		try {
-			program.build("-cl-std=CL1.2 -w");
+			program.build("-cl-std=CL1.2 -w -I /home/tom/libfluid");
 		} catch (...) {
 			cl_int buildErr = CL_SUCCESS;
 			auto buildInfo = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr);
