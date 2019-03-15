@@ -79,7 +79,13 @@ endif ()
 
 #add_library(libfluid Octree.hpp library.cpp library.hpp main.cpp library.cpp)
 
-add_executable(main sph.h cl.hpp nanoflann.hpp sph.cl Octree.hpp writer.hpp surface.hpp fluid.hpp main.cpp)
+add_executable(main
+        Octree.hpp
+        nanoflann.hpp
+        clsph_types.h clsph.hpp clsph_kernel.cl
+        cpusph.hpp
+        writer.hpp surface.hpp fluid.hpp
+        main.cpp)
 add_executable(libfluid test.cpp test-main.cpp)
 
 target_link_libraries(libfluid PRIVATE Catch2::Catch2)

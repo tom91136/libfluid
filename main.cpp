@@ -14,7 +14,8 @@
 //#include <experimental/filesystem>
 #include "fluid.hpp"
 #include "surface.hpp"
-#include "cl.hpp"
+#include "clsph.hpp"
+#include "cpusph.hpp"
 #include "nanoflann.hpp"
 
 #include "mio/mmap.hpp"
@@ -148,7 +149,7 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 		for (size_t y = 0; y < len; ++y) {
 			for (size_t z = 0; z < len; ++z) {
 				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
-				xs.emplace_back(++offset, fluid::Fluid, 1.0, pos, tvec3<num_t>(0));
+				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0));
 			}
 		}
 	}
@@ -192,7 +193,7 @@ struct PointCloud {
 };
 
 
-#define DO_SURFACE
+//#define DO_SURFACE
 
 
 void writeFile(std::string filename, std::string content) {
@@ -202,11 +203,15 @@ void writeFile(std::string filename, std::string content) {
 	file.close();
 }
 
+void run();
+
 int main(int argc, char *argv[]) {
 
-	auto clo = new CLOps();
-	clo->doIt();
-	delete clo;
+
+
+
+
+	run();
 
 	return EXIT_SUCCESS;
 }
@@ -232,8 +237,8 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(1);
-	size_t pcount = 6000 * 3;
-	size_t iter = 0;
+	size_t pcount = 1'00;
+	size_t iter = 1;
 
 
 
@@ -290,8 +295,8 @@ void run() {
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
-	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(
-			new fluid::SphSolver<size_t, num_t>(0.1, 550)); // less = less space between particle
+	std::unique_ptr<cpusph::SphSolver<size_t, num_t>> solver(
+			new cpusph::SphSolver<size_t, num_t>(0.1, 550)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
@@ -301,7 +306,7 @@ void run() {
 		i += glm::pi<num_t>() / 50;
 
 		hrc::time_point t1 = hrc::now();
-		solver->advance(static_cast<num_t> (0.0083 * 1), 2, xs,
+		solver->advance(static_cast<num_t> (0.0083 * 1), 3, xs,
 						[](const fluid::Particle<size_t, num_t> &x) {
 							return tvec3<num_t>(0, x.mass * 9.8, 0);
 						}, colliders
