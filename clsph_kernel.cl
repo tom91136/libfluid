@@ -3,6 +3,7 @@
 
 #ifndef __OPENCL_C_VERSION__
 
+#include <tgmath.h>
 #include "clsph_types.h"
 
 #define global
@@ -20,6 +21,9 @@
 #define constant constant
 #endif
 
+#define DEBUG
+#undef DEBUG
+
 
 const constant float VD = 0.49f;// Velocity dampening;
 const constant float RHO = 6378.0f; // Reference density;
@@ -30,8 +34,6 @@ const constant float C = 0.00001f;
 const constant float VORTICITY_EPSILON = 0.0005f;
 const constant float CorrK = 0.0001f;
 const constant float CorrN = 4.f;
-
-const constant float3 Zero3 = (float3) (0.f);
 
 
 const constant float H = 0.1f;
@@ -51,8 +53,8 @@ inline float poly6Kernel(const float r) {
 
 inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r) {
 	return (r >= EPSILON && r <= H) ?
-	       (x - y) * (SpikyKernelFactor * (pow(H - r, 2.f) / r)) :
-	       Zero3;
+		   (x - y) * (SpikyKernelFactor * (pow(H - r, 2.f) / r)) :
+		   (float3) (0.f);
 }
 
 
@@ -155,11 +157,15 @@ inline size_t neighbourEnd(const global ClSphAtom *atom) {
 	return neighbourStart(atom) + atom->neighbourCount;
 };
 
-inline float lambda(const ClSphConfig config,
-                    const global ClSphAtom *a,
-                    const global ClSphAtom *atoms,
-                    const global uint *neighbours) {
-	float3 norm2V = Zero3;
+
+kernel void sph_lambda(
+		const ClSphConfig config,
+		global ClSphAtom *atoms,
+		const global uint *neighbours
+) {
+	const size_t id = get_global_id(0);
+	global ClSphAtom *a = &atoms[id];
+	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
 	for (size_t i = neighbourStart(a); i < neighbourEnd(a); i++) {
 		const global ClSphAtom *b = &atoms[neighbours[i]];
@@ -168,48 +174,15 @@ inline float lambda(const ClSphConfig config,
 		rho += b->mass * poly6Kernel(r);
 	}
 	float norm2 = dot(norm2V, norm2V); // dot self = length2
-	float C = (rho / RHO - 1.f);
-	return -C / (norm2 + CFM_EPSILON);
+	float C1 = (rho / RHO - 1.f);
+	a->lambda = -C1 / (norm2 + CFM_EPSILON);
 }
 
 
-inline float3 deltaP(const ClSphConfig config,
-                     const float p6DeltaQ,
-                     const global ClSphAtom *a,
-                     const global ClSphAtom *atoms,
-                     const global uint *neighbours) {
-	float3 deltaP = Zero3;
-	for (size_t i = neighbourStart(a); i < neighbourEnd(a); i++) {
-		const global ClSphAtom *b = &atoms[neighbours[i]];
-		const float r = distance(a->now, b->now);
-		const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
-		const float factor = (a->lambda + b->lambda + corr) / RHO;
-		deltaP += spikyKernelGradient(a->now, b->now, r) * factor;
-	}
-	return deltaP;
-}
-
-inline void collision(const ClSphConfig config, global ClSphAtom *a) {
-
-	float3 currentP = (a->now + a->deltaP) * config.scale;
-	float3 currentV = a->velocity;
-
-
-	currentP = clamp(currentP, -750.f, 750.f);
-
-	// TODO handle colliders
-
-	a->now = currentP / config.scale;
-	a->velocity = currentV;
-}
-
-
-kernel void sph(
+kernel void sph_delta(
 		const ClSphConfig config,
 		global ClSphAtom *atoms,
-		const uint size,
-		const global uint *neighbours,
-		global ClSphResult *results
+		const global uint *neighbours
 ) {
 	const size_t id = get_global_id(0);
 
@@ -218,25 +191,50 @@ kernel void sph(
 	const float CorrDeltaQ = 0.3f * H;
 	const float p6DeltaQ = poly6Kernel(CorrDeltaQ);
 
-//	a->now = (a->velocity * config.dt) + (a->position / config.scale);
-
-	for (size_t iter = 0; iter < config.iteration; iter++) {
-		a->lambda = lambda(config, a, atoms, neighbours);
-		barrier(CLK_GLOBAL_MEM_FENCE);
-		a->deltaP = deltaP(config, p6DeltaQ, a, atoms, neighbours);
-		collision(config, a);
-		barrier(CLK_GLOBAL_MEM_FENCE);
+	float3 deltaP = (float3) (0.f);
+	for (size_t i = neighbourStart(a); i < neighbourEnd(a); i++) {
+		const global ClSphAtom *b = &atoms[neighbours[i]];
+		const float r = distance(a->now, b->now);
+		const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
+		const float factor = (a->lambda + b->lambda + corr) / RHO;
+		deltaP += spikyKernelGradient(a->now, b->now, r) * factor;
 	}
+	a->deltaP = deltaP;
+
+	// collision
+	float3 currentP = (a->now + a->deltaP) * config.scale;
+	float3 currentV = a->velocity;
+	currentP = clamp(currentP, -500.f, 500.f);
+	// TODO handle colliders
+
+	a->now = currentP / config.scale;
+	a->velocity = currentV;
 
 //	size_t x = 0;
 //	for (size_t i = neighbourStart(a); i < neighbourEnd(a); i++) {
 //		x += atoms[neighbours[i]].id;
 //	}
-//
-//	printf("[%ld] config {h=%f, scale=%f, dt=%f} %d p={id=%ld, mass=%f lam=%f, deltaP=(%f,%f,%f)}",
-//	       id, config.h, config.scale, config.dt, x,
-//	       a->id, a->mass, a->lambda,
-//	       a->deltaP.x, a->deltaP.y, a->deltaP.z);
+
+
+
+#ifdef DEBUG
+	printf("[%ld] config { scale=%f, dt=%f} p={id=%ld, mass=%f lam=%f, deltaP=(%f,%f,%f)}\n",
+		   id, config.scale, config.dt,
+		   a->id, a->mass, a->lambda,
+		   a->deltaP.x, a->deltaP.y, a->deltaP.z);
+#endif
+}
+
+
+kernel void sph_finalise(
+		const ClSphConfig config,
+		global ClSphAtom *atoms,
+		global ClSphResult *results
+) {
+	const size_t id = get_global_id(0);
+
+	global ClSphAtom *a = &atoms[id];
+
 
 	const float3 deltaX = a->now - a->position / config.scale;
 	results[id].position = a->now * config.scale;

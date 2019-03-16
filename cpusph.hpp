@@ -83,8 +83,6 @@ namespace cpusph {
 		GridNN(const std::vector<Atom<T, N>> &xs) : xs(xs) {
 
 
-
-
 			N H = 0.1f;
 			N H2 = H * 2;
 			std::vector<N> off = {-H, 0.f, H};
@@ -156,12 +154,10 @@ namespace cpusph {
 	class SphSolver {
 
 	public:
-		clsph::CLOps<T, N> clo;
+		clsph::CLOps<T, N> clo = clsph::CLOps<T,N>();
 
 		explicit SphSolver(N h = 0.1, N scale = 1) : h(h), scale(scale) {
-			clo = clsph::CLOps<T, N>();
-			clo.enumeratePlatformToCout();
-			clo.prepareProgram();
+			clsph::enumeratePlatformToCout();
 		}
 
 	public:
@@ -197,16 +193,16 @@ namespace cpusph {
 		const tvec3<N> spikyKernelGradient(tvec3<N> x, tvec3<N> y, N &r) {
 			r = glm::distance(x, y);
 			return !(r <= h && r >= EPSILON) ?
-			       tvec3<N>(0) :
-			       (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
+				   tvec3<N>(0) :
+				   (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
 		}
 
 	public:
 
 		void advance(N dt, size_t iteration,
-		             std::vector<Particle<T, N>> &xs,
-		             const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
-		             const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
+					 std::vector<Particle<T, N>> &xs,
+					 const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
+					 const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
 		) {
 
 			using namespace std::chrono;
@@ -216,21 +212,21 @@ namespace cpusph {
 			std::vector<Atom<T, N>> atoms;
 
 			std::transform(xs.begin(), xs.end(), std::back_inserter(atoms),
-			               [constForce, dt, this](Particle<T, N> &p) {
-				               auto a = Atom<T, N>(&p);
-				               a.velocity = constForce(p) * dt + p.velocity;
-				               a.mass = p.mass;
-				               a.now = (a.velocity * dt) + (p.position / scale);
-				               return a;
-			               });
+						   [constForce, dt, this](Particle<T, N> &p) {
+							   auto a = Atom<T, N>(&p);
+							   a.velocity = constForce(p) * dt + p.velocity;
+							   a.mass = p.mass;
+							   a.now = (a.velocity * dt) + (p.position / scale);
+							   return a;
+						   });
 
-			hrc::time_point gnn = hrc::now();
-			GridNN<T, N> rtn = GridNN<T, N>(atoms);
-			std::cout << "\tGNN done " << std::endl;
-			hrc::time_point gnne = hrc::now();
-			auto nng = duration_cast<nanoseconds>(gnne - gnn).count();
-			std::cout << "\tGNN: " << (nng / 1000000.0) << "ms -> " << rtn.length() << std::endl;
-
+//			hrc::time_point gnn = hrc::now();
+//			GridNN<T, N> rtn = GridNN<T, N>(atoms);
+//			std::cout << "\tGNN done " << std::endl;
+//			hrc::time_point gnne = hrc::now();
+//			auto nng = duration_cast<nanoseconds>(gnne - gnn).count();
+//			std::cout << "\tGNN: " << (nng / 1000000.0) << "ms -> " << rtn.length() << std::endl;
+//
 
 			hrc::time_point nns = hrc::now();
 
@@ -336,91 +332,98 @@ namespace cpusph {
 			auto rs = clo.run(atoms, iteration, scale);
 
 
-			for (int j = 0; j <atoms.size(); ++j) {
+			for (int j = 0; j < atoms.size(); ++j) {
 				Atom<T, N> &a = atoms[j];
 				a.particle->velocity = clutil::glmT(rs[j].velocity);
 				a.particle->position = clutil::glmT(rs[j].position);
 			}
 
-//
-//			for (size_t j = 0; j < iteration; ++j) {
-//
-//				// solve for lambda
-//#pragma omp parallel for
-//				for (int i = 0; i < atoms.size(); ++i) {
-//					Atom<T, N> &a = atoms[i];
-//					// Rho : density of a particle
-//					N rho = 0.f;
-//					auto norm2V = tvec3<N>(0);
-//					int nss = 0;
-//					for (size_t l = 0; l < a.neighbours->size(); ++l) {
-//						Atom<T, N> *b = (*a.neighbours)[l];
-//						N r;
-//						tvec3<N> skg = spikyKernelGradient(a.now, b->now, r);
-//						N p6k = poly6Kernel(r);
-//						rho += b->mass * p6k;
-//						norm2V += skg * (1.f / RHO);
-//						(*a.skgs)[l] = skg;
-//						(*a.p6ks)[l] = p6k;
-////						std::cout << "[" << a.particle->t << "]["<< b->particle->t << "]NS:" << nss  <<std::endl;
-//
-//						nss += b->particle->t;
-//					}
-//					auto norm2 = glm::length2(norm2V);
-//					N C = (rho / RHO - 1.f);
-//					a.lambda = -C / (norm2 + CFM_EPSILON);
-////					std::cout << "["<< a.particle->t << "]NS:" << nss  << " N2:" << rho <<std::endl;
-//
-//				}
-//
-//				// solve for delta p
-//#pragma omp parallel for
-//				for (int i = 0; i < atoms.size(); ++i) {
-//					Atom<T, N> &a = atoms[i];
-//					a.deltaP = tvec3<N>(0);
-//
-//					for (size_t l = 0; l < a.neighbours->size(); ++l) {
-//						Atom<T, N> *b = (*a.neighbours)[l];
-//						N corr = -CorrK *
-//						         std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
-//						N factor = (a.lambda + b->lambda + corr) / RHO;
-//						a.deltaP = (*a.skgs)[l] * factor + a.deltaP;
-//					}
-//
-//					auto current = Response<N>((a.now + a.deltaP) * scale, a.velocity);
-//					for (const auto &f : colliders) {
-//						Ray<N> ray = Ray<N>(a.particle->position,
-//						                    current.getPosition(),
-//						                    current.getVelocity());
-//						current = f(ray);
-//					}
-//
-//					a.now = current.getPosition() / scale;
-//					a.velocity = current.getVelocity();
-//				}
-//			}
-//
-//
-//			// finalise
-//			for (Atom<T, N> &a : atoms) {
-//
-//
-//				auto deltaX = a.now - a.particle->position / scale;
-//				a.particle->position = a.now * scale;
-//				a.particle->mass = a.mass;
-//				a.particle->velocity = (deltaX * (1.f / dt) + a.velocity) * VD;
-//			}
 
-//			for (Atom<T, N> &a : atoms) {
-//				std::cout << "CPU >> "
-//				          << " p=" << glm::to_string(a.particle->position)
-//				          << " v=" << glm::to_string(a.particle->velocity)
-//						<< " lam=" << a.lambda
-//						<< " deltaP=" << glm::to_string(a.deltaP)
-//				          << std::endl;
-//			}
+//#define USE_CPU
 
+
+#ifdef USE_CPU
+
+			for (size_t j = 0; j < iteration; ++j) {
+
+				// solve for lambda
+#pragma omp parallel for
+				for (int i = 0; i < atoms.size(); ++i) {
+					Atom<T, N> &a = atoms[i];
+					// Rho : density of a particle
+					N rho = 0.f;
+					auto norm2V = tvec3<N>(0);
+					int nss = 0;
+					for (size_t l = 0; l < a.neighbours->size(); ++l) {
+						Atom<T, N> *b = (*a.neighbours)[l];
+						N r;
+						tvec3<N> skg = spikyKernelGradient(a.now, b->now, r);
+						N p6k = poly6Kernel(r);
+						rho += b->mass * p6k;
+						norm2V += skg * (1.f / RHO);
+						(*a.skgs)[l] = skg;
+						(*a.p6ks)[l] = p6k;
+//						std::cout << "[" << a.particle->t << "]["<< b->particle->t << "]NS:" << nss  <<std::endl;
+
+						nss += b->particle->t;
+					}
+					auto norm2 = glm::length2(norm2V);
+					N C = (rho / RHO - 1.f);
+					a.lambda = -C / (norm2 + CFM_EPSILON);
+//					std::cout << "["<< a.particle->t << "]NS:" << nss  << " N2:" << rho <<std::endl;
+
+				}
+
+				// solve for delta p
+#pragma omp parallel for
+				for (int i = 0; i < atoms.size(); ++i) {
+					Atom<T, N> &a = atoms[i];
+					a.deltaP = tvec3<N>(0);
+
+					for (size_t l = 0; l < a.neighbours->size(); ++l) {
+						Atom<T, N> *b = (*a.neighbours)[l];
+						N corr = -CorrK *
+								 std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
+						N factor = (a.lambda + b->lambda + corr) / RHO;
+						a.deltaP = (*a.skgs)[l] * factor + a.deltaP;
+					}
+
+					auto current = Response<N>((a.now + a.deltaP) * scale, a.velocity);
+					for (const auto &f : colliders) {
+						Ray<N> ray = Ray<N>(a.particle->position,
+											current.getPosition(),
+											current.getVelocity());
+						current = f(ray);
+					}
+
+					a.now = current.getPosition() / scale;
+					a.velocity = current.getVelocity();
+				}
+			}
+
+
+			// finalise
+			for (Atom<T, N> &a : atoms) {
+
+
+				auto deltaX = a.now - a.particle->position / scale;
+				a.particle->position = a.now * scale;
+				a.particle->mass = a.mass;
+				a.particle->velocity = (deltaX * (1.f / dt) + a.velocity) * VD;
+			}
+
+			for (Atom<T, N> &a : atoms) {
+				std::cout << "CPU >> "
+						  << " p=" << glm::to_string(a.particle->position)
+						  << " v=" << glm::to_string(a.particle->velocity)
+						<< " lam=" << a.lambda
+						<< " deltaP=" << glm::to_string(a.deltaP)
+						  << std::endl;
+			}
+
+#endif
 			hrc::time_point kerne = hrc::now();
+
 
 			auto kern = duration_cast<nanoseconds>(kerne - kerns).count();
 			std::cout << "\tKern: " << (kern / 1000000.0) << "ms" << std::endl;

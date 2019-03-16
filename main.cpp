@@ -237,8 +237,9 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(1);
-	size_t pcount = 1'00;
-	size_t iter = 1;
+	size_t pcount = 2'0000;
+	size_t iter = 1000;
+	size_t solverIter = 3;
 
 
 
@@ -306,7 +307,7 @@ void run() {
 		i += glm::pi<num_t>() / 50;
 
 		hrc::time_point t1 = hrc::now();
-		solver->advance(static_cast<num_t> (0.0083 * 1), 3, xs,
+		solver->advance(static_cast<num_t> (0.0083 * 1), solverIter, xs,
 						[](const fluid::Particle<size_t, num_t> &x) {
 							return tvec3<num_t>(0, x.mass * 9.8, 0);
 						}, colliders

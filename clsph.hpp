@@ -49,20 +49,91 @@ namespace clutil {
 
 namespace clsph {
 
+
+	static void enumeratePlatformToCout() {
+		std::cout << "Enumerating OpenCL platforms:" << std::endl;
+
+		std::vector<cl::Platform> platforms;
+		cl::Platform::get(&platforms);
+		auto platform = cl::Platform::getDefault();
+		for (auto &p : platforms) {
+			try {
+
+				std::cout << "\t├─┬Platform"
+						  << (platform == p ? "(Default):" : ":")
+						  << p.getInfo<CL_PLATFORM_NAME>()
+						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+						  << "\n\t│ └Devices"
+						  << std::endl;
+				std::vector<cl::Device> devices;
+				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+				for (auto &d : devices) {
+					std::cout
+							<< "\t│\t     └┬Name    : " << d.getInfo<CL_DEVICE_NAME>()
+							<< "\n\t│\t      ├Type    : " << d.getInfo<CL_DEVICE_TYPE>()
+							<< "\n\t│\t      ├Vendor  : " << d.getInfo<CL_DEVICE_VENDOR_ID>()
+							<< "\n\t│\t      ├Avail.  : " << d.getInfo<CL_DEVICE_AVAILABLE>()
+							<< "\n\t│\t      └Version : " << d.getInfo<CL_DEVICE_VERSION>()
+							<< std::endl;
+				}
+			} catch (const std::exception &e) {
+				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
+						  << "` : "
+						  << e.what() << std::endl;
+			}
+		}
+
+
+	}
+
+	static const cl::Program loadProgramFromFile(const std::string &file) {
+		std::ifstream t(file);
+		std::stringstream source;
+		source << t.rdbuf();
+		cl::Program program = cl::Program(source.str());
+
+		auto printBuildInfo = [&program]() {
+			cl_int buildErr = CL_SUCCESS;
+			for (auto &pair : program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr)) {
+				std::cerr << pair.second << std::endl << std::endl;
+			}
+		};
+
+		try {
+			program.build(" -cl-std=CL1.2 -w"
+						  " -cl-mad-enable"
+						  " -cl-no-signed-zeros"
+						  " -cl-unsafe-math-optimizations"
+						  " -cl-finite-math-only"
+						  " -I /home/tom/libfluid");
+		} catch (...) {
+			std::cerr << "Program failed to compile" << std::endl;
+			printBuildInfo();
+			throw;
+		}
+		std::cout << "Program compiled" << std::endl;
+		printBuildInfo();
+		return program;
+	}
+
+
 	template<typename T, typename N>
 	class CLOps {
 
-
 	private:
-		cl::Program program;
+		const cl::Platform platform;
+		const cl::Program program;
 
 	public:
 
-		CLOps() {
-			std::ifstream t("../clsph_kernel.cl");
-			std::stringstream source;
-			source << t.rdbuf();
-			program = cl::Program(source.str());
+		explicit CLOps(const cl::Platform &platform = cl::Platform::getDefault()) :
+				platform(platform),
+				program(loadProgramFromFile("../clsph_kernel.cl")) {
+			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
+					  << std::endl;
 		}
 
 	private :
@@ -71,72 +142,7 @@ namespace clsph {
 		}
 
 
-	public :
-
-		void enumeratePlatformToCout() {
-			std::cout << "Enumerating OpenCL platforms:" << std::endl;
-
-			std::vector<cl::Platform> platforms;
-			cl::Platform::get(&platforms);
-			auto platform = cl::Platform::getDefault();
-			for (auto &p : platforms) {
-				try {
-
-					std::cout << "\t├─┬Platform"
-					          << (platform == p ? "(Default):" : ":")
-					          << p.getInfo<CL_PLATFORM_NAME>()
-					          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-					          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-					          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-					          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-					          << "\n\t│ └Devices"
-					          << std::endl;
-					std::vector<cl::Device> devices;
-					p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
-					for (auto &d : devices) {
-						std::cout
-								<< "\t│\t     └┬Name    : " << d.getInfo<CL_DEVICE_NAME>()
-								<< "\n\t│\t      ├Type    : " << d.getInfo<CL_DEVICE_TYPE>()
-								<< "\n\t│\t      ├Vendor  : " << d.getInfo<CL_DEVICE_VENDOR_ID>()
-								<< "\n\t│\t      ├Avail.  : " << d.getInfo<CL_DEVICE_AVAILABLE>()
-								<< "\n\t│\t      └Version : " << d.getInfo<CL_DEVICE_VERSION>()
-								<< std::endl;
-					}
-				} catch (const std::exception &e) {
-					std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-					          << "` : "
-					          << e.what() << std::endl;
-				}
-			}
-
-			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
-			          << std::endl;
-		}
-
-	private:
-
-		void showBuildInfo() {
-			cl_int buildErr = CL_SUCCESS;
-			auto buildInfo = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr);
-			for (auto &pair : buildInfo) {
-				std::cerr << pair.second << std::endl << std::endl;
-			}
-		}
-
 	public:
-
-		void prepareProgram() {
-			try {
-				program.build("-cl-std=CL1.2 -w "
-				              "-cl-mad-enable -cl-no-signed-zeros -cl-fast-relaxed-math"
-				              " -I /home/tom/libfluid");
-			} catch (...) {
-				showBuildInfo();
-				throw;
-			}
-			showBuildInfo();
-			std::cout << "Program compiled" << std::endl;
-		}
 
 
 		ClSphType resolve(fluid::Type t) {
@@ -243,7 +249,7 @@ namespace clsph {
 			}
 
 			std::cout << "As:" << as.size() << " NS: " << ns.size() << " PSum:" << prefixSum
-			          << std::endl;
+					  << std::endl;
 
 
 			std::cout << "Go! " << std::endl;
@@ -254,81 +260,86 @@ namespace clsph {
 			cl::Buffer atoms(as.begin(), as.end(), false);
 			cl::Buffer neighbours(ns.begin(), ns.end(), true);
 			cl::Buffer output(CL_MEM_WRITE_ONLY, as.size() * sizeof(ClSphResult));
-//			cl::Buffer output(backingRes.begin(), backingRes.end(), false);
+////			cl::Buffer output(backingRes.begin(), backingRes.end(), false);
+//
+//			hrc::time_point NNS = hrc::now();
+//
+//			cl::Buffer nnEntries(CL_MEM_READ_WRITE, as.size() * sizeof(Entry) * 27);
+//
+//			auto nnPhaseSize =
+//					cl::KernelFunctor<
+//							cl::Buffer &,
+//							cl::Buffer &,
+//							uint
+//					>(program, "nn_phase_size");
+//
+//
+//			try {
+//				nnPhaseSize(
+//						cl::EnqueueArgs(
+//								cl::NDRange(as.size())
+//						),
+//						atoms,
+//						nnEntries, (uint) as.size() * 27
+//				);
+//			} catch (const std::exception &exc) {
+//				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
+//				throw;
+//
+//			}
+//
+//
+//			std::vector<Entry> entryHost(as.size() * 27);
+//
+//			cl::copy(nnEntries, entryHost.begin(), entryHost.end());
+//
+//			int gmax = 0;
+//			for (const auto &a : entryHost) {
+//				if ((a.value) != 0) {
+//
+//					std::cout << "GPU >> "
+//					          << " k=" << glm::to_string(clutil::glmT(a.key))
+//					          << " v=" << (a.value) << "\n";
+//					gmax += a.value;
+//				}
+//			}
+//
+//			std::cout << "GPU >> t=" << gmax << std::endl;
+//
+//
+//			gmax= 0;
+//			std::vector<Entry2> alt(as.size() * 27);
+//			nn_phase_size(as, alt);
+//			for (const auto &a : alt) {
+//				if ((a.value) != 0) {
+//
+//					std::cout << "CPU >> "
+//					          << " k=" << glm::to_string((a.key))
+//					          << " v=" << (a.value) << "\n";
+//					gmax += a.value;
+//				}
+//			}
+//
+//			std::cout << "CPU >> t=" << gmax << std::endl;
+//
+//
+//
+//
+////			std::cout << "]" << std::endl;
+//
+//			hrc::time_point NNE = hrc::now();
+//			auto NNEL = std::chrono::duration_cast<std::chrono::nanoseconds>(NNE - NNS).count();
+//
+//			std::cout << "NNH " << (NNEL / 1000000.0) << "ms\n";
 
-			hrc::time_point NNS = hrc::now();
-
-			cl::Buffer nnEntries(CL_MEM_READ_WRITE, as.size() * sizeof(Entry) * 27);
-
-			auto nnPhaseSize =
-					cl::KernelFunctor<
-							cl::Buffer &,
-							cl::Buffer &,
-							uint
-					>(program, "nn_phase_size");
 
 
-			try {
-				nnPhaseSize(
-						cl::EnqueueArgs(
-								cl::NDRange(as.size())
-						),
-						atoms,
-						nnEntries, (uint) as.size() * 27
-				);
-			} catch (const std::exception &exc) {
-				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
-				throw;
-
-			}
-
-
-			std::vector<Entry> entryHost(as.size() * 27);
-
-			cl::copy(nnEntries, entryHost.begin(), entryHost.end());
-
-			int gmax = 0;
-			for (const auto &a : entryHost) {
-				if ((a.value) != 0) {
-
-					std::cout << "GPU >> "
-					          << " k=" << glm::to_string(clutil::glmT(a.key))
-					          << " v=" << (a.value) << "\n";
-					gmax += a.value;
-				}
-			}
-
-			std::cout << "GPU >> t=" << gmax << std::endl;
-
-
-			gmax= 0;
-			std::vector<Entry2> alt(as.size() * 27);
-			nn_phase_size(as, alt);
-			for (const auto &a : alt) {
-				if ((a.value) != 0) {
-
-					std::cout << "CPU >> "
-					          << " k=" << glm::to_string((a.key))
-					          << " v=" << (a.value) << "\n";
-					gmax += a.value;
-				}
-			}
-
-			std::cout << "CPU >> t=" << gmax << std::endl;
-
-
-
-
-
-
-
-
-//			std::cout << "]" << std::endl;
-
-			hrc::time_point NNE = hrc::now();
-			auto NNEL = std::chrono::duration_cast<std::chrono::nanoseconds>(NNE - NNS).count();
-
-			std::cout << "NNH " << (NNEL / 1000000.0) << "ms\n";
+			auto lambdaKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
+					(program, "sph_lambda"));
+			auto deltaKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
+					(program, "sph_delta"));
+			auto finaliseKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
+					(program, "sph_finalise"));
 
 			ClSphConfig config = {
 //					.h = 0.1,
@@ -337,34 +348,29 @@ namespace clsph {
 					.iteration = static_cast<size_t>(iter)
 			};
 
-			auto sphKernel =
-					cl::KernelFunctor<
-							decltype(config) &,
-							cl::Buffer &, uint,
-							cl::Buffer &,
-							cl::Buffer &
-					>(program, "sph");
 
 			std::cout << "SPH run" << std::endl;
 
+
 			cl_int error;
 			try {
-				sphKernel(
-						cl::EnqueueArgs(
-								cl::NDRange(as.size())
-						),
-						config,
-						atoms, (uint) as.size(),
-						neighbours,
-						output,
-						error
-				);
+
+				for (size_t itr = 0; itr < iter; ++itr) {
+					lambdaKernel(
+							cl::EnqueueArgs(cl::NDRange(as.size())),
+							config, atoms, neighbours, error);
+
+					deltaKernel(
+							cl::EnqueueArgs(cl::NDRange(as.size())),
+							config, atoms, neighbours, error);
+				}
+				finaliseKernel(cl::EnqueueArgs(cl::NDRange(as.size())),
+							   config, atoms, output, error);
+
 			} catch (const std::exception &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
 				throw;
 			}
-
-			std::cout << "Error? " << error << std::endl;
 
 
 			std::vector<ClSphResult> actual(as.size());
