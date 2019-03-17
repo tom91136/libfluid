@@ -1,10 +1,10 @@
 #ifndef LIBFLUID_FLUID_HPP
 #define LIBFLUID_FLUID_HPP
 
+
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
-
 
 
 #include <algorithm>
@@ -98,6 +98,7 @@ namespace fluid {
 		std::unique_ptr<std::vector<Atom<T, N> *>> neighbours;
 		std::unique_ptr<std::vector<N>> p6ks;
 		std::unique_ptr<std::vector<tvec3<N>>> skgs;
+		size_t zIndex;
 		N mass;
 		tvec3<N> now;
 		N lambda;

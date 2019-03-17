@@ -1,6 +1,12 @@
 #ifndef LIBFLUID_CPUSPH_HPP
 #define LIBFLUID_CPUSPH_HPP
 
+#define _GLIBCXX_PARALLEL
+
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_SIMD_AVX2
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <ostream>
 #include <functional>
 #include <vector>
@@ -9,6 +15,7 @@
 #include <unordered_map>
 #include <iostream>
 #include <algorithm>
+#include <limits>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
 #include "Octree.hpp"
@@ -17,6 +24,7 @@
 #include <memory>
 #include "clsph.hpp"
 #include "fluid.hpp"
+#include "ska_sort.hpp"
 
 
 namespace cpusph {
@@ -26,106 +34,374 @@ namespace cpusph {
 	using fluid::Response;
 	using fluid::Ray;
 
+
+	const static size_t uninterleave(size_t value) {
+		size_t ret = 0x0;
+		ret |= (value & 0x1) >> 0;
+		ret |= (value & 0x8) >> 2;
+		ret |= (value & 0x40) >> 4;
+		ret |= (value & 0x200) >> 6;
+		ret |= (value & 0x1000) >> 8;
+		ret |= (value & 0x8000) >> 10;
+		ret |= (value & 0x40000) >> 12;
+		ret |= (value & 0x200000) >> 14;
+		ret |= (value & 0x1000000) >> 16;
+		ret |= (value & 0x8000000) >> 18;
+		return ret;
+	}
+
+	const static glm::tvec3<size_t> get_cell_coords_z_curve(size_t index) {
+		size_t mask = 0x9249249;
+		size_t i_x = index & mask;
+		size_t i_y = (index >> 1) & mask;
+		size_t i_z = (index >> 2) & mask;
+		return glm::tvec3<size_t>(uninterleave(i_x), uninterleave(i_y), uninterleave(i_z));
+	}
+
+	const static size_t get_grid_index_z_curve(size_t in_x, size_t in_y, size_t in_z) {
+		size_t x = in_x;
+		size_t y = in_y;
+		size_t z = in_z;
+
+		x = (x | (x << 16)) & 0x030000FF;
+		x = (x | (x << 8)) & 0x0300F00F;
+		x = (x | (x << 4)) & 0x030C30C3;
+		x = (x | (x << 2)) & 0x09249249;
+
+		y = (y | (y << 16)) & 0x030000FF;
+		y = (y | (y << 8)) & 0x0300F00F;
+		y = (y | (y << 4)) & 0x030C30C3;
+		y = (y | (y << 2)) & 0x09249249;
+
+		z = (z | (z << 16)) & 0x030000FF;
+		z = (z | (z << 8)) & 0x0300F00F;
+		z = (z | (z << 4)) & 0x030C30C3;
+		z = (z | (z << 2)) & 0x09249249;
+
+		return x | (y << 1) | (z << 2);
+	}
+
+
 	template<typename T, typename N>
-	class GridNN {
+	const static void allPairNN(std::vector<Atom<T, N>> &atoms) {
 
 
-		glm::tvec3<N> pMin;
-		glm::tvec3<N> pMax;
-		glm::tvec3<int> cellMax;
-		std::vector<glm::tvec3<N>> offsets = std::vector<glm::tvec3<N>>();
+		const float H2 = 0.1 /2;
 
-		const std::vector<Atom<T, N>> &xs;
+		float min_x, max_x, min_y, max_y, min_z, max_z;
+		float grid_cell_side_length = (H2 * 2);
+		min_x = min_y = min_z = std::numeric_limits<cl_int>::max();
+		max_x = max_y = max_z = std::numeric_limits<cl_int>::min();
 
-	public:
+		for (int i = 0; i < atoms.size(); ++i) {
+			Atom<T, N> &p = atoms[i];
+			auto pos = p.now;
+			if (pos.x < min_x) min_x = pos.x;
+			if (pos.y < min_y) min_y = pos.y;
+			if (pos.z < min_z) min_z = pos.z;
 
-
-		float rescale(float x, float a0, float a1, float b0, float b1) {
-			return ((x - a0) / (a1 - a0)) * (b1 - b0) + b0;
+			if (pos.x > max_x) max_x = pos.x;
+			if (pos.y > max_y) max_y = pos.y;
+			if (pos.z > max_z) max_z = pos.z;
 		}
 
-		int asIndex(glm::tvec3<int> v) {
-			return v.x + (v.y * cellMax.x) + v.z * (cellMax.x * cellMax.y);
+		min_x -= grid_cell_side_length * 2;
+		min_y -= grid_cell_side_length * 2;
+		min_z -= grid_cell_side_length * 2;
+
+		max_x += grid_cell_side_length * 2;
+		max_y += grid_cell_side_length * 2;
+		max_z += grid_cell_side_length * 2;
+
+		glm::tvec3<N> minP(min_x, min_y, min_z);
+		glm::tvec3<N> maxP(max_x, max_y, max_z);
+
+		glm::tvec3<size_t> sizes(
+				static_cast<size_t>((max_x - min_x) / grid_cell_side_length),
+				static_cast<size_t>((max_y - min_y) / grid_cell_side_length),
+				static_cast<size_t>((max_z - min_z) / grid_cell_side_length)
+		);
+
+		size_t count = get_grid_index_z_curve(
+				sizes.x, sizes.y, sizes.z);
+
+#pragma omp parallel for
+		for (int i = 0; i < atoms.size(); ++i) {
+			Atom<T, N> &p = atoms[i];
+
+
+			size_t grid_index = get_grid_index_z_curve(
+					static_cast<size_t>((p.now.x - min_x) / (grid_cell_side_length)),
+					static_cast<size_t>((p.now.y - min_y) / (grid_cell_side_length)),
+					static_cast<size_t>((p.now.z - min_z) / (grid_cell_side_length)));
+
+
+			p.zIndex = grid_index; // get_grid_index_z_curve(p.now.x, p.now.y, p.now.z);
 		}
 
-//		glm::tvec3<int> subscript(Particle<T, N> p) {
-//			int i = std::round(rescale(p.position.x,
-//			                           pMin.x, pMax.x, 0.0f, cellMax.x - 1));
-//			int j = std::round(rescale(p.position.y,
-//			                           pMin.y, pMax.y, 0.0f, cellMax.y - 1));
-//			int k = std::round(rescale(p.position.z,
-//			                           pMin.z, pMax.z, 0.0f, cellMax.z - 1));
-//
-//			return glm::tvec3<int>(i, j, k);
+
+//		for (const Atom<T, N> &a : atoms) {
+//			std::cout << "CPU1 >> " << " t=" << a.particle->t << " ZIdx=" << a.zIndex << std::endl;
 //		}
 
-		static constexpr auto CELL_SIZE = 0.1;
 
-		struct AtomCompare {
-			bool operator()(const glm::tvec3<int> &lhs, const glm::tvec3<int> &rhs) const {
-				return memcmp((void *) &lhs, (void *) &rhs, sizeof(glm::tvec3<int>)) > 0;
+//		ska_sort(atoms.begin(), atoms.end(), [](const Atom<T, N> &a) ->  { return   a.zIndex; });
+		std::sort(atoms.begin(), atoms.end(), [](const Atom<T, N> &lhs, const Atom<T, N> &rhs) {
+			return lhs.zIndex < rhs.zIndex;
+		});
+
+//		std::cout << " >> " << atoms.size() << std::endl;
+
+//		for (const Atom<T, N> &a : atoms) {
+//			std::cout << "CPU >> " << " t=" << a.particle->t << " ZIdx=" << a.zIndex << std::endl;
+//		}
+
+		std::vector<size_t> ses(count);
+		size_t current_index = 0;
+		for (size_t i = 0; i < count; ++i) {
+			ses[i] = current_index;
+//			std::cout << "\t-> " << i << "  =" << current_index << std::endl;
+			while (current_index != atoms.size() && atoms[current_index].zIndex == i) {
+				current_index++;
 			}
-		};
-
-
-		typedef std::unordered_multimap<size_t, size_t> SMap;
-		SMap M;
-
-
-		size_t hash(glm::tvec3<N> a) {
-			size_t res = 17;
-			res = res * 31 + std::hash<int>()(round(a.x / CELL_SIZE));
-			res = res * 31 + std::hash<int>()(round(a.y / CELL_SIZE));
-			res = res * 31 + std::hash<int>()(round(a.z / CELL_SIZE));
-			return res;
-		}
-
-		GridNN(const std::vector<Atom<T, N>> &xs) : xs(xs) {
-
-
-			N H = 0.1f;
-			N H2 = H * 2;
-			std::vector<N> off = {-H, 0.f, H};
-			for (size_t x = 0; x < off.size(); ++x)
-				for (size_t y = 0; y < off.size(); ++y)
-					for (size_t z = 0; z < off.size(); ++z)
-						offsets.push_back(tvec3<N>(off[x], off[y], off[z]));
-
-			for (size_t i = 0; i < xs.size(); ++i) {
-				const Atom<T, N> &p = xs[i];
-
-				for (const auto ov : offsets) {
-					M.insert({hash(p.now + ov) % xs.size(), p.particle->t});
-
-				}
-
-
-//				M.insert({hash(p.now), p.particle->t});
-			}
-
-
 		}
 
 
-		size_t length() {
-			return M.size();
-		}
+#pragma omp parallel for
+		for (size_t xx = 0; xx < atoms.size(); ++xx) {
+			Atom<T, N> &p = atoms[xx];
 
 
-		void find(const Atom<T, N> &p, N radius, std::vector<size_t> &acc) {
-			auto r2 = radius * radius;
-//			for (const auto ov : offsets) {
-			auto ret = M.equal_range(hash(p.now));
-			for (auto it = ret.first; it != ret.second; ++it) {
-				if (glm::distance2(xs[it->second].now, p.now) <= r2) {
-					acc.push_back(it->second);
+			auto cell_coords = get_cell_coords_z_curve(p.zIndex);
+
+			for (size_t z = cell_coords.z - 1; z <= cell_coords.z + 1; ++z) {
+				for (size_t y = cell_coords.y - 1; y <= cell_coords.y + 1; ++y) {
+					for (size_t x = cell_coords.x - 1; x <= cell_coords.x + 1; ++x) {
+						size_t grid_index = get_grid_index_z_curve(x, y, z);
+
+
+						size_t start = ses[grid_index];
+						size_t end = (count > (grid_index + 1))
+						             ? ses[grid_index + 1]
+						             : atoms.size();
+
+
+//						std::cout << "\t\t<ZI> " << grid_index << "  [" << start << "->" << end
+//						          << "] @  "
+//						          << glm::to_string(glm::tvec3<size_t>(x, y, z)) << std::endl;
+
+						for (size_t ni = start; ni < end; ++ni) {
+							p.neighbours->emplace_back(&atoms[ni]);
+						}
+					}
 				}
 			}
+
+//			std::cout << "\t[ZI] " << p.particle->t << " N=" << p.neighbours->size() << " @ "
+//			          << glm::to_string(cell_coords) << std::endl;
+
+			p.p6ks->reserve(p.neighbours->size());
+			p.skgs->reserve(p.neighbours->size());
+
+
+		}
+
+
+		std::cout << "\t**ZI "
+		          << " side length=" << grid_cell_side_length
+		          << " [CI]=" << current_index
+		          << " [CL]=" << ses.size()
+		          << " count=" << count << "->"
+		          << glm::to_string(get_cell_coords_z_curve(count))
+		          << " X*Y*Z=" << glm::to_string(sizes)
+		          << " min=" << glm::to_string(minP)
+		          << " max=" << glm::to_string(maxP)
+		          << std::endl;
+		std::cout << " Atom size >>> " << atoms.size() << std::endl;
+
+	}
+
+
+//	template<typename T, typename N>
+//	class GridNN {
+//
+//
+//		glm::tvec3<N> pMin;
+//		glm::tvec3<N> pMax;
+//		glm::tvec3<int> cellMax;
+//		std::vector<glm::tvec3<N>> offsets = std::vector<glm::tvec3<N>>();
+//
+//		const std::vector<Atom<T, N>> &xs;
+//
+//	public:
+//
+//
+//		static constexpr auto CELL_SIZE = 0.1;
+//
+//		struct AtomCompare {
+//			bool operator()(const glm::tvec3<int> &lhs, const glm::tvec3<int> &rhs) const {
+//				return memcmp((void *) &lhs, (void *) &rhs, sizeof(glm::tvec3<int>)) > 0;
 //			}
-		}
-
-
-	};
+//		};
+//
+//
+//		typedef std::unordered_multimap<size_t, size_t> SMap;
+//		SMap M;
+//
+//
+//		size_t hash(glm::tvec3<N> a) {
+//			size_t res = 17;
+//			res = res * 31 + std::hash<int>()(round(a.x / CELL_SIZE));
+//			res = res * 31 + std::hash<int>()(round(a.y / CELL_SIZE));
+//			res = res * 31 + std::hash<int>()(round(a.z / CELL_SIZE));
+//			return res;
+//		}
+//
+//
+//		GridNN(std::vector<Atom<T, N>> &xs) : xs(xs) {
+//
+//
+//			float min_x, max_x, min_y, max_y, min_z, max_z;
+//			float grid_cell_side_length = (0.1f * 2);
+//			min_x = min_y = min_z = std::numeric_limits<cl_int>::max();
+//			max_x = max_y = max_z = std::numeric_limits<cl_int>::min();
+//
+//
+//			for (int i = 0; i < xs.size(); ++i) {
+//				Atom<T, N> &p = xs[i];
+//				auto pos = p.now;
+//				if (pos.x < min_x) min_x = pos.x;
+//				if (pos.y < min_y) min_y = pos.y;
+//				if (pos.z < min_z) min_z = pos.z;
+//
+//				if (pos.x > max_x) max_x = pos.x;
+//				if (pos.y > max_y) max_y = pos.y;
+//				if (pos.z > max_z) max_z = pos.z;
+//			}
+//
+//			min_x -= grid_cell_side_length * 2;
+//			min_y -= grid_cell_side_length * 2;
+//			min_z -= grid_cell_side_length * 2;
+//
+//			max_x += grid_cell_side_length * 2;
+//			max_y += grid_cell_side_length * 2;
+//			max_z += grid_cell_side_length * 2;
+//
+//			glm::tvec3<N> minP(min_x, min_y, min_z);
+//			glm::tvec3<N> maxP(max_x, max_y, max_z);
+//
+//			glm::tvec3<size_t> sizes(
+//					static_cast<size_t>((max_x - min_x) / grid_cell_side_length),
+//					static_cast<size_t>((max_y - min_y) / grid_cell_side_length),
+//					static_cast<size_t>((max_z - min_z) / grid_cell_side_length)
+//			);
+//
+//			size_t count = get_grid_index_z_curve(
+//					sizes.x, sizes.y, sizes.z);
+//
+////#pragma parallel for
+//			for (int i = 0; i < xs.size(); ++i) {
+//				Atom<T, N> &p = xs[i];
+//				p.zIndex = get_grid_index_z_curve(p.now.x, p.now.y, p.now.z);
+//			}
+//
+//			ska_sort(xs.begin(), xs.end(), [](const Atom<T, N> &a) { return a.zIndex; });
+////			std::sort(xs.begin(), xs.end(), [](const Atom<T, N> &lhs, const Atom<T, N> &rhs) {
+////				return lhs.zIndex > rhs.zIndex;
+////			});
+//
+//
+//
+//
+//
+//			std::vector<size_t> ses(count);
+//			size_t current_index = 0;
+//			for (size_t i = 0; i < count; ++i) {
+//				ses[i] = current_index;
+//				while (current_index != xs.size() && xs[current_index].zIndex == i) {
+//					current_index++;
+//				}
+//			}
+//
+//
+//
+//
+//
+////			std::sort(xs.begin(), xs.end(), [](const Atom<T, N> &lhs, const Atom<T, N> &rhs) {
+////				return lhs.zIndex > rhs.zIndex;
+////			});
+//
+//
+//			std::cout << "\t**ZI "
+//			          << " side length=" << grid_cell_side_length
+//			          << " [CI]=" << current_index
+//			          << " [CL]=" << ses.size()
+//			          << " count=" << count << "->"
+//			          << glm::to_string(get_cell_coords_z_curve(count))
+//			          << " X*Y*Z=" << glm::to_string(sizes)
+//			          << " min=" << glm::to_string(minP)
+//			          << " max=" << glm::to_string(maxP)
+//			          << std::endl;
+//
+//
+//
+//
+//			// bound size
+//			// offset bound size
+//			// for all particle
+//			//     write grid_index
+//			// build grid table
+//			// radix sort grid
+//			// do sph
+//
+//
+//
+//
+//
+////
+////			N H = 0.1f;
+////			N H2 = H * 2;
+////			std::vector<N> off = {-H, 0.f, H};
+////			for (size_t x = 0; x < off.size(); ++x)
+////				for (size_t y = 0; y < off.size(); ++y)
+////					for (size_t z = 0; z < off.size(); ++z)
+////						offsets.push_back(tvec3<N>(off[x], off[y], off[z]));
+////
+////			for (size_t i = 0; i < xs.size(); ++i) {
+////				const Atom<T, N> &p = xs[i];
+////
+////				for (const auto ov : offsets) {
+////					M.insert({hash(p.now + ov) % xs.size(), p.particle->t});
+////
+////				}
+////
+////
+//////				M.insert({hash(p.now), p.particle->t});
+////			}
+//
+//
+//		}
+//
+//
+//		size_t length() {
+//			return M.size();
+//		}
+//
+//
+//		void find(const Atom<T, N> &p, N radius, std::vector<size_t> &acc) {
+//			auto r2 = radius * radius;
+////			for (const auto ov : offsets) {
+//			auto ret = M.equal_range(hash(p.now));
+//			for (auto it = ret.first; it != ret.second; ++it) {
+//				if (glm::distance2(xs[it->second].now, p.now) <= r2) {
+//					acc.push_back(it->second);
+//				}
+//			}
+////			}
+//		}
+//
+//
+//	};
 
 	template<typename T, typename N>
 	struct AtomCloud {
@@ -154,7 +430,7 @@ namespace cpusph {
 	class SphSolver {
 
 	public:
-		clsph::CLOps<T, N> clo = clsph::CLOps<T,N>();
+		clsph::CLOps<T, N> clo = clsph::CLOps<T, N>();
 
 		explicit SphSolver(N h = 0.1, N scale = 1) : h(h), scale(scale) {
 			clsph::enumeratePlatformToCout();
@@ -193,16 +469,16 @@ namespace cpusph {
 		const tvec3<N> spikyKernelGradient(tvec3<N> x, tvec3<N> y, N &r) {
 			r = glm::distance(x, y);
 			return !(r <= h && r >= EPSILON) ?
-				   tvec3<N>(0) :
-				   (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
+			       tvec3<N>(0) :
+			       (x - y) * (spikyKernelFactor * (std::pow(h - r, 2.f) / r));
 		}
 
 	public:
 
 		void advance(N dt, size_t iteration,
-					 std::vector<Particle<T, N>> &xs,
-					 const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
-					 const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
+		             std::vector<Particle<T, N>> &xs,
+		             const std::function<tvec3<N>(const Particle<T, N> &)> &constForce,
+		             const std::vector<std::function<const Response<N>(Ray<N> &)> > &colliders
 		) {
 
 			using namespace std::chrono;
@@ -212,20 +488,23 @@ namespace cpusph {
 			std::vector<Atom<T, N>> atoms;
 
 			std::transform(xs.begin(), xs.end(), std::back_inserter(atoms),
-						   [constForce, dt, this](Particle<T, N> &p) {
-							   auto a = Atom<T, N>(&p);
-							   a.velocity = constForce(p) * dt + p.velocity;
-							   a.mass = p.mass;
-							   a.now = (a.velocity * dt) + (p.position / scale);
-							   return a;
-						   });
+			               [constForce, dt, this](Particle<T, N> &p) {
+				               auto a = Atom<T, N>(&p);
+				               a.velocity = constForce(p) * dt + p.velocity;
+				               a.mass = p.mass;
+				               a.now = (a.velocity * dt) + (p.position / scale);
+				               return a;
+			               });
 
-//			hrc::time_point gnn = hrc::now();
+			hrc::time_point gnn = hrc::now();
+
+			allPairNN(atoms);
+
 //			GridNN<T, N> rtn = GridNN<T, N>(atoms);
 //			std::cout << "\tGNN done " << std::endl;
-//			hrc::time_point gnne = hrc::now();
-//			auto nng = duration_cast<nanoseconds>(gnne - gnn).count();
-//			std::cout << "\tGNN: " << (nng / 1000000.0) << "ms -> " << rtn.length() << std::endl;
+			hrc::time_point gnne = hrc::now();
+			auto nng = duration_cast<nanoseconds>(gnne - gnn).count();
+			std::cout << "\tZIDX: " << (nng / 1000000.0) << "ms   " << std::endl;
 //
 
 			hrc::time_point nns = hrc::now();
@@ -240,7 +519,7 @@ namespace cpusph {
 
 			unibn::Octree<tvec3<N>> octree;
 			octree.initialize(pts);
-#else
+#elseif A
 
 			using namespace nanoflann;
 //			std::vector<tvec3<N>> pts;
@@ -276,7 +555,7 @@ namespace cpusph {
 					a.neighbours->emplace_back(&atoms[idx]);
 
 
-#else
+#elseif A
 
 //				std::vector<size_t> n2;
 //				rtn.find(a, h2, n2);
@@ -327,19 +606,19 @@ namespace cpusph {
 			std::cout << "\tNN: " << (nn / 1000000.0) << "ms" << std::endl;
 
 			hrc::time_point kerns = hrc::now();
+//
+//
+//			auto rs = clo.run(atoms, iteration, scale);
+//
+//
+//			for (int j = 0; j < atoms.size(); ++j) {
+//				Atom<T, N> &a = atoms[j];
+//				a.particle->velocity = clutil::glmT(rs[j].velocity);
+//				a.particle->position = clutil::glmT(rs[j].position);
+//			}
 
 
-			auto rs = clo.run(atoms, iteration, scale);
-
-
-			for (int j = 0; j < atoms.size(); ++j) {
-				Atom<T, N> &a = atoms[j];
-				a.particle->velocity = clutil::glmT(rs[j].velocity);
-				a.particle->position = clutil::glmT(rs[j].position);
-			}
-
-
-//#define USE_CPU
+#define USE_CPU
 
 
 #ifdef USE_CPU
@@ -383,7 +662,7 @@ namespace cpusph {
 					for (size_t l = 0; l < a.neighbours->size(); ++l) {
 						Atom<T, N> *b = (*a.neighbours)[l];
 						N corr = -CorrK *
-								 std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
+						         std::pow((*a.p6ks)[l] / p6DeltaQ, CorrN);
 						N factor = (a.lambda + b->lambda + corr) / RHO;
 						a.deltaP = (*a.skgs)[l] * factor + a.deltaP;
 					}
@@ -391,8 +670,8 @@ namespace cpusph {
 					auto current = Response<N>((a.now + a.deltaP) * scale, a.velocity);
 					for (const auto &f : colliders) {
 						Ray<N> ray = Ray<N>(a.particle->position,
-											current.getPosition(),
-											current.getVelocity());
+						                    current.getPosition(),
+						                    current.getVelocity());
 						current = f(ray);
 					}
 
@@ -412,14 +691,14 @@ namespace cpusph {
 				a.particle->velocity = (deltaX * (1.f / dt) + a.velocity) * VD;
 			}
 
-			for (Atom<T, N> &a : atoms) {
-				std::cout << "CPU >> "
-						  << " p=" << glm::to_string(a.particle->position)
-						  << " v=" << glm::to_string(a.particle->velocity)
-						<< " lam=" << a.lambda
-						<< " deltaP=" << glm::to_string(a.deltaP)
-						  << std::endl;
-			}
+//			for (Atom<T, N> &a : atoms) {
+//				std::cout << "CPU >> "
+//						  << " p=" << glm::to_string(a.particle->position)
+//						  << " v=" << glm::to_string(a.particle->velocity)
+//						<< " lam=" << a.lambda
+//						<< " deltaP=" << glm::to_string(a.deltaP)
+//						  << std::endl;
+//			}
 
 #endif
 			hrc::time_point kerne = hrc::now();

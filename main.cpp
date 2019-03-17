@@ -6,6 +6,11 @@
 #define FLANN_S
 #define FLANN
 
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_SIMD_AVX2
+#define GLM_ENABLE_EXPERIMENTAL
+
+
 #include <memory>
 #include <chrono>
 #include <random>
@@ -236,9 +241,9 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(1);
-	size_t pcount = 2'0000;
-	size_t iter = 1000;
+	omp_set_num_threads(4);
+	size_t pcount = 1000 * 50;
+	size_t iter = 10000;
 	size_t solverIter = 3;
 
 
@@ -266,8 +271,8 @@ void run() {
 	std::vector<std::function<const fluid::Response<num_t>(
 			fluid::Ray<num_t> &)> > colliders = {
 			[&i, Xscale, Yscale, Zscale](const fluid::Ray<num_t> &x) -> fluid::Response<num_t> {
-				float xx = (sin(i) * 220);
-				float zz = (cos(i) * 50);
+				float xx = (sin(i) * 220) * 0;
+				float zz = (cos(i) * 50) * 0;
 
 
 				return fluid::Response<num_t>(
@@ -297,7 +302,7 @@ void run() {
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 	std::unique_ptr<cpusph::SphSolver<size_t, num_t>> solver(
-			new cpusph::SphSolver<size_t, num_t>(0.1, 550)); // less = less space between particle
+			new cpusph::SphSolver<size_t, num_t>(0.1, 600)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
