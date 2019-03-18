@@ -83,8 +83,10 @@ add_executable(main
         Octree.hpp
         nanoflann.hpp
         ska_sort.hpp
+        cl_types.h
         zcurve.h
-        clsph_types.h clsph.hpp clsph_kernel.cl
+        clsph_type.h clsph_kernel.cl clsph.hpp
+        clmc_kernel.cl
         cpusph.hpp
         writer.hpp surface.hpp fluid.hpp
         main.cpp)

@@ -1,26 +1,6 @@
-
-
-
-#ifndef __OPENCL_C_VERSION__
-
-#include <tgmath.h>
-#include "clsph_types.h"
+#include "clsph_type.h"
 #include "zcurve.h"
 
-#define global
-#define kernel
-#define constant
-#define M_PI_F 3.1415926f
-#define INCL
-#else
-
-#include "clsph_types.h"
-#include "zcurve.h"
-
-#define global global
-#define kernel kernel
-#define constant constant
-#endif
 
 #define DEBUG
 #undef DEBUG
@@ -63,8 +43,8 @@ inline float poly6Kernel(const float r) {
 
 inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r) {
 	return (r >= EPSILON && r <= H) ?
-	       (x - y) * (SpikyKernelFactor * (pown(H - r, 2) / r)) :
-	       (float3) (0.f);
+		   (x - y) * (SpikyKernelFactor * (pown(H - r, 2) / r)) :
+		   (float3) (0.f);
 }
 
 //#define SORTED

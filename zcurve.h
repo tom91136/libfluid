@@ -242,54 +242,54 @@ const static inline size_t zCurveGridIndexAtCoord(size_t x, size_t y, size_t z) 
 	return x | y << 1 | z << 2;
 }
 
-const static inline void genTable(const size_t x, const size_t y, const size_t z,
-                                  const size_t count, const size_t *LUT, const size_t pMax,
-                                  void(*callback)(size_t)) {
-	size_t offsets[27] = {
-			zCurveGridIndexAtCoord(x - 1, y - 1, z - 1),
-			zCurveGridIndexAtCoord(x + 0, y - 1, z - 1),
-			zCurveGridIndexAtCoord(x + 1, y - 1, z - 1),
-			zCurveGridIndexAtCoord(x - 1, y + 0, z - 1),
-			zCurveGridIndexAtCoord(x + 0, y + 0, z - 1),
-			zCurveGridIndexAtCoord(x + 1, y + 0, z - 1),
-			zCurveGridIndexAtCoord(x - 1, y + 1, z - 1),
-			zCurveGridIndexAtCoord(x + 0, y + 1, z - 1),
-			zCurveGridIndexAtCoord(x + 1, y + 1, z - 1),
-			zCurveGridIndexAtCoord(x - 1, y - 1, z + 0),
-			zCurveGridIndexAtCoord(x + 0, y - 1, z + 0),
-			zCurveGridIndexAtCoord(x + 1, y - 1, z + 0),
-			zCurveGridIndexAtCoord(x - 1, y + 0, z + 0),
-			zCurveGridIndexAtCoord(x + 0, y + 0, z + 0),
-			zCurveGridIndexAtCoord(x + 1, y + 0, z + 0),
-			zCurveGridIndexAtCoord(x - 1, y + 1, z + 0),
-			zCurveGridIndexAtCoord(x + 0, y + 1, z + 0),
-			zCurveGridIndexAtCoord(x + 1, y + 1, z + 0),
-			zCurveGridIndexAtCoord(x - 1, y - 1, z + 1),
-			zCurveGridIndexAtCoord(x + 0, y - 1, z + 1),
-			zCurveGridIndexAtCoord(x + 1, y - 1, z + 1),
-			zCurveGridIndexAtCoord(x - 1, y + 0, z + 1),
-			zCurveGridIndexAtCoord(x + 0, y + 0, z + 1),
-			zCurveGridIndexAtCoord(x + 1, y + 0, z + 1),
-			zCurveGridIndexAtCoord(x - 1, y + 1, z + 1),
-			zCurveGridIndexAtCoord(x + 0, y + 1, z + 1),
-			zCurveGridIndexAtCoord(x + 1, y + 1, z + 1)
-	};
-//	sortArray16(offsets);
-	size_t lastStart = 0;
-	size_t lastEnd = 0;
-	for (int i = 0; i < 27; ++i) {
-		size_t offset = offsets[i];
-
-		size_t start = LUT[offset];
-		size_t end = ((offset + 1) < count) ? LUT[offset + 1] : pMax;
-
-		if (lastStart == start && lastEnd == end) continue;
-
-		for (size_t j = start; j < end; ++j) callback(j);
-		lastStart = start;
-		lastEnd = end;
-	}
-}
+//const static inline void genTable(const size_t x, const size_t y, const size_t z,
+//                                  const size_t count, const size_t *LUT, const size_t pMax,
+//                                  void(*callback)(size_t)) {
+//	size_t offsets[27] = {
+//			zCurveGridIndexAtCoord(x - 1, y - 1, z - 1),
+//			zCurveGridIndexAtCoord(x + 0, y - 1, z - 1),
+//			zCurveGridIndexAtCoord(x + 1, y - 1, z - 1),
+//			zCurveGridIndexAtCoord(x - 1, y + 0, z - 1),
+//			zCurveGridIndexAtCoord(x + 0, y + 0, z - 1),
+//			zCurveGridIndexAtCoord(x + 1, y + 0, z - 1),
+//			zCurveGridIndexAtCoord(x - 1, y + 1, z - 1),
+//			zCurveGridIndexAtCoord(x + 0, y + 1, z - 1),
+//			zCurveGridIndexAtCoord(x + 1, y + 1, z - 1),
+//			zCurveGridIndexAtCoord(x - 1, y - 1, z + 0),
+//			zCurveGridIndexAtCoord(x + 0, y - 1, z + 0),
+//			zCurveGridIndexAtCoord(x + 1, y - 1, z + 0),
+//			zCurveGridIndexAtCoord(x - 1, y + 0, z + 0),
+//			zCurveGridIndexAtCoord(x + 0, y + 0, z + 0),
+//			zCurveGridIndexAtCoord(x + 1, y + 0, z + 0),
+//			zCurveGridIndexAtCoord(x - 1, y + 1, z + 0),
+//			zCurveGridIndexAtCoord(x + 0, y + 1, z + 0),
+//			zCurveGridIndexAtCoord(x + 1, y + 1, z + 0),
+//			zCurveGridIndexAtCoord(x - 1, y - 1, z + 1),
+//			zCurveGridIndexAtCoord(x + 0, y - 1, z + 1),
+//			zCurveGridIndexAtCoord(x + 1, y - 1, z + 1),
+//			zCurveGridIndexAtCoord(x - 1, y + 0, z + 1),
+//			zCurveGridIndexAtCoord(x + 0, y + 0, z + 1),
+//			zCurveGridIndexAtCoord(x + 1, y + 0, z + 1),
+//			zCurveGridIndexAtCoord(x - 1, y + 1, z + 1),
+//			zCurveGridIndexAtCoord(x + 0, y + 1, z + 1),
+//			zCurveGridIndexAtCoord(x + 1, y + 1, z + 1)
+//	};
+////	sortArray16(offsets);
+//	size_t lastStart = 0;
+//	size_t lastEnd = 0;
+//	for (int i = 0; i < 27; ++i) {
+//		size_t offset = offsets[i];
+//
+//		size_t start = LUT[offset];
+//		size_t end = ((offset + 1) < count) ? LUT[offset + 1] : pMax;
+//
+//		if (lastStart == start && lastEnd == end) continue;
+//
+//		for (size_t j = start; j < end; ++j) callback(j);
+//		lastStart = start;
+//		lastEnd = end;
+//	}
+//}
 
 
 #endif //LIBFLUID_ZCURVE_H

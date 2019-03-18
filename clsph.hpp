@@ -6,7 +6,6 @@
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #define CL_HPP_ENABLE_EXCEPTIONS
 
-#include "clsph_types.h"
 #include <CL/cl2.hpp>
 #include <iostream>
 #include <sstream>
@@ -14,7 +13,9 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+
 #include "fluid.hpp"
+#include "clsph_type.h"
 #include "zcurve.h"
 #include "ska_sort.hpp"
 
@@ -134,13 +135,6 @@ namespace clsph {
 			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
 			          << std::endl;
 		}
-
-	private :
-		void showAtom(ClSphAtom atom) {
-			std::cout << "P " << atom.particle.id << " " << atom.particle.mass << " " << atom.lambda
-			          << std::endl;
-		}
-
 
 	public:
 
