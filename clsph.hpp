@@ -183,18 +183,14 @@ namespace clsph {
 				const fluid::Particle<T, N> &p = particles[i];
 				const glm::tvec3<N> velocity = (p.mass * constForce) * dt + p.velocity;
 				const glm::tvec3<N> pStar = (velocity * dt) + (p.position / scale);
-
-				hostAtoms[i] = (ClSphAtom{
-						.particle = {
-								.id = p.t,
-								.type = resolve(p.type),
-								.mass = p.mass,
-								.position = clutil::vec3ToCl(p.position),
-								.velocity = clutil::vec3ToCl(velocity)
-						},
-						.pStar = clutil::vec3ToCl(pStar),
-				});
-
+				ClSphAtom &atom = hostAtoms[i];
+				ClSphParticle &particle = atom.particle;
+				particle.id = p.t,
+				particle.type = resolve(p.type),
+				particle.mass = p.mass,
+				particle.position = clutil::vec3ToCl(p.position),
+				particle.velocity = clutil::vec3ToCl(velocity);
+				atom.pStar = clutil::vec3ToCl(pStar);
 				min.x = glm::min(pStar.x, min.x);
 				min.y = glm::min(pStar.y, min.y);
 				min.z = glm::min(pStar.z, min.z);
