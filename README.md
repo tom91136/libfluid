@@ -23,6 +23,15 @@ If you are using vcpkg, install the following dependencies:
 
     vcpkg install boost glm mio opencl nlohmann-json catch2
 
+# Compiling
+
+On Windows:
+
+    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+    cmake --build build --target main --config Release
+
+
 
 ## Licence
 
