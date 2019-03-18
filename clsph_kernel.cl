@@ -36,14 +36,10 @@ const constant float VORTICITY_EPSILON = 0.0005f;
 const constant float CorrK = 0.0001f;
 const constant float CorrN = 4.f;
 
-
 const constant float H = 0.1f;
 const constant float H2 = H * 2;
 const constant float HH = H * H;
 const constant float HHH = H * H * H;
-#define  NEIGHBOUR_SIZE  (1 + (2) * 2) // n[L] + C + n[R]
-const constant float NEIGHBOURS[NEIGHBOUR_SIZE] = {-H2, -H, 0, H, H2};
-
 
 const constant uint3 NEIGHBOUR_OFFSETS[27] = {
 		(uint3) (-1, -1, -1), (uint3) (+0, -1, -1), (uint3) (+1, -1, -1),
@@ -62,14 +58,74 @@ const constant float Poly6Factor = 315.f / (64.f * M_PI_F * (HHH * HHH * HHH));
 const constant float SpikyKernelFactor = -(45.f / (M_PI_F * HHH * HHH));
 
 inline float poly6Kernel(const float r) {
-	return r <= H ? Poly6Factor * pow(HH - r * r, 3.f) : 0.f;
+	return r <= H ? Poly6Factor * pown(HH - r * r, 3) : 0.f;
 }
 
 inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r) {
 	return (r >= EPSILON && r <= H) ?
-	       (x - y) * (SpikyKernelFactor * (pow(H - r, 2.f) / r)) :
+	       (x - y) * (SpikyKernelFactor * (pown(H - r, 2) / r)) :
 	       (float3) (0.f);
 }
+
+//#define SORTED
+
+#ifdef SORTED
+
+#define FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN) \
+{ \
+	uint3 __coord = (uint3) ( \
+			coordAtZCurveGridIndex0(a->zIndex), \
+			coordAtZCurveGridIndex1(a->zIndex), \
+			coordAtZCurveGridIndex2(a->zIndex)); \
+	size_t __offsets[27] = { \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z - 1), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z + 0), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z + 1), \
+		zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z + 1) \
+	}; \
+	sortArray16(__offsets);  \
+	size_t __lastStart = 0; \
+	size_t __lastEnd = 0; \
+	for (int __i = 0; __i < 27; ++__i) { \
+		size_t __offset = __offsets[__i]; \
+		size_t __start = (gridTable)[__offset]; \
+		size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (atomN); \
+		if (__lastStart == __start && __lastEnd == __end) continue;  \
+		for (size_t __ni = __start; __ni < __end; ++__ni) { \
+			const global ClSphAtom *b = &(atoms)[__ni]; \
+
+
+#define FOR_EACH_NEIGHBOUR_END  \
+		} \
+		__lastStart = __start; \
+		__lastEnd = __end; \
+	} \
+} \
+
+#else
 
 #define FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN) \
 { \
@@ -90,6 +146,8 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
     } \
 } \
 
+
+#endif
 kernel void sph_lambda(
 		const ClSphConfig config,
 		global ClSphAtom *atoms, uint atomN,
@@ -101,9 +159,9 @@ kernel void sph_lambda(
 	float rho = 0.f;
 
 	FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN)
-				const float r = distance(a->pStar, b->pStar);
-				norm2V += spikyKernelGradient(a->pStar, b->pStar, r) * (1.f / RHO);
-				rho += b->particle.mass * poly6Kernel(r);
+				const float r = fast_distance(a->pStar, b->pStar);
+				norm2V = fma(spikyKernelGradient(a->pStar, b->pStar, r), 1.f / RHO, norm2V);
+				rho = fma(b->particle.mass, poly6Kernel(r), rho);
 	FOR_EACH_NEIGHBOUR_END
 
 	float norm2 = dot(norm2V, norm2V); // dot self = length2
@@ -128,15 +186,17 @@ kernel void sph_delta(
 
 
 	FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN)
-				const float r = distance(a->pStar, b->pStar);
+				const float r = fast_distance(a->pStar, b->pStar);
 				const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
 				const float factor = (a->lambda + b->lambda + corr) / RHO;
-				deltaP += spikyKernelGradient(a->pStar, b->pStar, r) * factor;
+				deltaP = fma(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
 	FOR_EACH_NEIGHBOUR_END
 
 	a->deltaP = deltaP;
 
 	// collision
+
+
 	float3 currentP = (a->pStar + a->deltaP) * config.scale;
 	float3 currentV = a->particle.velocity;
 	currentP = clamp(currentP, -500.f, 500.f);
@@ -144,12 +204,6 @@ kernel void sph_delta(
 
 	a->pStar = currentP / config.scale;
 	a->particle.velocity = currentV;
-
-//	size_t x = 0;
-//	for (size_t i = neighbourStart(a); i < neighbourEnd(a); i++) {
-//		x += atoms[neighbours[i]].id;
-//	}
-
 
 
 #ifdef DEBUG
@@ -187,6 +241,6 @@ kernel void sph_finalise(
 	global ClSphAtom *a = &atoms[id];
 	const float3 deltaX = a->pStar - a->particle.position / config.scale;
 	a->particle.position = a->pStar * config.scale;
-	a->particle.velocity = (deltaX * (1.f / config.dt) + a->particle.velocity) * VD;
+	a->particle.velocity = fma(deltaX, (1.f / config.dt), a->particle.velocity) * VD;
 	results[id] = a->particle;
 }

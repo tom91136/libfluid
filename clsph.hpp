@@ -149,6 +149,7 @@ namespace clsph {
 			switch (t) {
 				case fluid::Type::Fluid: return ClSphType::Fluid;
 				case fluid::Type::Obstacle: return ClSphType::Obstacle;
+				default: throw std::logic_error("unhandled branch");
 			}
 		}
 
@@ -156,6 +157,7 @@ namespace clsph {
 			switch (t) {
 				case ClSphType::Fluid: return fluid::Type::Fluid;
 				case ClSphType::Obstacle: return fluid::Type::Obstacle;
+				default: throw std::logic_error("unhandled branch");
 			}
 		}
 
@@ -265,12 +267,22 @@ namespace clsph {
 
 			std::cout << "Go! " << std::endl;
 
-			hrc::time_point gpuS = hrc::now();
+
+			hrc::time_point gpuXferS = hrc::now();
+
+			std::vector<ClSphParticle> copiedParticles(atomsN);
 
 
 			cl::Buffer deviceAtoms(hostAtoms.begin(), hostAtoms.end(), false);
 			cl::Buffer deviceGridTable(hostGridTable.begin(), hostGridTable.end(), true);
-			cl::Buffer deviceResult(CL_MEM_WRITE_ONLY, hostAtoms.size() * sizeof(ClSphParticle));
+
+			cl::Buffer deviceResult(copiedParticles.begin(), copiedParticles.end(), false);
+
+			cl::finish();
+
+			hrc::time_point gpuXferE = hrc::now();
+
+			hrc::time_point gpuFunctorS = hrc::now();
 
 			auto lambdaKernel = cl::KernelFunctor<
 					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
@@ -287,9 +299,10 @@ namespace clsph {
 					.dt =0.0083f,
 					.iteration = static_cast<size_t>(iter)
 			};
+			hrc::time_point gpuFunctorE = hrc::now();
 
-			std::cout << "SPH run" << std::endl;
 
+			hrc::time_point gpuKernelS = hrc::now();
 			try {
 
 				for (size_t itr = 0; itr < iter; ++itr) {
@@ -312,13 +325,17 @@ namespace clsph {
 				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
 				throw;
 			}
+			cl::finish();
+
+			hrc::time_point gpuKernelE = hrc::now();
 
 
-			std::vector<ClSphParticle> copiedParticles(atomsN);
-//			std::vector<ClSphAtom> copiedAtoms(atomsN);
+			hrc::time_point gpuXferRS = hrc::now();
 
 			cl::copy(deviceResult, copiedParticles.begin(), copiedParticles.end());
+			cl::finish();
 
+			hrc::time_point gpuXferRE = hrc::now();
 
 //#pragma omp parallel for
 			for (int i = 0; i < particles.size(); ++i) {
@@ -341,7 +358,6 @@ namespace clsph {
 //			showAtom(b);
 //		}
 
-			hrc::time_point gpuE = hrc::now();
 
 			auto aabbCpy = std::chrono::duration_cast<std::chrono::nanoseconds>(
 					aabbCpyE - aabbCpyS).count();
@@ -349,13 +365,23 @@ namespace clsph {
 					zCurveE - zCurveS).count();
 			auto sort = std::chrono::duration_cast<std::chrono::nanoseconds>(sortE - sortS).count();
 			auto gt = std::chrono::duration_cast<std::chrono::nanoseconds>(gtE - gtS).count();
-			auto gpu = std::chrono::duration_cast<std::chrono::nanoseconds>(gpuE - gpuS).count();
+			auto gpuKernel = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					gpuKernelE - gpuKernelS).count();
+			auto gpuXfer = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					gpuXferE - gpuXferS).count();
+			auto gpuXferR = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					gpuXferRE - gpuXferRS).count();
+			auto gpuFunctor = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					gpuFunctorE - gpuFunctorS).count();
 			std::cout
 					<< "\tCPU aabbCpy= " << (aabbCpy / 1000000.0) << "ms\n"
 					<< "\tCPU zCurve = " << (zCurve / 1000000.0) << "ms\n"
 					<< "\tCPU sort   = " << (sort / 1000000.0) << "ms\n"
 					<< "\tCPU gt     = " << (gt / 1000000.0) << "ms\n"
-					<< "\tGPU jacobi = " << (gpu / 1000000.0) << "ms\n"
+					<< "\tGPU xfer     = " << (gpuXfer / 1000000.0) << "ms\n"
+					<< "\tGPU xferR    = " << (gpuXferR / 1000000.0) << "ms\n"
+					<< "\tGPU functor  = " << (gpuFunctor / 1000000.0) << "ms\n"
+					<< "\tGPU kernel   = " << (gpuKernel / 1000000.0) << "ms\n"
 					<< std::endl;
 
 

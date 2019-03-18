@@ -241,10 +241,11 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(2);
-	size_t pcount = (10) * 1000;
-	size_t iter = 3000;
-	size_t solverIter = 100;
+	omp_set_num_threads(4);
+	size_t pcount = (100) * 1000;
+	size_t iter = 5000;
+	size_t solverIter = 3;
+	num_t scaling = 300;
 
 
 
@@ -299,7 +300,7 @@ void run() {
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 	std::unique_ptr<cpusph::SphSolver<size_t, num_t>> solver(
-			new cpusph::SphSolver<size_t, num_t>(0.1, 600)); // less = less space between particle
+			new cpusph::SphSolver<size_t, num_t>(0.1, scaling)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
