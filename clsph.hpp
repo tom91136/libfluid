@@ -15,6 +15,8 @@
 #include <memory>
 #include <algorithm>
 #include "fluid.hpp"
+#include "zcurve.h"
+#include "ska_sort.hpp"
 
 using glm::tvec3;
 namespace clutil {
@@ -34,15 +36,12 @@ namespace clutil {
 	inline cl_float4 float4(float x) { return {{x, x, x, x}}; }
 
 
-	inline glm::tvec3<float> glmT(cl_float3 v) {
+	template<typename N>
+	inline glm::tvec3<N> clToVec3(cl_float3 v) {
 		return glm::tvec3<float>(v.x, v.y, v.z);
 	}
 
-	inline glm::tvec3<uint> glmT(cl_int3 v) {
-		return glm::tvec3<uint>(v.x, v.y, v.z);
-	}
-
-	inline cl_float3 glmT(glm::tvec3<float> v) {
+	inline cl_float3 vec3ToCl(glm::tvec3<float> v) {
 		return float3(v.x, v.y, v.z);
 	}
 }
@@ -60,14 +59,14 @@ namespace clsph {
 			try {
 
 				std::cout << "\t├─┬Platform"
-						  << (platform == p ? "(Default):" : ":")
-						  << p.getInfo<CL_PLATFORM_NAME>()
-						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-						  << "\n\t│ └Devices"
-						  << std::endl;
+				          << (platform == p ? "(Default):" : ":")
+				          << p.getInfo<CL_PLATFORM_NAME>()
+				          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+				          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+				          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+				          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+				          << "\n\t│ └Devices"
+				          << std::endl;
 				std::vector<cl::Device> devices;
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 				for (auto &d : devices) {
@@ -81,8 +80,8 @@ namespace clsph {
 				}
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-						  << "` : "
-						  << e.what() << std::endl;
+				          << "` : "
+				          << e.what() << std::endl;
 			}
 		}
 
@@ -104,11 +103,11 @@ namespace clsph {
 
 		try {
 			program.build(" -cl-std=CL1.2 -w"
-						  " -cl-mad-enable"
-						  " -cl-no-signed-zeros"
-						  " -cl-unsafe-math-optimizations"
-						  " -cl-finite-math-only"
-						  " -I /home/tom/libfluid");
+			              " -cl-mad-enable"
+			              " -cl-no-signed-zeros"
+			              " -cl-unsafe-math-optimizations"
+			              " -cl-finite-math-only"
+			              " -I /home/tom/libfluid");
 		} catch (...) {
 			std::cerr << "Program failed to compile" << std::endl;
 			printBuildInfo();
@@ -133,239 +132,181 @@ namespace clsph {
 				platform(platform),
 				program(loadProgramFromFile("../clsph_kernel.cl")) {
 			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
-					  << std::endl;
+			          << std::endl;
 		}
 
 	private :
 		void showAtom(ClSphAtom atom) {
-			std::cout << "P " << atom.id << " " << atom.mass << " " << atom.lambda << std::endl;
+			std::cout << "P " << atom.particle.id << " " << atom.particle.mass << " " << atom.lambda
+			          << std::endl;
 		}
 
 
 	public:
 
 
-		ClSphType resolve(fluid::Type t) {
+		static ClSphType resolve(fluid::Type t) {
 			switch (t) {
 				case fluid::Type::Fluid: return ClSphType::Fluid;
 				case fluid::Type::Obstacle: return ClSphType::Obstacle;
 			}
 		}
 
-
-		static inline glm::tvec3<size_t> snap(glm::tvec3<N> a) {
-			return glm::tvec3<int>(round(a.x / 0.1), round(a.y / 0.1), round(a.z / 0.1));
+		static fluid::Type resolve(ClSphType t) {
+			switch (t) {
+				case ClSphType::Fluid: return fluid::Type::Fluid;
+				case ClSphType::Obstacle: return fluid::Type::Obstacle;
+			}
 		}
 
-		static inline size_t hash(glm::tvec3<size_t> a) {
-			size_t res = 17;
-			res = res * 31 + a.x;
-			res = res * 31 + a.y;
-			res = res * 31 + a.z;
-			return res;
-		}
 
-#define  NEIGHBOUR_SIZE  (1 + (2) * 2) // n[L] + C + n[R]
 		constexpr static float H = 0.1f;
-		constexpr static float H2 = H * 2;
-		constexpr static float HH = H * H;
-		constexpr static float HHH = H * H * H;
+
+		const N HD2 = 0.1 / 2;
 
 
-		typedef struct Entry2 {
-			glm::tvec3<size_t> key;
-			size_t value;
-		} __attribute__ ((aligned)) Entry2;
-
-		static inline size_t
-		findSlotUnfenced(const std::vector<Entry2> &buckets, const glm::tvec3<size_t> x) {
-			size_t i = hash(x) % buckets.size();
-
-//			glm::notEqual(buckets[i].key , x)
-
-			while (buckets[i].value != 0 && buckets[i].key != x)
-				i = (i + 1) % buckets.size();
-			return i;
-		}
-
-
-		void nn_phase_size(const std::vector<ClSphAtom> &atoms, std::vector<Entry2> &buckets) {
-			static float NEIGHBOURS[NEIGHBOUR_SIZE] = {-H2, -H, 0, H, H2};
-
-			for (uint i = 0; i < buckets.size(); ++i) {
-				buckets[i].value = 0;
-			}
-
-
-			for (const auto &atom : atoms) {
-				for (size_t x = 0; x < NEIGHBOUR_SIZE; x++)
-					for (size_t y = 0; y < NEIGHBOUR_SIZE; y++)
-						for (size_t z = 0; z < NEIGHBOUR_SIZE; z++) {
-							glm::tvec3<size_t> snapped = snap(
-									clutil::glmT(atom.now) +
-									glm::tvec3<float>(NEIGHBOURS[x], NEIGHBOURS[y], NEIGHBOURS[z]));
-
-//							std::cout << "Offset: " << glm::to_string(snapped) << std::endl;
-
-
-							size_t slot = findSlotUnfenced(buckets, snapped);
-							Entry2 &e = buckets[slot];
-							if (e.value == 0) e.key = snapped;
-							e.value++;
-						}
-			}
-
-		}
-
-
-		std::vector<ClSphResult>
-		run(const std::vector<fluid::Atom<T, N>> &origin, size_t iter, N scale) {
-
+		void run(
+				std::vector<fluid::Particle<T, N>> &particles,
+				size_t iter, N scale,
+				glm::tvec3<N> constForce,
+				N dt
+		) {
 			using hrc = std::chrono::high_resolution_clock;
-			hrc::time_point sphs = hrc::now();
 
-			typedef tvec3<float> v3n;
+			hrc::time_point aabbCpyS = hrc::now();
 
-			std::vector<ClSphAtom> as(origin.size());
-			std::vector<uint> ns;
+			glm::tvec3<N> min(std::numeric_limits<N>::max());
+			glm::tvec3<N> max(std::numeric_limits<N>::min());
+			N sideLength = (HD2 * 2);
 
-			size_t prefixSum = 0;
-			for (int i = 0; i < as.size(); ++i) {
-				const fluid::Atom<T, N> &a = origin[i];
-				as[i] = (ClSphAtom{
-						.id = a.particle->t,
-						.type = resolve(a.particle->type),
-						.mass = a.particle->mass,
-						.position = clutil::glmT(a.particle->position),
-						.velocity = clutil::glmT(a.velocity),
-						.now = clutil::glmT(a.now),
-						.neighbourOffset = static_cast<size_t >(prefixSum),
-						.neighbourCount = static_cast<size_t >(a.neighbours->size())
+			const size_t atomsN = particles.size();
+			std::vector<ClSphAtom> hostAtoms(particles.size());
+
+//#pragma omp parallel for reduction(min:min.x) reduction(min:min.y) reduction(min:min.z) reduction(max:max.x) reduction(max:max.y) reduction(max:max.z)
+			for (size_t i = 0; i < particles.size(); ++i) {
+				const fluid::Particle<T, N> &p = particles[i];
+				const glm::tvec3<N> velocity = (p.mass * constForce) * dt + p.velocity;
+				const glm::tvec3<N> pStar = (velocity * dt) + (p.position / scale);
+
+				hostAtoms[i] = (ClSphAtom{
+						.particle = {
+								.id = p.t,
+								.type = resolve(p.type),
+								.mass = p.mass,
+								.position = clutil::vec3ToCl(p.position),
+								.velocity = clutil::vec3ToCl(velocity)
+						},
+						.pStar = clutil::vec3ToCl(pStar),
 				});
-				prefixSum += a.neighbours->size();
-				for (int j = 0; j < a.neighbours->size(); ++j) {
-					ns.push_back((*a.neighbours)[j]->particle->t);
+
+				min.x = glm::min(pStar.x, min.x);
+				min.y = glm::min(pStar.y, min.y);
+				min.z = glm::min(pStar.z, min.z);
+
+				max.x = glm::max(pStar.x, max.x);
+				max.y = glm::max(pStar.y, max.y);
+				max.z = glm::max(pStar.z, max.z);
+			}
+
+			N padding = sideLength * 2;
+			min -= padding;
+			max += padding;
+			glm::tvec3<size_t> sizes((max - min) / sideLength);
+
+			const size_t gridTableN = zCurveGridIndexAtCoord(sizes.x, sizes.y, sizes.z);
+			hrc::time_point aabbCpyE = hrc::now();
+
+			hrc::time_point zCurveS = hrc::now();
+
+
+#pragma omp parallel for
+			for (size_t i = 0; i < hostAtoms.size(); ++i) {
+				const float3 pStar = hostAtoms[i].pStar;
+				hostAtoms[i].zIndex = zCurveGridIndexAtCoord(
+						static_cast<size_t>((pStar.x - min.x) / sideLength),
+						static_cast<size_t>((pStar.y - min.y) / sideLength),
+						static_cast<size_t>((pStar.z - min.z) / sideLength));
+			}
+
+
+			hrc::time_point zCurveE = hrc::now();
+
+			hrc::time_point sortS = hrc::now();
+
+//			ska_sort(hostAtoms.begin(), hostAtoms.end(),
+//			         [](const ClSphAtom &a) { return a.zIndex; });
+
+			std::sort(hostAtoms.begin(), hostAtoms.end(),
+			          [](const ClSphAtom &l, const ClSphAtom &r) {
+				          return l.zIndex < r.zIndex;
+			          });
+			hrc::time_point sortE = hrc::now();
+
+			hrc::time_point gtS = hrc::now();
+
+			std::vector<uint> hostGridTable(gridTableN);
+			uint gridIndex = 0;
+			for (size_t i = 0; i < gridTableN; ++i) {
+				hostGridTable[i] = gridIndex;
+				while (gridIndex != atomsN && hostAtoms[gridIndex].zIndex == i) {
+					gridIndex++;
 				}
 			}
 
-			std::cout << "As:" << as.size() << " NS: " << ns.size() << " PSum:" << prefixSum
-					  << std::endl;
+			hrc::time_point gtE = hrc::now();
 
+
+			std::cout << "atomsN = " << atomsN
+			          << " AABB:" << glm::to_string(sizes)
+			          << " min:" << glm::to_string(min)
+			          << " max:" << glm::to_string(max)
+			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
+			          << std::endl;
 
 			std::cout << "Go! " << std::endl;
 
-
-//			std::vector<ClSphResult> backingRes(as.size());
-
-			cl::Buffer atoms(as.begin(), as.end(), false);
-			cl::Buffer neighbours(ns.begin(), ns.end(), true);
-			cl::Buffer output(CL_MEM_WRITE_ONLY, as.size() * sizeof(ClSphResult));
-////			cl::Buffer output(backingRes.begin(), backingRes.end(), false);
-//
-//			hrc::time_point NNS = hrc::now();
-//
-//			cl::Buffer nnEntries(CL_MEM_READ_WRITE, as.size() * sizeof(Entry) * 27);
-//
-//			auto nnPhaseSize =
-//					cl::KernelFunctor<
-//							cl::Buffer &,
-//							cl::Buffer &,
-//							uint
-//					>(program, "nn_phase_size");
-//
-//
-//			try {
-//				nnPhaseSize(
-//						cl::EnqueueArgs(
-//								cl::NDRange(as.size())
-//						),
-//						atoms,
-//						nnEntries, (uint) as.size() * 27
-//				);
-//			} catch (const std::exception &exc) {
-//				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
-//				throw;
-//
-//			}
-//
-//
-//			std::vector<Entry> entryHost(as.size() * 27);
-//
-//			cl::copy(nnEntries, entryHost.begin(), entryHost.end());
-//
-//			int gmax = 0;
-//			for (const auto &a : entryHost) {
-//				if ((a.value) != 0) {
-//
-//					std::cout << "GPU >> "
-//					          << " k=" << glm::to_string(clutil::glmT(a.key))
-//					          << " v=" << (a.value) << "\n";
-//					gmax += a.value;
-//				}
-//			}
-//
-//			std::cout << "GPU >> t=" << gmax << std::endl;
-//
-//
-//			gmax= 0;
-//			std::vector<Entry2> alt(as.size() * 27);
-//			nn_phase_size(as, alt);
-//			for (const auto &a : alt) {
-//				if ((a.value) != 0) {
-//
-//					std::cout << "CPU >> "
-//					          << " k=" << glm::to_string((a.key))
-//					          << " v=" << (a.value) << "\n";
-//					gmax += a.value;
-//				}
-//			}
-//
-//			std::cout << "CPU >> t=" << gmax << std::endl;
-//
-//
-//
-//
-////			std::cout << "]" << std::endl;
-//
-//			hrc::time_point NNE = hrc::now();
-//			auto NNEL = std::chrono::duration_cast<std::chrono::nanoseconds>(NNE - NNS).count();
-//
-//			std::cout << "NNH " << (NNEL / 1000000.0) << "ms\n";
+			hrc::time_point gpuS = hrc::now();
 
 
+			cl::Buffer deviceAtoms(hostAtoms.begin(), hostAtoms.end(), false);
+			cl::Buffer deviceGridTable(hostGridTable.begin(), hostGridTable.end(), true);
+			cl::Buffer deviceResult(CL_MEM_WRITE_ONLY, hostAtoms.size() * sizeof(ClSphParticle));
 
-			auto lambdaKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
-					(program, "sph_lambda"));
-			auto deltaKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
-					(program, "sph_delta"));
-			auto finaliseKernel = (cl::KernelFunctor<ClSphConfig &, cl::Buffer &, cl::Buffer &>
-					(program, "sph_finalise"));
+			auto lambdaKernel = cl::KernelFunctor<
+					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
+			>(program, "sph_lambda");
+			auto deltaKernel = cl::KernelFunctor<
+					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
+			>(program, "sph_delta");
+			auto finaliseKernel = cl::KernelFunctor<
+					const ClSphConfig &, cl::Buffer &, cl::Buffer &
+			>(program, "sph_finalise");
 
-			ClSphConfig config = {
-//					.h = 0.1,
+			const ClSphConfig config = {
 					.scale = scale,
 					.dt =0.0083f,
 					.iteration = static_cast<size_t>(iter)
 			};
 
-
 			std::cout << "SPH run" << std::endl;
 
-
-			cl_int error;
 			try {
 
 				for (size_t itr = 0; itr < iter; ++itr) {
 					lambdaKernel(
-							cl::EnqueueArgs(cl::NDRange(as.size())),
-							config, atoms, neighbours, error);
+							cl::EnqueueArgs(cl::NDRange(atomsN)),
+							config,
+							deviceAtoms, static_cast<uint>(atomsN),
+							deviceGridTable, static_cast<uint>(gridTableN));
 
 					deltaKernel(
-							cl::EnqueueArgs(cl::NDRange(as.size())),
-							config, atoms, neighbours, error);
+							cl::EnqueueArgs(cl::NDRange(atomsN)),
+							config,
+							deviceAtoms, static_cast<uint>(atomsN),
+							deviceGridTable, static_cast<uint>(gridTableN));
 				}
-				finaliseKernel(cl::EnqueueArgs(cl::NDRange(as.size())),
-							   config, atoms, output, error);
+				finaliseKernel(cl::EnqueueArgs(cl::NDRange(atomsN)),
+				               config, deviceAtoms, deviceResult);
 
 			} catch (const std::exception &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
@@ -373,34 +314,51 @@ namespace clsph {
 			}
 
 
-			std::vector<ClSphResult> actual(as.size());
-			std::vector<ClSphAtom> actualAtoms(as.size());
+			std::vector<ClSphParticle> copiedParticles(atomsN);
+//			std::vector<ClSphAtom> copiedAtoms(atomsN);
 
-			cl::copy(output, actual.begin(), actual.end());
+			cl::copy(deviceResult, copiedParticles.begin(), copiedParticles.end());
+
+
+//#pragma omp parallel for
+			for (int i = 0; i < particles.size(); ++i) {
+				const ClSphParticle &p = copiedParticles[i];
+				fluid::Particle<T, N> &particle = particles[i];
+
+				particle.t = static_cast<T>(p.id);
+				particle.type = resolve(p.type);
+				particle.mass = static_cast<N>(p.mass);
+				particle.position = clutil::clToVec3<N>(p.position);
+				particle.velocity = clutil::clToVec3<N>(p.velocity);
+//				std::cout << "GPU >> "
+//				          << " t=" << particle.t
+//				          << " p=" << glm::to_string(particle.position)
+//				          << " v=" << glm::to_string(particle.velocity) << "\n";
+			}
+
 //			cl::copy(atoms, actualAtoms.begin(), actualAtoms.end());
-
-
 //		for (auto b : actualAtoms) {
 //			showAtom(b);
 //		}
 
+			hrc::time_point gpuE = hrc::now();
 
-			hrc::time_point sphe = hrc::now();
-			auto solve = std::chrono::duration_cast<std::chrono::nanoseconds>(sphe - sphs).count();
+			auto aabbCpy = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					aabbCpyE - aabbCpyS).count();
+			auto zCurve = std::chrono::duration_cast<std::chrono::nanoseconds>(
+					zCurveE - zCurveS).count();
+			auto sort = std::chrono::duration_cast<std::chrono::nanoseconds>(sortE - sortS).count();
+			auto gt = std::chrono::duration_cast<std::chrono::nanoseconds>(gtE - gtS).count();
+			auto gpu = std::chrono::duration_cast<std::chrono::nanoseconds>(gpuE - gpuS).count();
+			std::cout
+					<< "\tCPU aabbCpy= " << (aabbCpy / 1000000.0) << "ms\n"
+					<< "\tCPU zCurve = " << (zCurve / 1000000.0) << "ms\n"
+					<< "\tCPU sort   = " << (sort / 1000000.0) << "ms\n"
+					<< "\tCPU gt     = " << (gt / 1000000.0) << "ms\n"
+					<< "\tGPU jacobi = " << (gpu / 1000000.0) << "ms\n"
+					<< std::endl;
 
-			std::cout << "vector in " << (solve / 1000000.0) << "ms: [ \n";
 
-
-//			for (auto a : actual) {
-//				std::cout << "GPU >> "
-//				          << " p=" << glm::to_string(clutil::glmT(a.position))
-//				          << " v=" << glm::to_string(clutil::glmT(a.velocity)) << "\n";
-//			}
-//
-//			std::cout << "]" << std::endl;
-			std::cout << "Done" << std::endl;
-//
-			return actual;
 		}
 
 

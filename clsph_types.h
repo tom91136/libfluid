@@ -9,8 +9,10 @@
 typedef cl_float4 float4;
 typedef cl_float3 float3;
 typedef cl_int3 int3;
+typedef cl_char3 char3;
 typedef cl_uint uint;
 typedef cl_uint2 uint2;
+typedef cl_uint3 uint3;
 
 #else
 
@@ -26,37 +28,32 @@ typedef struct ClSphConfig {
 	float scale;
 	float dt;
 	size_t iteration;
+	float3 constForce;
 }  __attribute__ ((aligned)) ClSphConfig;
 
 typedef enum ClSphType {
 	Fluid, Obstacle
 } ClSphType;
 
-
-typedef struct ClSphAtom {
-
+typedef struct ClSphParticle {
 	size_t id;
 	ClSphType type;
 	float mass;
 	float3 position;
 	float3 velocity;
+}  __attribute__ ((aligned)) ClSphParticle;
 
-	float3 now;
+typedef struct ClSphAtom {
+
+	ClSphParticle particle;
+
+	float3 pStar;
 	float3 deltaP;
 	float3 omega;
 	float lambda;
-
-	size_t neighbourOffset;
-	size_t neighbourCount;
-
+	size_t zIndex;
 }  __attribute__ ((aligned)) ClSphAtom;
 
-typedef struct ClSphResult {
-
-	float3 position;
-	float3 velocity;
-
-}  __attribute__ ((aligned)) ClSphResult;
 
 
 #endif //LIBFLUID_SPH_H

@@ -233,21 +233,18 @@ void run() {
 	writeFile("particle.json", particleType.second.dump(1));
 	writeFile("triangle.json", triangleType.second.dump(1));
 
-//	for (const auto &t : {particleType, triangleType, headerType}) {
-//		std::cout << "size=" << t.first << std::endl;
-//		std::cout << t.second.dump(3) << std::endl;
-//	}
+	for (const auto &t : {particleType, triangleType, headerType}) {
+		std::cout << "size=" << t.first << std::endl;
+		std::cout << t.second.dump(3) << std::endl;
+	}
 
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(4);
-	size_t pcount = 1000 * 50;
-	size_t iter = 10000;
-	size_t solverIter = 3;
-
-
-
+	omp_set_num_threads(2);
+	size_t pcount = (10) * 1000;
+	size_t iter = 3000;
+	size_t solverIter = 100;
 
 
 
