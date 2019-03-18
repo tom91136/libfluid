@@ -212,7 +212,7 @@ namespace clsph {
 
 
 #pragma omp parallel for
-			for (size_t i = 0; i < hostAtoms.size(); ++i) {
+			for (int i = 0; i < hostAtoms.size(); ++i) {
 				const float3 pStar = hostAtoms[i].pStar;
 				hostAtoms[i].zIndex = zCurveGridIndexAtCoord(
 						static_cast<size_t>((pStar.x - min.x) / sideLength),
@@ -327,7 +327,7 @@ namespace clsph {
 			hrc::time_point gpuXferRE = hrc::now();
 
 #pragma omp parallel for
-			for (size_t i = 0; i < particles.size(); ++i) {
+			for (int i = 0; i < particles.size(); ++i) {
 				const ClSphParticle &p = copiedParticles[i];
 				fluid::Particle<T, N> &particle = particles[i];
 
