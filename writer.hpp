@@ -123,7 +123,6 @@ namespace writer {
 	}
 
 
-};
-
+}
 
 #endif //LIBFLUID_WRITER_H

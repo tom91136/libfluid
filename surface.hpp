@@ -15,6 +15,7 @@
 #include "Octree.hpp"
 #include <cstdlib>
 #include <memory>
+#include <array>
 
 
 namespace surface {

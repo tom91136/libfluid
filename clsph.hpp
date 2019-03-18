@@ -337,8 +337,8 @@ namespace clsph {
 
 			hrc::time_point gpuXferRE = hrc::now();
 
-//#pragma omp parallel for
-			for (int i = 0; i < particles.size(); ++i) {
+#pragma omp parallel for
+			for (size_t i = 0; i < particles.size(); ++i) {
 				const ClSphParticle &p = copiedParticles[i];
 				fluid::Particle<T, N> &particle = particles[i];
 
