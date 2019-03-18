@@ -3,53 +3,35 @@
 
 #include "cl_types.h"
 
-typedef struct ALIGNED_(
-		sizeof(float) +
-		sizeof(float) +
-		sizeof(size_t) +
-		sizeof(float3))
-ClSphConfig {
-	float scale;
-	float dt;
-	size_t iteration;
-	float3 constForce;
+typedef struct ClSphConfig {
+	ALIGNED_(4) float scale;
+	ALIGNED_(4) float dt;
+	ALIGNED_(8) size_t iteration;
+	ALIGNED_(16) float3 constForce;
 } ClSphConfig;
 
-typedef enum ALIGNED_(sizeof(int)) ClSphType {
+typedef enum ALIGNED_(4) ClSphType {
 	Fluid, Obstacle
 } ClSphType;
 
-typedef struct ALIGNED_(
-		sizeof(size_t) +
-		sizeof(ClSphType) +
-		sizeof(float) +
-		sizeof(float3) +
-		sizeof(float3) + 16)
-ClSphParticle {
-	size_t id;
+typedef struct ClSphParticle {
+	ALIGNED_(8) size_t id;
 	ClSphType type;
-	float mass;
-	float3 position;
-	float3 velocity;
+	ALIGNED_(4) float mass;
+	ALIGNED_(16) float3 position;
+	ALIGNED_(16) float3 velocity;
+//	ALIGNED_(16) float3 __padding;
 } ClSphParticle;
 
-
-typedef struct ALIGNED_(
-		sizeof(ClSphParticle) +
-		sizeof(float3) +
-		sizeof(float3) +
-		sizeof(float3) +
-		sizeof(float) +
-		sizeof(size_t) + 4)
-ClSphAtom {
-
+typedef struct ClSphAtom {
 	ClSphParticle particle;
+	ALIGNED_(16) float3 pStar;
+	ALIGNED_(16) float3 deltaP;
+	ALIGNED_(16) float3 omega;
+	ALIGNED_(4) float lambda;
+	ALIGNED_(8) size_t zIndex;
+//	ALIGNED_(4) float __padding;
 
-	float3 pStar;
-	float3 deltaP;
-	float3 omega;
-	float lambda;
-	size_t zIndex;
-}  __attribute__ ((aligned)) ClSphAtom;
+} ClSphAtom;
 
 #endif //LIBFLUID_CLSPH_TYPE

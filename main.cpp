@@ -242,7 +242,7 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	size_t pcount = (100) * 1000;
+	size_t pcount = (250) * 1000;
 	size_t iter = 5000;
 	size_t solverIter = 3;
 	num_t scaling = 300;
