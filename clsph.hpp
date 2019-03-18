@@ -284,11 +284,10 @@ namespace clsph {
 					const ClSphConfig &, cl::Buffer &, cl::Buffer &
 			>(program, "sph_finalise");
 
-			const ClSphConfig config = {
-					.scale = scale,
-					.dt =0.0083f,
-					.iteration = static_cast<size_t>(iter)
-			};
+			ClSphConfig config;
+			config.scale = scale;
+			config.dt = 0.0083f;
+			config.iteration = static_cast<size_t>(iter);
 			hrc::time_point gpuFunctorE = hrc::now();
 
 
