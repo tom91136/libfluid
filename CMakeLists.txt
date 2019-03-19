@@ -26,7 +26,7 @@ if (NOT TARGET OpenMP::OpenMP_CXX)
 endif ()
 
 include_directories(third_party)
-add_library(fluid
+add_library(fluid STATIC
         include/fluid/zcurve.h
         include/fluid/cl_types.h
         include/fluid/clsph.hpp
@@ -54,12 +54,14 @@ target_compile_features(fluid INTERFACE cxx_std_14)
 
 
 target_link_libraries(fluid
-        PUBLIC
+        INTERFACE
+        nlohmann_json::nlohmann_json
         glm
+        PRIVATE
         mio::mio
         OpenCL::OpenCL
         OpenMP::OpenMP_CXX
-        nlohmann_json::nlohmann_json)
+        )
 
 if (BUILD_SAMPLES)
     add_subdirectory(samples)

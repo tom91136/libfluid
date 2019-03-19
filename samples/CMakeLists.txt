@@ -14,11 +14,11 @@ ExternalProject_Add(
         INSTALL_COMMAND ""
 )
 
-add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} PUBLIC fluid::fluid)
+add_executable(main main.cpp)
+target_link_libraries(main PRIVATE fluid::fluid)
 
 if (MSVC)
-    target_compile_options(${PROJECT_NAME}
+    target_compile_options(main
             PUBLIC
             /Wp64
             /W3
@@ -27,7 +27,7 @@ if (MSVC)
     set(RELEASE_OPTIONS /MT /GF /Gy /Ox /arch:AVX2 /fp:fast)
     set(DEBUG_OPTIONS /MTd)
 else ()
-    target_compile_options(${PROJECT_NAME}
+    target_compile_options(main
             PUBLIC
             -Wall
             -Wextra
@@ -39,8 +39,8 @@ else ()
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
     set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
 endif ()
-target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
-target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
+target_compile_options(main PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
+target_compile_options(main PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
 
 
 #install(TARGETS ${PROJECT_NAME} DESTINATION examples)
