@@ -1,5 +1,5 @@
 #include <catch2/catch.hpp>
-#include "fluid.hpp"
+#include "fluid/fluid.hpp"
 #include <chrono>
 
 using namespace fluid;
@@ -11,7 +11,6 @@ typedef size_t p_t;
 
 
 TEST_CASE("Solver is correct") {
-
 
 	std::vector<fluid::Particle<p_t, num_t>> expected;
 	expected.emplace_back(0, Fluid, 1.0, v3n(27.181, 32.112, 27.181), v3n(0.346, 0.729, 0.346));

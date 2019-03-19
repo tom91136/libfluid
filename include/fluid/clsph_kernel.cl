@@ -51,7 +51,7 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 
 #ifdef SORTED
 
-const static void sortArray27(size_t d[27]) {
+static inline void sortArray27(size_t d[27]) {
 	// optimal sort network
 #define SWAP(x, y) { const size_t tmp = min(d[y], d[x]); d[y] = max(d[y], d[x]); d[x] = tmp; };
 	//@formatter:off
@@ -124,8 +124,6 @@ const static void sortArray27(size_t d[27]) {
         zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z + 1) \
     }; \
     sortArray27(__offsets);  \
-    size_t __lastStart = 0; \
-    size_t __lastEnd = 0; \
     for (size_t __i = 0; __i < 27; ++__i) { \
         size_t __offset = __offsets[__i]; \
         size_t __start = (gridTable)[__offset]; \
@@ -136,8 +134,6 @@ const static void sortArray27(size_t d[27]) {
 
 #define FOR_EACH_NEIGHBOUR_END  \
         } \
-        __lastStart = __start; \
-        __lastEnd = __end; \
     } \
 } \
 

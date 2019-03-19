@@ -6,18 +6,17 @@
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #define CL_HPP_ENABLE_EXCEPTIONS
 
-#include <CL/cl2.hpp>
 #include <iostream>
 #include <sstream>
 #include <chrono>
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <CL/cl2.hpp>
 
 #include "fluid.hpp"
 #include "clsph_type.h"
 #include "zcurve.h"
-#include "ska_sort.hpp"
 
 using glm::tvec3;
 namespace clutil {
@@ -86,31 +85,35 @@ namespace clsph {
 			}
 		}
 
-
 	}
 
+
 	static const cl::Program loadProgramFromFile(const std::string &file) {
+		std::cout << "Compiling CL kernel:`" << file << "`" << std::endl;
 		std::ifstream t(file);
 		std::stringstream source;
 		source << t.rdbuf();
 		cl::Program program = cl::Program(source.str());
 
 		auto printBuildInfo = [&program]() {
-			cl_int buildErr = CL_SUCCESS;
-			for (auto &pair : program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr)) {
-				std::cerr << pair.second << std::endl << std::endl;
+			auto log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>();
+			std::cerr << "Compiler output(" << log.size() << "):\n" << std::endl;
+			for (auto &pair : log) {
+				std::cerr << ">" << pair.second << std::endl;
 			}
 		};
 
 		try {
-			program.build(" -cl-std=CL1.2 -w"
+			program.build(" -cl-std=CL1.2"
+			              " -w"
 			              " -cl-mad-enable"
 			              " -cl-no-signed-zeros"
 			              " -cl-unsafe-math-optimizations"
 			              " -cl-finite-math-only"
-			              " -I /home/tom/libfluid");
+			              " -I /home/tom/libfluid/include/fluid/"
+			);
 		} catch (...) {
-			std::cerr << "Program failed to compile" << std::endl;
+			std::cerr << "Program failed to compile, source:\n" << source.str() << std::endl;
 			printBuildInfo();
 			throw;
 		}
@@ -131,7 +134,7 @@ namespace clsph {
 
 		explicit CLOps(const cl::Platform &platform = cl::Platform::getDefault()) :
 				platform(platform),
-				program(loadProgramFromFile("../clsph_kernel.cl")) {
+				program(loadProgramFromFile("/home/tom/libfluid/include/fluid/clsph_kernel.cl")) {
 			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
 			          << std::endl;
 		}

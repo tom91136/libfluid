@@ -1,4 +1,3 @@
-
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
@@ -6,27 +5,22 @@
 #define FLANN_S
 #define FLANN
 
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_FORCE_SIMD_AVX2
-#define GLM_ENABLE_EXPERIMENTAL
-
-
 #include <memory>
 #include <chrono>
 #include <random>
 #include <iostream>
 #include <fstream>
 //#include <experimental/filesystem>
-#include "fluid.hpp"
-#include "surface.hpp"
-#include "clsph.hpp"
-#include "cpusph.hpp"
-#include "nanoflann.hpp"
 
+#include "fluid/fluid.hpp"
+#include "fluid/surface.hpp"
+#include "fluid/clsph.hpp"
+#include "fluid/cpusph.hpp"
+#include "fluid/writer.hpp"
+
+#include "nanoflann.hpp"
 #include "mio/mmap.hpp"
 #include "omp.h"
-#include <nlohmann/json.hpp>
-#include "writer.hpp"
 
 using json = nlohmann::json;
 
@@ -138,15 +132,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-				tvec3<N> origin,
-				std::vector<fluid::Particle<size_t, num_t >> &xs) {
+                tvec3<N> origin,
+                std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -213,9 +207,6 @@ void run();
 int main(int argc, char *argv[]) {
 
 
-
-
-
 	run();
 
 	return EXIT_SUCCESS;
@@ -242,9 +233,9 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(1);
-	size_t pcount = (270) * 1000;
+	size_t pcount = (500) * 1000;
 	size_t iter = 5000;
-	size_t solverIter = 5;
+	size_t solverIter = 3;
 	num_t scaling = 300;
 
 
@@ -276,11 +267,11 @@ void run() {
 				return fluid::Response<num_t>(
 						tvec3<num_t>(
 								glm::clamp(x.getOrigin().x, (num_t) -500.f * Xscale + xx,
-										   (num_t) 500.f * Xscale + xx),
+								           (num_t) 500.f * Xscale + xx),
 								glm::clamp(x.getOrigin().y, (num_t) -500.f * Yscale,
-										   (num_t) 500.f * Yscale),
+								           (num_t) 500.f * Yscale),
 								glm::clamp(x.getOrigin().z, (num_t) -500.f * Zscale + zz,
-										   (num_t) 500.f * Zscale + zz)),
+								           (num_t) 500.f * Zscale + zz)),
 						x.getVelocity());
 			}
 	};
@@ -300,7 +291,8 @@ void run() {
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 	std::unique_ptr<cpusph::SphSolver<size_t, num_t>> solver(
-			new cpusph::SphSolver<size_t, num_t>(0.1, scaling)); // less = less space between particle
+			new cpusph::SphSolver<size_t, num_t>(0.1,
+			                                     scaling)); // less = less space between particle
 
 	using hrc = high_resolution_clock;
 
@@ -311,9 +303,9 @@ void run() {
 
 		hrc::time_point t1 = hrc::now();
 		solver->advance(static_cast<num_t> (0.0083 * 1), solverIter, xs,
-						[](const fluid::Particle<size_t, num_t> &x) {
-							return tvec3<num_t>(0, x.mass * 9.8, 0);
-						}, colliders
+		                [](const fluid::Particle<size_t, num_t> &x) {
+			                return tvec3<num_t>(0, x.mass * 9.8, 0);
+		                }, colliders
 		);
 		hrc::time_point t2 = hrc::now();
 
@@ -411,12 +403,12 @@ void run() {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-				  << "Solver:" << (solve / 1000000.0) << "ms "
-				  << "Surface:" << (param / 1000000.0) << "ms "
-				  << "IPC:" << (mmf / 1000000.0) << "ms "
-				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-				  << xs.size()
-				  << std::endl;
+		          << "Solver:" << (solve / 1000000.0) << "ms "
+		          << "Surface:" << (param / 1000000.0) << "ms "
+		          << "IPC:" << (mmf / 1000000.0) << "ms "
+		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+		          << xs.size()
+		          << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();

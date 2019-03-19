@@ -1,0 +1,46 @@
+project(samples)
+
+
+include(ExternalProject)
+
+
+ExternalProject_Add(
+        bunny
+        PREFIX "demo"
+        URL http://graphics.stanford.edu/pub/3Dscanrep/bunny.tar.gz
+        URL_HASH SHA512=59e7b43db838dbe6f02fda5e844d18e190d32d2ca1a83dc9f6b1aaed43e0340fc1e8ecabed6fffdac9f85bd34e7e93b5d8a17283d59ea3c14977a0372785d2bd
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ""
+        INSTALL_COMMAND ""
+)
+
+add_executable(${PROJECT_NAME} main.cpp)
+target_link_libraries(${PROJECT_NAME} PUBLIC fluid::fluid)
+
+if (MSVC)
+    target_compile_options(${PROJECT_NAME}
+            PUBLIC
+            /Wp64
+            /W3
+            /Zc:wchar_t
+            )
+    set(RELEASE_OPTIONS /MT /GF /Gy /Ox /arch:AVX2 /fp:fast)
+    set(DEBUG_OPTIONS /MTd)
+else ()
+    target_compile_options(${PROJECT_NAME}
+            PUBLIC
+            -Wall
+            -Wextra
+            #            -Wshadow
+            #            -Wold-style-cast
+            -Wcast-align
+            -Wpedantic
+            )
+    set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
+    set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
+endif ()
+target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
+target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
+
+
+#install(TARGETS ${PROJECT_NAME} DESTINATION examples)

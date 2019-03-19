@@ -12,7 +12,6 @@
 #include <algorithm>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
-#include "Octree.hpp"
 #include <cstdlib>
 #include <memory>
 #include <array>

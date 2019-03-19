@@ -18,13 +18,11 @@
 #include <limits>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
-#include "Octree.hpp"
 #include "nanoflann.hpp"
 #include <cstdlib>
 #include <memory>
 #include "clsph.hpp"
 #include "fluid.hpp"
-#include "ska_sort.hpp"
 #include "zcurve.h"
 
 

@@ -1,110 +1,74 @@
-cmake_minimum_required(VERSION 3.7 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 
 
-if (DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    message(STATUS "Using vcpkg:  $ENV{VCPKG_ROOT}")
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
-endif ()
+project(libfluid VERSION 1.0.0 LANGUAGES CXX)
 
 
-project(libfluid)
+option(BUILD_SAMPLES "Build samples" ON)
+option(BUILD_TESTS "Build tests" ON)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_VERBOSE_MAKEFILE on)
 
-
-#set(MSGPACK_ENABLE_STATIC true)
-#set(MSGPACK_ENABLE_SHARED false)
-
-find_package(OpenMP REQUIRED)
-if (OpenMP_FOUND)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif ()
-
-find_package(Catch2 REQUIRED)
-find_package(glm REQUIRED)
 find_package(mio REQUIRED)
+find_package(glm REQUIRED)
 find_package(OpenCL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-if (OpenMP_FOUND)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+find_package(OpenMP)
+if (NOT TARGET OpenMP::OpenMP_CXX)
+    # https://cliutils.gitlab.io/modern-cmake/chapters/packages/OpenMP.html
+    find_package(Threads REQUIRED)
+    add_library(OpenMP::OpenMP_CXX IMPORTED INTERFACE)
+    set_property(TARGET OpenMP::OpenMP_CXX
+            PROPERTY INTERFACE_COMPILE_OPTIONS ${OpenMP_CXX_FLAGS})
+    set_property(TARGET OpenMP::OpenMP_CXX
+            PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
 endif ()
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} \
--Wall -pedantic \
--fno-omit-frame-pointer -fsanitize=address \
--O1 -march=native \
--fopenmp \
--g")
-set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -lasan")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}    \
--Ofast -funsafe-math-optimizations -march=native \
--fopenmp \
--g")
+include_directories(third_party)
+add_library(fluid
+        include/fluid/zcurve.h
+        include/fluid/cl_types.h
+        include/fluid/clsph.hpp
+        include/fluid/writer.hpp
+        include/fluid/surface.hpp
+        include/fluid/fluid.hpp
+        include/fluid/cpusph.hpp
+        include/fluid/clsph_type.h
+        include/fluid/clsph_kernel.cl
+        include/fluid/clmc_kernel.cl
+        )
+
+set_target_properties(fluid PROPERTIES LINKER_LANGUAGE CXX)
+add_library(fluid::fluid ALIAS fluid)
+
+target_include_directories(fluid
+        INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+
+target_compile_features(fluid INTERFACE cxx_std_14)
 
 
-#  -fprofile-generate=./pgo \
-#  -fprofile-use=./pgo -fprofile-correction \
+target_link_libraries(fluid
+        PUBLIC
+        glm
+        mio::mio
+        OpenCL::OpenCL
+        OpenMP::OpenMP_CXX
+        nlohmann_json::nlohmann_json)
 
-
-if (MSVC)
-    message(STATUS "Using MSVC")
-    # StringPooling: true == /GF  false == /GF-
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GF /Gy /Ox /openmp /arch:AVX2 /fp:fast")
-
-    # RuntimeLibrary
-    # 0 (MultiThreaded) == /MT
-    # 1 (MultiThreadedDebug) == /MTd
-    # 2 (MultiThreadedDLL) == /MD
-    # 3 (MultiThreadedDebugDLL) == /MDd
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
-
-    # TreatWChar_tAsBuiltInType: true == /Zc:wchar_t  false == /Zc:wchar_t-
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:wchar_t")
-
-    # WarningLevel: /W<level 0 to 4> or /Wall
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3")
-
-    # Detect64BitPortabilityProblems: /Wp64 - Deprecated since VC++ 2010
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Wp64")
+if (BUILD_SAMPLES)
+    add_subdirectory(samples)
 endif ()
 
-#find_package(BoostCompute CONFIG REQUIRED)
 
-#include_directories(${BoostCompute_INCLUDE_DIRS})
-
-#add_library(libfluid Octree.hpp library.cpp library.hpp main.cpp library.cpp)
-
-add_executable(main
-        Octree.hpp
-        nanoflann.hpp
-        ska_sort.hpp
-        cl_types.h
-        zcurve.h
-        clsph_type.h clsph_kernel.cl clsph.hpp
-        clmc_kernel.cl
-        cpusph.hpp
-        writer.hpp surface.hpp fluid.hpp
-        main.cpp)
-add_executable(libfluid test.cpp test-main.cpp)
-
-target_link_libraries(libfluid PRIVATE Catch2::Catch2)
-target_link_libraries(libfluid PRIVATE glm)
-target_link_libraries(libfluid PRIVATE mio::mio)
-target_link_libraries(libfluid PRIVATE OpenCL::OpenCL)
-
-target_link_libraries(main PRIVATE Catch2::Catch2)
-target_link_libraries(main PRIVATE glm)
-target_link_libraries(main PRIVATE mio::mio)
-target_link_libraries(main PRIVATE OpenCL::OpenCL)
-#target_link_libraries(main PRIVATE stdc++fs)
-target_link_libraries(main PRIVATE nlohmann_json::nlohmann_json)
+if (BUILD_TESTS)
+    add_subdirectory(tests)
+endif ()
 
 
-include(CTest)
-include(Catch)
-catch_discover_tests(libfluid)
+

@@ -1,7 +1,9 @@
 #ifndef LIBFLUID_WRITER_H
 #define LIBFLUID_WRITER_H
 
+
 #include <vector>
+#include <mio/mmap.hpp>
 #include <nlohmann/json.hpp>
 
 
