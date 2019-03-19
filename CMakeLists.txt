@@ -7,7 +7,8 @@ project(libfluid VERSION 1.0.0 LANGUAGES CXX)
 option(BUILD_SAMPLES "Build samples" ON)
 option(BUILD_TESTS "Build tests" ON)
 
-set(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(mio REQUIRED)
 find_package(glm REQUIRED)
@@ -25,29 +26,23 @@ if (NOT TARGET OpenMP::OpenMP_CXX)
             PROPERTY INTERFACE_LINK_LIBRARIES ${OpenMP_CXX_FLAGS} Threads::Threads)
 endif ()
 
+
+add_library(fluid INTERFACE)
+
 include_directories(third_party)
-add_library(fluid STATIC
-        include/fluid/zcurve.h
-        include/fluid/cl_types.h
-        include/fluid/clsph.hpp
-        include/fluid/writer.hpp
-        include/fluid/surface.hpp
-        include/fluid/fluid.hpp
-        include/fluid/cpusph.hpp
-        include/fluid/clsph_type.h
-        include/fluid/clsph_kernel.cl
-        include/fluid/clmc_kernel.cl
+target_include_directories(fluid INTERFACE
+        include/fluid
+        third_party
         )
 
-set_target_properties(fluid PROPERTIES LINKER_LANGUAGE CXX)
+#set_target_properties(fluid PROPERTIES LINKER_LANGUAGE CXX)
 add_library(fluid::fluid ALIAS fluid)
 
 target_include_directories(fluid
         INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${INSTALL_INCLUDE_DIR}>
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+
         )
 
 target_compile_features(fluid INTERFACE cxx_std_14)
@@ -57,11 +52,36 @@ target_link_libraries(fluid
         INTERFACE
         nlohmann_json::nlohmann_json
         glm
-        PRIVATE
         mio::mio
         OpenCL::OpenCL
         OpenMP::OpenMP_CXX
         )
+
+
+if (MSVC)
+    target_compile_options(fluid
+            INTERFACE
+            /Wp64
+            /W3
+            /Zc:wchar_t
+            )
+    set(RELEASE_OPTIONS /MT /GF /Gy /Ox /arch:AVX2 /fp:fast)
+    set(DEBUG_OPTIONS /MTd)
+else ()
+    target_compile_options(fluid
+            INTERFACE
+            -Wall
+            -Wextra
+            #            -Wshadow
+            #            -Wold-style-cast
+            -Wcast-align
+            -Wpedantic
+            )
+    set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
+    set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
+endif ()
+target_compile_options(fluid INTERFACE "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
+target_compile_options(fluid INTERFACE "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
 
 if (BUILD_SAMPLES)
     add_subdirectory(samples)
