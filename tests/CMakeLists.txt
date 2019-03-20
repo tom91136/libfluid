@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
-
 project(tests)
 
 include(FetchContent)
@@ -8,8 +6,14 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
         GIT_TAG v2.7.0
 )
-FetchContent_MakeAvailable(Catch2)
+#FetchContent_MakeAvailable(Catch2)
 #find_package(Catch2 REQUIRED)
+
+FetchContent_GetProperties(catch2)
+if(NOT catch2_POPULATED)
+    FetchContent_Populate(catch2)
+    add_subdirectory(${catch2_SOURCE_DIR} ${catch2_BINARY_DIR})
+endif()
 
 
 add_executable(test-all test.cpp test-main.cpp)
