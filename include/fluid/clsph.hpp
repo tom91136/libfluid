@@ -17,6 +17,7 @@
 #include "fluid.hpp"
 #include "clsph_type.h"
 #include "zcurve.h"
+#include "mc.h"
 
 using glm::tvec3;
 namespace clutil {

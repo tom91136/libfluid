@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 
 
-project(libfluid VERSION 1.0.0 LANGUAGES CXX)
+project(libfluid VERSION 1.0.0)
 
 
 option(BUILD_SAMPLES "Build samples" ON)
@@ -35,7 +35,11 @@ target_include_directories(fluid INTERFACE
         third_party
         )
 
-#set_target_properties(fluid PROPERTIES LINKER_LANGUAGE CXX)
+#set_source_files_properties(
+#        clmc_kernel.cl
+#        clsph_kernel.cl
+#        PROPERTIES LANGUAGE CXX)
+
 add_library(fluid::fluid ALIAS fluid)
 
 target_include_directories(fluid
