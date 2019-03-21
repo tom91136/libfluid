@@ -7,21 +7,21 @@ Generic fluid simulation solver based on SPH method as described in [Position Ba
 
 Build dependencies:
 
- * cmake
- * gcc/clang/msvc
+ * CMake >= 3.11
+ * GGG/Clang/MSVC
 
 Library dependencies:
 
- * boost-compute
- * OpenMP
- * OpenCL
+ * OpenMP >= 2.0 (2.0 is supported but with degraded proformance)
+ * OpenCL (runtime must support OpenCL 1.2 or newer)
  * Catch2
  * GLM
  * mio
+ * nlohmann-json
  
 If you are using vcpkg, install the following dependencies:
 
-    vcpkg install boost glm mio opencl nlohmann-json catch2
+    vcpkg install glm mio opencl nlohmann-json catch2
 
 # Compiling
 
@@ -29,8 +29,13 @@ On Windows:
 
     cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake
 
-    cmake --build build --target main --config Release
+On Linux:
 
+    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=/home/<user>/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+Then compile:
+
+    cmake --build build --target main --config Release
 
 
 ## Licence
