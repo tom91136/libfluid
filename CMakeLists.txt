@@ -61,32 +61,6 @@ target_link_libraries(fluid
         OpenMP::OpenMP_CXX
         )
 
-
-if (MSVC)
-    target_compile_options(fluid
-            INTERFACE
-            /Wp64
-            /W3
-            /Zc:wchar_t
-            )
-    set(RELEASE_OPTIONS /MT /GF /Gy /Ox /arch:AVX2 /fp:fast)
-    set(DEBUG_OPTIONS /MTd)
-else ()
-    target_compile_options(fluid
-            INTERFACE
-            -Wall
-            -Wextra
-            #            -Wshadow
-            #            -Wold-style-cast
-            -Wcast-align
-            -Wpedantic
-            )
-    set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
-    set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
-endif ()
-target_compile_options(fluid INTERFACE "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
-target_compile_options(fluid INTERFACE "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
-
 if (BUILD_SAMPLES)
     add_subdirectory(samples)
 endif ()

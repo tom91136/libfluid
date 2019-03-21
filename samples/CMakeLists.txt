@@ -24,7 +24,7 @@ if (MSVC)
             /W3
             /Zc:wchar_t
             )
-    set(RELEASE_OPTIONS /MT /GF /Gy /Ox /arch:AVX2 /fp:fast)
+    set(RELEASE_OPTIONS /MT /GF /Gy /O2 /arch:AVX2 /fp:fast)
     set(DEBUG_OPTIONS /MTd)
 else ()
     target_compile_options(main
@@ -39,7 +39,8 @@ else ()
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
     set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
 endif ()
-target_compile_options(main PUBLIC "$<$<CONFIG:Release>:${RELEASE_OPTIONS}>")
+
+target_compile_options(main PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_OPTIONS}>")
 target_compile_options(main PUBLIC "$<$<CONFIG:DEBUG>:${DEBUG_OPTIONS}>")
 
 
