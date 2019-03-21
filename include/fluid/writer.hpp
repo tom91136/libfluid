@@ -112,14 +112,14 @@ namespace writer {
 	}
 
 	template<typename W, class S, std::size_t... Is, class ...Rest>
-	inline const static size_t writePacked_impl(W &w, const S &s, const size_t offset,
+	inline static size_t writePacked_impl(W &w, const S &s, const size_t offset,
 	                                            const std::tuple<Rest...> &xs,
 	                                            const std::index_sequence<Is...>) {
 		return write(w, s, offset, std::get<Is>(xs)...);
 	}
 
 	template<typename W, class S, class ...Rest>
-	inline const static size_t
+	inline static size_t
 	writePacked(W &w, const S &s, const size_t offset, const Entries<Rest...> &e) {
 		return writePacked_impl(w, s, offset, e.args, std::index_sequence_for<Rest...>());
 	}

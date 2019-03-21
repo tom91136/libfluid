@@ -14,12 +14,10 @@
 
 #include "fluid/fluid.hpp"
 #include "fluid/surface.hpp"
-#include "fluid/clsph.hpp"
+#include "fluid/oclsph.hpp"
 #include "fluid/cpusph.hpp"
 #include "fluid/writer.hpp"
 
-#include "nanoflann.hpp"
-#include "mio/mmap.hpp"
 #include "omp.h"
 
 using json = nlohmann::json;
@@ -39,7 +37,7 @@ static const char velocity_y_[] = "velocity.y";
 static const char velocity_z_[] = "velocity.z";
 
 template<typename T, typename N>
-const static inline auto particleEntries() {
+static inline auto particleEntries() {
 	return writer::makeEntries(
 			ENTRY(t_, CLS(fluid::Particle<T, N>), t),
 			ENTRY(type_, CLS(fluid::Particle<T, N>), type),
@@ -64,7 +62,7 @@ static const char v2_y_[] = "v2.y";
 static const char v2_z_[] = "v2.z";
 
 template<typename N>
-const static inline auto triangleEntries() {
+static inline auto triangleEntries() {
 	return writer::makeEntries(
 			ENTRY(v0_x_, CLS(surface::Triangle<N>), v0.x),
 			ENTRY(v0_y_, CLS(surface::Triangle<N>), v0.y),
@@ -92,7 +90,7 @@ struct Header {
 	), entries(entries) {}
 };
 
-const static inline auto headerEntries() {
+static inline auto headerEntries() {
 	return writer::makeEntries(
 			ENTRY(timestamp_, CLS(Header), timestamp),
 			ENTRY(entries_, CLS(Header), entries)
@@ -144,7 +142,7 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
-	for (size_t x = 0; x < len / 2; ++x) {
+	for (size_t x = 0; x < len; ++x) {
 		for (size_t y = 0; y < len; ++y) {
 			for (size_t z = 0; z < len; ++z) {
 				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
@@ -205,16 +203,12 @@ void writeFile(std::string filename, std::string content) {
 void run();
 
 int main(int argc, char *argv[]) {
-
-
 	run();
-
 	return EXIT_SUCCESS;
 }
 
 
 void run() {
-
 
 	auto particleType = writer::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
 	auto triangleType = writer::writeMetaPacked<decltype(triangleEntries<num_t>())>();
@@ -232,17 +226,11 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(1);
-	size_t pcount = (500) * 1000;
-	size_t iter = 5000;
-	size_t solverIter = 3;
-	num_t scaling = 300;
-
-
-
-//	checkClNN3();
-//	checkClNN3();
-//	checkClNN3();
+	omp_set_num_threads(4);
+	const size_t pcount = (20) * 1000;
+	const size_t iter = 5000;
+	const size_t solverIter = 3;
+	const num_t scaling = 300; // less = less space between particle
 
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
@@ -250,35 +238,7 @@ void run() {
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
 	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
-	float i = 0;
-
-
-	const num_t Xscale = 2.f;
-	const num_t Yscale = 0.8f;
-	const num_t Zscale = 0.7f;
-
-	std::vector<std::function<const fluid::Response<num_t>(
-			fluid::Ray<num_t> &)> > colliders = {
-			[&i, Xscale, Yscale, Zscale](const fluid::Ray<num_t> &x) -> fluid::Response<num_t> {
-				float xx = (sin(i) * 220) * 0;
-				float zz = (cos(i) * 50) * 0;
-
-
-				return fluid::Response<num_t>(
-						tvec3<num_t>(
-								glm::clamp(x.getOrigin().x, (num_t) -500.f * Xscale + xx,
-								           (num_t) 500.f * Xscale + xx),
-								glm::clamp(x.getOrigin().y, (num_t) -500.f * Yscale,
-								           (num_t) 500.f * Yscale),
-								glm::clamp(x.getOrigin().z, (num_t) -500.f * Zscale + zz,
-								           (num_t) 500.f * Zscale + zz)),
-						x.getVelocity());
-			}
-	};
-
-
 	std::cout << "Mark" << std::endl;
-
 
 	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
 	auto mmfTSink = mkMmf("triangles.mmf", 500000 * triangleType.first + headerType.first);
@@ -290,23 +250,37 @@ void run() {
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
-	std::unique_ptr<cpusph::SphSolver<size_t, num_t>> solver(
-			new cpusph::SphSolver<size_t, num_t>(0.1,
-			                                     scaling)); // less = less space between particle
+//	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
+	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(0.1, "/home/tom/libfluid/include/fluid"));
 
 	using hrc = high_resolution_clock;
 
 	hrc::time_point start = hrc::now();
-	for (size_t j = 0; j < iter; ++j) {
 
+
+	auto min = tvec3<num_t>(-500);
+	auto max = tvec3<num_t>(500);
+
+	auto config = fluid::Config<num_t>(
+			static_cast<num_t>(0.0083 * 1),
+			scaling,
+			solverIter,
+			tvec3<num_t>(0, 9.8, 0),
+			min, max);
+
+	float i = 0;
+
+	const std::vector<fluid::MeshCollider<num_t>> colliders;
+
+	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
+		auto xx = (std::sin(i) * 220) * 1;
+		auto zz = (std::cos(i) * 50) * 1;
+		config.min = min + tvec3<num_t>(xx, 1, zz);
+		config.max = max + tvec3<num_t>(xx, 1, zz);
 
 		hrc::time_point t1 = hrc::now();
-		solver->advance(static_cast<num_t> (0.0083 * 1), solverIter, xs,
-		                [](const fluid::Particle<size_t, num_t> &x) {
-			                return tvec3<num_t>(0, x.mass * 9.8, 0);
-		                }, colliders
-		);
+		solver->advance(config, xs, colliders);
 		hrc::time_point t2 = hrc::now();
 
 

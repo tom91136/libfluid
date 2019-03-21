@@ -1,3 +1,4 @@
+
 #ifndef LIBFLUID_CLSPH_HPP
 #define LIBFLUID_CLSPH_HPP
 
@@ -5,6 +6,11 @@
 #define CL_HPP_MINIMUM_OPENCL_VERSION 120
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #define CL_HPP_ENABLE_EXCEPTIONS
+
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_SIMD_AVX2
+#define GLM_ENABLE_EXPERIMENTAL
+
 
 #include <iostream>
 #include <sstream>
@@ -15,40 +21,11 @@
 #include <CL/cl2.hpp>
 
 #include "fluid.hpp"
-#include "clsph_type.h"
+#include "oclsph_type.h"
 #include "zcurve.h"
 #include "mc.h"
 
-using glm::tvec3;
 namespace clutil {
-
-	template<typename N>
-	static inline cl_float3 float3(N x, N y, N z) {
-		return {{static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)}};
-	}
-
-	inline cl_float4 float4(float x, float y, float z, float w) { return {{x, y, z, w}}; }
-
-	template<typename N>
-	static inline cl_float3 float3(N x) {
-		return {{static_cast<float>(x), static_cast<float>(x), static_cast<float>(x)}};
-	}
-
-	inline cl_float4 float4(float x) { return {{x, x, x, x}}; }
-
-
-	template<typename N>
-	inline glm::tvec3<N> clToVec3(cl_float3 v) {
-		return glm::tvec3<float>(v.x, v.y, v.z);
-	}
-
-	inline cl_float3 vec3ToCl(glm::tvec3<float> v) {
-		return float3(v.x, v.y, v.z);
-	}
-}
-
-namespace clsph {
-
 
 	static void enumeratePlatformToCout() {
 		std::cout << "Enumerating OpenCL platforms:" << std::endl;
@@ -88,31 +65,33 @@ namespace clsph {
 
 	}
 
-
-	static const cl::Program loadProgramFromFile(const std::string &file) {
+	static cl::Program loadProgramFromFile(
+			const std::string &file,
+			const std::string &include,
+			const std::string &flags = "") {
+		enumeratePlatformToCout();
 		std::cout << "Compiling CL kernel:`" << file << "`" << std::endl;
 		std::ifstream t(file);
 		std::stringstream source;
 		source << t.rdbuf();
 		cl::Program program = cl::Program(source.str());
 
-		auto printBuildInfo = [&program]() {
+		const auto printBuildInfo = [&program]() {
 			auto log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>();
 			std::cerr << "Compiler output(" << log.size() << "):\n" << std::endl;
 			for (auto &pair : log) {
 				std::cerr << ">" << pair.second << std::endl;
 			}
 		};
-
+		const std::string clFlags = " -cl-std=CL1.2"
+		                            " -w"
+		                            " -cl-mad-enable"
+		                            " -cl-no-signed-zeros"
+		                            " -cl-unsafe-math-optimizations"
+		                            " -cl-finite-math-only";
+		const std::string build = clFlags + " -I " + include + " " + flags;
 		try {
-			program.build(" -cl-std=CL1.2"
-			              " -w"
-			              " -cl-mad-enable"
-			              " -cl-no-signed-zeros"
-			              " -cl-unsafe-math-optimizations"
-			              " -cl-finite-math-only"
-			              " -I /home/tom/libfluid/include/fluid/"
-			);
+			program.build(build.c_str());
 		} catch (...) {
 			std::cerr << "Program failed to compile, source:\n" << source.str() << std::endl;
 			printBuildInfo();
@@ -123,27 +102,58 @@ namespace clsph {
 		return program;
 	}
 
+	template<typename N>
+	static inline cl_float3 float3(N x, N y, N z) {
+		return {{static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)}};
+	}
+
+	inline cl_float4 float4(float x, float y, float z, float w) { return {{x, y, z, w}}; }
+
+	template<typename N>
+	static inline cl_float3 float3(N x) {
+		return {{static_cast<float>(x), static_cast<float>(x), static_cast<float>(x)}};
+	}
+
+	inline cl_float4 float4(float x) { return {{x, x, x, x}}; }
+
+
+	template<typename N>
+	inline glm::tvec3<N> clToVec3(cl_float3 v) {
+		return glm::tvec3<float>(v.x, v.y, v.z);
+	}
+
+	inline cl_float3 vec3ToCl(glm::tvec3<float> v) {
+		return float3(v.x, v.y, v.z);
+	}
+}
+
+namespace ocl {
+
+	using glm::tvec3;
+
 
 	template<typename T, typename N>
-	class CLOps {
+	class SphSolver : public fluid::SphSolver<T, N> {
 
 	private:
-		const cl::Platform platform;
-		const cl::Program program;
+
+		const N h;
+		const cl::Device device;
+		const cl::Program clsph;
 
 	public:
+		explicit SphSolver(N h, std::string kernelPath,
+		                   cl::Device device = cl::Device::getDefault()) :
+				h(h),
+				device(std::move(device)),
+				clsph(clutil::loadProgramFromFile(
+						kernelPath + "/oclsph_kernel.cl",
+						kernelPath,
+						"-DH=" + std::to_string(h))) {}
 
-		explicit CLOps(const cl::Platform &platform = cl::Platform::getDefault()) :
-				platform(platform),
-				program(loadProgramFromFile("/home/tom/libfluid/include/fluid/clsph_kernel.cl")) {
-			std::cout << "Using default platform: `" << platform.getInfo<CL_PLATFORM_NAME>() << "`"
-			          << std::endl;
-		}
+	private:
 
-	public:
-
-
-		static ClSphType resolve(fluid::Type t) {
+		static inline ClSphType resolve(fluid::Type t) {
 			switch (t) {
 				case fluid::Type::Fluid: return ClSphType::Fluid;
 				case fluid::Type::Obstacle: return ClSphType::Obstacle;
@@ -151,7 +161,7 @@ namespace clsph {
 			}
 		}
 
-		static fluid::Type resolve(ClSphType t) {
+		static inline fluid::Type resolve(ClSphType t) {
 			switch (t) {
 				case ClSphType::Fluid: return fluid::Type::Fluid;
 				case ClSphType::Obstacle: return fluid::Type::Obstacle;
@@ -159,34 +169,35 @@ namespace clsph {
 			}
 		}
 
+		void advance(const fluid::Config<N> &config,
+		             std::vector<fluid::Particle<T, N>> &xs,
+		             const std::vector<fluid::MeshCollider<N>> &colliders) override {
 
-		constexpr static float H = 0.1f;
-
-		const N HD2 = 0.1 / 2;
-
-
-		void run(
-				std::vector<fluid::Particle<T, N>> &particles,
-				size_t iter, N scale,
-				glm::tvec3<N> constForce,
-				N dt
-		) {
 			using hrc = std::chrono::high_resolution_clock;
+			using std::chrono::nanoseconds;
+			using std::chrono::milliseconds;
+			using std::chrono::duration_cast;
+
 
 			hrc::time_point aabbCpyS = hrc::now();
 
-			glm::tvec3<N> min(std::numeric_limits<N>::max());
-			glm::tvec3<N> max(std::numeric_limits<N>::min());
-			N sideLength = (HD2 * 2);
+			tvec3<N> min(std::numeric_limits<N>::max());
+			tvec3<N> max(std::numeric_limits<N>::min());
 
-			const size_t atomsN = particles.size();
-			std::vector<ClSphAtom> hostAtoms(particles.size());
+			const size_t atomsN = xs.size();
+			std::vector<ClSphAtom> hostAtoms(xs.size());
 
-//#pragma omp parallel for reduction(min:min.x) reduction(min:min.y) reduction(min:min.z) reduction(max:max.x) reduction(max:max.y) reduction(max:max.z)
-			for (size_t i = 0; i < particles.size(); ++i) {
-				const fluid::Particle<T, N> &p = particles[i];
-				const glm::tvec3<N> velocity = (p.mass * constForce) * dt + p.velocity;
-				const glm::tvec3<N> pStar = (velocity * dt) + (p.position / scale);
+
+#if _OPENMP > 201307
+#pragma omp declare reduction(glmMin: tvec3<N>: omp_out = glm::min(omp_in, omp_out))
+#pragma omp declare reduction(glmMax: tvec3<N>: omp_out = glm::max(omp_in, omp_out))
+#pragma omp parallel for reduction(glmMin:min) reduction(glmMax:max)
+#endif
+			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
+				const fluid::Particle<T, N> &p = xs[i];
+				const tvec3<N> velocity =
+						(p.mass * config.constantForce) * config.dt + p.velocity;
+				const tvec3<N> pStar = (velocity * config.dt) + (p.position / config.scale);
 				ClSphAtom &atom = hostAtoms[i];
 				ClSphParticle &particle = atom.particle;
 				particle.id = p.t,
@@ -195,19 +206,25 @@ namespace clsph {
 				particle.position = clutil::vec3ToCl(p.position),
 				particle.velocity = clutil::vec3ToCl(velocity);
 				atom.pStar = clutil::vec3ToCl(pStar);
-				min.x = glm::min(pStar.x, min.x);
-				min.y = glm::min(pStar.y, min.y);
-				min.z = glm::min(pStar.z, min.z);
-
-				max.x = glm::max(pStar.x, max.x);
-				max.y = glm::max(pStar.y, max.y);
-				max.z = glm::max(pStar.z, max.z);
+				min = glm::min(pStar, min);
+				max = glm::max(pStar, max);
 			}
+//
+//			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
+//				const float3 &pStar = hostAtoms[i].pStar;
+//				min.x = glm::min(pStar.x, min.x);
+//				min.y = glm::min(pStar.y, min.y);
+//				min.z = glm::min(pStar.z, min.z);
+//				max.x = glm::max(pStar.x, max.x);
+//				max.y = glm::max(pStar.y, max.y);
+//				max.z = glm::max(pStar.z, max.z);
+//			}
 
-			N padding = sideLength * 2;
+
+			N padding = h * 2;
 			min -= padding;
 			max += padding;
-			glm::tvec3<size_t> sizes((max - min) / sideLength);
+			glm::tvec3<size_t> sizes((max - min) / h);
 
 			const size_t gridTableN = zCurveGridIndexAtCoord(sizes.x, sizes.y, sizes.z);
 			hrc::time_point aabbCpyE = hrc::now();
@@ -216,12 +233,12 @@ namespace clsph {
 
 
 #pragma omp parallel for
-			for (int i = 0; i < hostAtoms.size(); ++i) {
+			for (int i = 0; i < static_cast<int>(hostAtoms.size()); ++i) {
 				const float3 pStar = hostAtoms[i].pStar;
 				hostAtoms[i].zIndex = zCurveGridIndexAtCoord(
-						static_cast<size_t>((pStar.x - min.x) / sideLength),
-						static_cast<size_t>((pStar.y - min.y) / sideLength),
-						static_cast<size_t>((pStar.z - min.z) / sideLength));
+						static_cast<size_t>((pStar.x - min.x) / h),
+						static_cast<size_t>((pStar.y - min.y) / h),
+						static_cast<size_t>((pStar.z - min.z) / h));
 			}
 
 
@@ -267,12 +284,28 @@ namespace clsph {
 			std::vector<ClSphParticle> copiedParticles(atomsN);
 
 
+			hrc::time_point da1 = hrc::now();
 			cl::Buffer deviceAtoms(hostAtoms.begin(), hostAtoms.end(), false);
+			hrc::time_point da2 = hrc::now();
+			cl::finish();
+			std::cout << "Device atoms: "
+			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
+			          << std::endl;
+
+
+			hrc::time_point dgt1 = hrc::now();
 			cl::Buffer deviceGridTable(hostGridTable.begin(), hostGridTable.end(), true);
+			hrc::time_point dgt2 = hrc::now();
+			cl::finish();
+			std::cout << "Device GT  : "
+			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
+			          << std::endl;
+
 
 			cl::Buffer deviceResult(copiedParticles.begin(), copiedParticles.end(), false);
 
 			cl::finish();
+
 
 			hrc::time_point gpuXferE = hrc::now();
 
@@ -280,39 +313,42 @@ namespace clsph {
 
 			auto lambdaKernel = cl::KernelFunctor<
 					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
-			>(program, "sph_lambda");
+			>(clsph, "sph_lambda");
 			auto deltaKernel = cl::KernelFunctor<
 					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
-			>(program, "sph_delta");
+			>(clsph, "sph_delta");
 			auto finaliseKernel = cl::KernelFunctor<
 					const ClSphConfig &, cl::Buffer &, cl::Buffer &
-			>(program, "sph_finalise");
+			>(clsph, "sph_finalise");
 
-			ClSphConfig config;
-			config.scale = scale;
-			config.dt = 0.0083f;
-			config.iteration = static_cast<size_t>(iter);
+			ClSphConfig clConfig;
+			clConfig.dt = config.dt;
+			clConfig.scale = config.scale;
+			clConfig.iteration = static_cast<size_t>(config.iteration);
+			clConfig.min = clutil::vec3ToCl(config.min);
+			clConfig.max = clutil::vec3ToCl(config.max);
+
+
 			hrc::time_point gpuFunctorE = hrc::now();
 
 
 			hrc::time_point gpuKernelS = hrc::now();
 			try {
-
-				for (size_t itr = 0; itr < iter; ++itr) {
+				for (size_t itr = 0; itr < config.iteration; ++itr) {
 					lambdaKernel(
 							cl::EnqueueArgs(cl::NDRange(atomsN)),
-							config,
+							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN));
 
 					deltaKernel(
 							cl::EnqueueArgs(cl::NDRange(atomsN)),
-							config,
+							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN));
 				}
 				finaliseKernel(cl::EnqueueArgs(cl::NDRange(atomsN)),
-				               config, deviceAtoms, deviceResult);
+				               clConfig, deviceAtoms, deviceResult);
 
 			} catch (const std::exception &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
@@ -331,9 +367,9 @@ namespace clsph {
 			hrc::time_point gpuXferRE = hrc::now();
 
 #pragma omp parallel for
-			for (int i = 0; i < particles.size(); ++i) {
+			for (int i = 0; i < xs.size(); ++i) {
 				const ClSphParticle &p = copiedParticles[i];
-				fluid::Particle<T, N> &particle = particles[i];
+				fluid::Particle<T, N> &particle = xs[i];
 
 				particle.t = static_cast<T>(p.id);
 				particle.type = resolve(p.type);
@@ -352,20 +388,14 @@ namespace clsph {
 //		}
 
 
-			auto aabbCpy = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					aabbCpyE - aabbCpyS).count();
-			auto zCurve = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					zCurveE - zCurveS).count();
-			auto sort = std::chrono::duration_cast<std::chrono::nanoseconds>(sortE - sortS).count();
-			auto gt = std::chrono::duration_cast<std::chrono::nanoseconds>(gtE - gtS).count();
-			auto gpuKernel = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					gpuKernelE - gpuKernelS).count();
-			auto gpuXfer = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					gpuXferE - gpuXferS).count();
-			auto gpuXferR = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					gpuXferRE - gpuXferRS).count();
-			auto gpuFunctor = std::chrono::duration_cast<std::chrono::nanoseconds>(
-					gpuFunctorE - gpuFunctorS).count();
+			auto aabbCpy = duration_cast<nanoseconds>(aabbCpyE - aabbCpyS).count();
+			auto zCurve = duration_cast<nanoseconds>(zCurveE - zCurveS).count();
+			auto sort = duration_cast<nanoseconds>(sortE - sortS).count();
+			auto gt = duration_cast<nanoseconds>(gtE - gtS).count();
+			auto gpuKernel = duration_cast<nanoseconds>(gpuKernelE - gpuKernelS).count();
+			auto gpuXfer = duration_cast<nanoseconds>(gpuXferE - gpuXferS).count();
+			auto gpuXferR = duration_cast<nanoseconds>(gpuXferRE - gpuXferRS).count();
+			auto gpuFunctor = duration_cast<nanoseconds>(gpuFunctorE - gpuFunctorS).count();
 			std::cout
 					<< "\tCPU aabbCpy= " << (aabbCpy / 1000000.0) << "ms\n"
 					<< "\tCPU zCurve = " << (zCurve / 1000000.0) << "ms\n"
@@ -380,9 +410,8 @@ namespace clsph {
 
 		}
 
-
 	};
-}
 
+}
 
 #endif //LIBFLUID_CLSPH_HPP

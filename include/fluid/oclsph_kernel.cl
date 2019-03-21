@@ -1,9 +1,15 @@
-#include "clsph_type.h"
+#include "oclsph_type.h"
 #include "zcurve.h"
 
 
 #define DEBUG
 #undef DEBUG
+
+
+
+#ifndef H
+#error H is not set
+#endif
 
 
 const constant float VD = 0.49f;// Velocity dampening;
@@ -16,7 +22,6 @@ const constant float VORTICITY_EPSILON = 0.0005f;
 const constant float CorrK = 0.0001f;
 const constant float CorrN = 4.f;
 
-const constant float H = 0.1f;
 const constant float H2 = H * 2;
 const constant float HH = H * H;
 const constant float HHH = H * H * H;
@@ -211,7 +216,11 @@ kernel void sph_delta(
 
 	float3 currentP = (a->pStar + a->deltaP) * config.scale;
 	float3 currentV = a->particle.velocity;
-	currentP = clamp(currentP, -500.f, 500.f);
+//	currentP = clamp(currentP, -500.f, 500.f);
+
+
+	currentP = min(config.max, max(config.min, currentP));
+
 	// TODO handle colliders
 
 	a->pStar = currentP / config.scale;

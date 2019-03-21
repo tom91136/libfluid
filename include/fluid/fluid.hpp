@@ -91,33 +91,44 @@ namespace fluid {
 	};
 
 
-	template<typename T, typename N>
-	struct Atom {
+	template<typename N>
+	struct MeshCollider {
+		const std::vector<glm::tvec3<N>> &triangles;
 
-		Particle<T, N> *particle;
-		std::unique_ptr<std::vector<Atom<T, N> *>> neighbours;
-		std::unique_ptr<std::vector<N>> p6ks;
-		std::unique_ptr<std::vector<tvec3<N>>> skgs;
-		size_t zIndex;
-		N mass;
-		tvec3<N> now;
-		N lambda;
-		tvec3<N> deltaP;
-		tvec3<N> omega;
-		tvec3<N> velocity;
-
-		explicit Atom(Particle<T, N> *particle) : particle(particle) {
-			lambda = 0;
-			now = tvec3<N>(0);
-			deltaP = tvec3<N>(0);
-			omega = tvec3<N>(0);
-			velocity = tvec3<N>(0);
-			neighbours = std::make_unique<std::vector<Atom<T, N> *>>();
-			p6ks = std::make_unique<std::vector<N>>();
-			skgs = std::make_unique<std::vector<tvec3<N>>>();
-
-		}
+		explicit MeshCollider(const std::vector<glm::tvec3<N>> &triangles) : triangles(triangles) {}
 	};
+
+	template<typename N>
+	struct Config {
+
+		N dt;
+		N scale;
+		size_t iteration;
+		glm::tvec3<N> constantForce;
+
+		glm::tvec3<N> min;
+		glm::tvec3<N> max;
+
+		explicit Config(N dt, N scale, size_t iteration,
+		                const glm::tvec3<N> &constantForce,
+		                const glm::tvec3<N> &min,
+		                const glm::tvec3<N> &max) : dt(dt), scale(scale),
+		                                            iteration(iteration),
+		                                            constantForce(constantForce),
+		                                            min(min), max(max) {}
+	};
+
+	template<typename T, typename N>
+	class SphSolver {
+	public :
+
+		virtual ~SphSolver() = default;
+
+		virtual void advance(const Config<N> &config,
+		                     std::vector<Particle<T, N>> &xs,
+		                     const std::vector<MeshCollider<N>> &colliders) = 0;
+	};
+
 
 }
 

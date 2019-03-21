@@ -61,6 +61,12 @@ target_link_libraries(fluid
         OpenMP::OpenMP_CXX
         )
 
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # CL2 typedefs cl types with attributes
+    target_compile_options(fluid INTERFACE -Wno-ignored-attributes)
+endif ()
+
 if (BUILD_SAMPLES)
     add_subdirectory(samples)
 endif ()
