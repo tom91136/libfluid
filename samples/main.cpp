@@ -2,8 +2,6 @@
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
 
-#define FLANN_S
-#define FLANN
 
 #include <memory>
 #include <chrono>
@@ -171,24 +169,6 @@ struct ParticleCloud {
 
 };
 
-template<typename N>
-struct PointCloud {
-	const std::vector<tvec3<N>> pts;
-	const N scale;
-
-	PointCloud(const std::vector<tvec3<N>> &pts, N scale) : pts(pts), scale(scale) {}
-
-	inline size_t kdtree_get_point_count() const { return pts.size(); }
-
-	inline N kdtree_get_pt(const size_t idx, const size_t dim) const {
-		return pts[idx][dim];
-	}
-
-	template<class BBOX>
-	bool kdtree_get_bbox(BBOX & /* bb */) const { return false; }
-
-};
-
 
 //#define DO_SURFACE
 
@@ -227,10 +207,10 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (20) * 1000;
+	const size_t pcount = (15) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 3;
-	const num_t scaling = 300; // less = less space between particle
+	const num_t scaling = 350; // less = less space between particle
 
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
@@ -245,7 +225,7 @@ void run() {
 
 	std::cout << "Go" << std::endl;
 
-	float D = 20.f;
+	float D = 15.f;
 	auto P = static_cast<size_t>(2000.f / D);
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
@@ -294,28 +274,6 @@ void run() {
 		const num_t MBC = 100.f;
 		const num_t MBCC = MBC * MBC;
 
-#ifndef FLANN_S
-
-		std::vector<tvec3<num_t>> pts;
-		std::transform(xs.begin(), xs.end(), std::back_inserter(pts),
-					   [](const fluid::Particle<size_t, num_t> &a) { return a.position; });
-
-
-		unibn::Octree<tvec3<num_t>> octree;
-		octree.initialize(pts);
-		auto triangles = surface::parameterise<num_t>(100.f,lattice, [&octree, &xs, MBCC, NR](
-				const tvec3<num_t> &a) -> num_t {
-
-					std::vector<uint32_t> results;
-					octree.radiusNeighbors<unibn::L2Distance<tvec3<num_t>>>(a, NR, results);
-					num_t v = 0;
-					for (uint32_t &result : results)
-						v += (MBCC /
-							  glm::length2(xs[result].position - a)) * 2;
-					return v;
-				});
-
-#else
 
 		using namespace nanoflann;
 		const ParticleCloud<size_t, num_t> cloud = ParticleCloud<size_t, num_t>(xs);
@@ -344,7 +302,6 @@ void run() {
 		});
 
 
-#endif
 
 
 		std::cout <<
@@ -367,10 +324,6 @@ void run() {
 #endif
 		write_particles(mmfPSink, xs);
 		hrc::time_point mmt2 = hrc::now();
-
-
-
-//		sleep(1);
 
 
 		auto solve = duration_cast<nanoseconds>(t2 - t1).count();

@@ -150,7 +150,7 @@ namespace ocl {
 				clsph(clutil::loadProgramFromFile(
 						kernelPath + "/oclsph_kernel.cl",
 						kernelPath,
-						"-DH=" + std::to_string(h))) {}
+						"-DH=((float)" + std::to_string(h) + ")")) {}
 
 	private:
 

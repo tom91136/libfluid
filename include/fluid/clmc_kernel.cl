@@ -3,6 +3,7 @@
 #include "mc.h"
 
 // Heavily modified version of https://github.com/smistad/GPU-Marching-Cubes
+// See https://github.com/smistad/GPU-Marching-Cubes/blob/master/gpu-mc-morton.cl
 /*
 
 Copyright 2011 Erik Smistad. All rights reserved.
