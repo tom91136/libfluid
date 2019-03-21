@@ -8,7 +8,7 @@
 
 #endif
 
-static size_t uninterleave(size_t value) {
+static inline size_t uninterleave(size_t value) {
 	size_t ret = 0x0;
 	ret |= (value & 0x1) >> 0;
 	ret |= (value & 0x8) >> 2;

@@ -25,6 +25,7 @@
 #include "oclsph_type.h"
 #include "zcurve.h"
 #include "mc.h"
+#include "ska_sort.hpp"
 
 namespace clutil {
 
