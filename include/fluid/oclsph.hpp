@@ -27,6 +27,8 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
+// #define DEBUG
+
 namespace clutil {
 
 	static void enumeratePlatformToCout() {
@@ -72,7 +74,7 @@ namespace clutil {
 			const std::string &include,
 			const std::string &flags = "") {
 		enumeratePlatformToCout();
-		std::cout << "Compiling CL kernel:`" << file << "`" << std::endl;
+		std::cout << "Compiling CL kernel:`" << file << "` using " << std::endl;
 		std::ifstream t(file);
 		std::stringstream source;
 		source << t.rdbuf();
@@ -92,6 +94,7 @@ namespace clutil {
 		                            " -cl-unsafe-math-optimizations"
 		                            " -cl-finite-math-only";
 		const std::string build = clFlags + " -I " + include + " " + flags;
+		std::cout << "Using args:`" << build << "`" << std::endl;
 		try {
 			program.build(build.c_str());
 		} catch (...) {
@@ -141,15 +144,16 @@ namespace ocl {
 
 		const N h;
 		const cl::Device device;
+		const cl::Context context;
 		const cl::Program clsph;
 
 	public:
-		explicit SphSolver(N h, std::string kernelPath,
-		                   cl::Device device = cl::Device::getDefault()) :
+		explicit SphSolver(N h, const std::string& kernelPath, const cl::Device& device) :
 				h(h),
 				device(std::move(device)),
+				context(cl::Context(device)),
 				clsph(clutil::loadProgramFromFile(
-						kernelPath + "/oclsph_kernel.cl",
+						kernelPath + "oclsph_kernel.cl",
 						kernelPath,
 						"-DH=((float)" + std::to_string(h) + ")")) {}
 
@@ -248,13 +252,14 @@ namespace ocl {
 
 			hrc::time_point sortS = hrc::now();
 
-//			ska_sort(hostAtoms.begin(), hostAtoms.end(),
-//			         [](const ClSphAtom &a) { return a.zIndex; });
+			// ska_sort(hostAtoms.begin(), hostAtoms.end(),
+			        //  [](const ClSphAtom &a) { return a.zIndex; });
 
 			std::sort(hostAtoms.begin(), hostAtoms.end(),
 			          [](const ClSphAtom &l, const ClSphAtom &r) {
 				          return l.zIndex < r.zIndex;
 			          });
+					  
 			hrc::time_point sortE = hrc::now();
 
 			hrc::time_point gtS = hrc::now();
@@ -270,6 +275,7 @@ namespace ocl {
 
 			hrc::time_point gtE = hrc::now();
 
+#ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
 			          << " AABB:" << glm::to_string(sizes)
@@ -280,7 +286,7 @@ namespace ocl {
 
 			std::cout << "Go! " << std::endl;
 
-
+#endif
 			hrc::time_point gpuXferS = hrc::now();
 
 			std::vector<ClSphParticle> copiedParticles(atomsN);
@@ -290,18 +296,23 @@ namespace ocl {
 			cl::Buffer deviceAtoms(hostAtoms.begin(), hostAtoms.end(), false);
 			hrc::time_point da2 = hrc::now();
 			cl::finish();
+
+#ifdef DEBUG
 			std::cout << "Device atoms: "
 			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
 			          << std::endl;
+#endif
 
 
 			hrc::time_point dgt1 = hrc::now();
 			cl::Buffer deviceGridTable(hostGridTable.begin(), hostGridTable.end(), true);
 			hrc::time_point dgt2 = hrc::now();
 			cl::finish();
+#ifdef DEBUG
 			std::cout << "Device GT  : "
 			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
 			          << std::endl;
+#endif
 
 
 			cl::Buffer deviceResult(copiedParticles.begin(), copiedParticles.end(), false);
@@ -390,6 +401,8 @@ namespace ocl {
 //		}
 
 
+#ifdef DEBUG
+
 			auto aabbCpy = duration_cast<nanoseconds>(aabbCpyE - aabbCpyS).count();
 			auto zCurve = duration_cast<nanoseconds>(zCurveE - zCurveS).count();
 			auto sort = duration_cast<nanoseconds>(sortE - sortS).count();
@@ -408,6 +421,7 @@ namespace ocl {
 					<< "\tGPU functor  = " << (gpuFunctor / 1000000.0) << "ms\n"
 					<< "\tGPU kernel   = " << (gpuKernel / 1000000.0) << "ms\n"
 					<< std::endl;
+#endif
 
 
 		}

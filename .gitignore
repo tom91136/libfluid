@@ -244,5 +244,5 @@ $RECYCLE.BIN/
 *.lnk
 
 *.mmf
-
+.vscode/
 # End of https://www.gitignore.io/api/c,c++,clion,macos,linux,cmake,windows

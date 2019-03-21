@@ -27,11 +27,11 @@ If you are using vcpkg, install the following dependencies:
 
 On Windows:
 
-    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake
+    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 On Linux:
 
-    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=/home/<user>/vcpkg/scripts/buildsystems/vcpkg.cmake
+    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=/home/<user>/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 Then compile:
 

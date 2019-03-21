@@ -23,22 +23,20 @@ typedef cl_uint4 uint4;
 #define constant
 #define __private
 
-#else
-
-#define global global
-#define kernel kernel
-#define constant constant
-
-#endif
-
-
 #if defined(_MSC_VER)
 #define ALIGNED_(x) __declspec(align(x))
 #else
 #define ALIGNED_(x) __attribute__ ((aligned(x)))
 #endif
 
-#define _ALIGNED_TYPE(t, x) typedef t ALIGNED_(x)
+#else
 
+#define global global
+#define kernel kernel
+#define constant constant
+
+#define ALIGNED_(x) __attribute__ ((aligned(x)))
+
+#endif
 
 #endif //LIBFLUID_CL_TYPES

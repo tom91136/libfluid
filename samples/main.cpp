@@ -230,8 +230,10 @@ void run() {
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
-//	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
-	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(0.1, "/home/tom/libfluid/include/fluid"));
+	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
+	// C:\Users\Tom\libfluid\include\fluid
+	// /home/tom/libfluid/include/fluid/
+	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(0.1, "C:\\Users\\Tom\\libfluid\\include\\fluid\\",  cl::Device::getDefault()));
 
 	using hrc = high_resolution_clock;
 
