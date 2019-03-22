@@ -30,7 +30,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-// #define DEBUG
+//#define DEBUG
 
 namespace fsutils {
 
@@ -44,6 +44,7 @@ namespace fsutils {
 }
 
 namespace clutil {
+
 
 	static std::vector<cl::Device> findDeviceWithSignature(const std::string &needle) {
 		std::vector<cl::Platform> platforms;
@@ -106,6 +107,7 @@ namespace clutil {
 	}
 
 	static cl::Program loadProgramFromFile(
+			const cl::Context &context,
 			const std::string &file,
 			const std::string &include,
 			const std::string &flags = "") {
@@ -120,7 +122,7 @@ namespace clutil {
 
 		std::stringstream source;
 		source << t.rdbuf();
-		cl::Program program = cl::Program(source.str());
+		cl::Program program = cl::Program(context, source.str());
 
 		const auto printBuildInfo = [&program]() {
 			auto log = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>();
@@ -188,13 +190,16 @@ namespace ocl {
 		const cl::Device device;
 		const cl::Context context;
 		const cl::Program clsph;
+		cl::CommandQueue queue;
 
 	public:
 		explicit SphSolver(N h, const std::string &kernelPath, const cl::Device &device) :
 				h(h),
 				device(device),
 				context(cl::Context(device)),
+				queue(cl::CommandQueue(context, device, cl::QueueProperties::OutOfOrder)),
 				clsph(clutil::loadProgramFromFile(
+						context,
 						kernelPath + "oclsph_kernel.cl",
 						kernelPath,
 						"-DH=((float)" + std::to_string(h) + ")")) {}
@@ -320,46 +325,51 @@ namespace ocl {
 #ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
-					  << " AABB:" << glm::to_string(sizes)
-					  << " min:" << glm::to_string(min)
-					  << " max:" << glm::to_string(max)
-					  << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
-					  << std::endl;
+			          << " AABB:" << glm::to_string(sizes)
+			          << " min:" << glm::to_string(min)
+			          << " max:" << glm::to_string(max)
+			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
+			          << std::endl;
 
 			std::cout << "Go! " << std::endl;
 
 #endif
+
+
 			hrc::time_point gpuXferS = hrc::now();
 
 			std::vector<ClSphParticle> copiedParticles(atomsN);
 
 
 			hrc::time_point da1 = hrc::now();
-			cl::Buffer deviceAtoms(hostAtoms.begin(), hostAtoms.end(), false);
+			cl::Buffer deviceAtoms(queue, hostAtoms.begin(), hostAtoms.end(), false);
 			hrc::time_point da2 = hrc::now();
-			cl::finish();
 
 #ifdef DEBUG
 			std::cout << "Device atoms: "
-					  << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
-					  << std::endl;
+			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
+			          << std::endl;
+			cl::finish();
 #endif
 
 
 			hrc::time_point dgt1 = hrc::now();
-			cl::Buffer deviceGridTable(hostGridTable.begin(), hostGridTable.end(), true);
+			cl::Buffer deviceGridTable(queue, hostGridTable.begin(), hostGridTable.end(), true);
 			hrc::time_point dgt2 = hrc::now();
-			cl::finish();
+
 #ifdef DEBUG
 			std::cout << "Device GT  : "
-					  << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
-					  << std::endl;
+			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
+			          << std::endl;
+			cl::finish();
 #endif
 
 
-			cl::Buffer deviceResult(copiedParticles.begin(), copiedParticles.end(), false);
+			cl::Buffer deviceResult(queue, copiedParticles.begin(), copiedParticles.end(), false);
 
+#ifdef DEBUG
 			cl::finish();
+#endif
 
 
 			hrc::time_point gpuXferE = hrc::now();
@@ -367,14 +377,15 @@ namespace ocl {
 			hrc::time_point gpuFunctorS = hrc::now();
 
 			auto lambdaKernel = cl::KernelFunctor<
-					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
+					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint
 			>(clsph, "sph_lambda");
 			auto deltaKernel = cl::KernelFunctor<
-					const ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
+					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
 			>(clsph, "sph_delta");
 			auto finaliseKernel = cl::KernelFunctor<
-					const ClSphConfig &, cl::Buffer &, cl::Buffer &
+					ClSphConfig &, cl::Buffer &, cl::Buffer &
 			>(clsph, "sph_finalise");
+
 
 			ClSphConfig clConfig;
 			clConfig.dt = config.dt;
@@ -383,41 +394,43 @@ namespace ocl {
 			clConfig.min = clutil::vec3ToCl(config.min);
 			clConfig.max = clutil::vec3ToCl(config.max);
 
-
 			hrc::time_point gpuFunctorE = hrc::now();
-
 
 			hrc::time_point gpuKernelS = hrc::now();
 			try {
 				for (size_t itr = 0; itr < config.iteration; ++itr) {
 					lambdaKernel(
-							cl::EnqueueArgs(cl::NDRange(atomsN)),
+							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN));
-
 					deltaKernel(
-							cl::EnqueueArgs(cl::NDRange(atomsN)),
+							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN));
 				}
-				finaliseKernel(cl::EnqueueArgs(cl::NDRange(atomsN)),
+				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 				               clConfig, deviceAtoms, deviceResult);
 
-			} catch (const std::exception &exc) {
-				std::cerr << "Kernel failed to execute: " << exc.what() << std::endl;
+			} catch (const cl::Error &exc) {
+				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
+#ifdef DEBUG
 			cl::finish();
+#endif
 
 			hrc::time_point gpuKernelE = hrc::now();
 
 
 			hrc::time_point gpuXferRS = hrc::now();
 
-			cl::copy(deviceResult, copiedParticles.begin(), copiedParticles.end());
+			cl::copy(queue, deviceResult, copiedParticles.begin(), copiedParticles.end());
+#ifdef DEBUG
 			cl::finish();
+#endif
 
 			hrc::time_point gpuXferRE = hrc::now();
 

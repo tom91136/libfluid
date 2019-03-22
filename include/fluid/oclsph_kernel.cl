@@ -6,7 +6,6 @@
 #undef DEBUG
 
 
-
 #ifndef H
 #error H is not set
 #endif
