@@ -30,7 +30,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-//#define DEBUG
+#define DEBUG
 
 namespace fsutils {
 
@@ -197,7 +197,7 @@ namespace ocl {
 				h(h),
 				device(device),
 				context(cl::Context(device)),
-				queue(cl::CommandQueue(context, device, cl::QueueProperties::OutOfOrder)),
+				queue(cl::CommandQueue(context, device, cl::QueueProperties::None)),
 				clsph(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclsph_kernel.cl",
@@ -349,7 +349,7 @@ namespace ocl {
 			std::cout << "Device atoms: "
 			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
 			          << std::endl;
-			cl::finish();
+			queue.finish();
 #endif
 
 
@@ -361,14 +361,14 @@ namespace ocl {
 			std::cout << "Device GT  : "
 			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
 			          << std::endl;
-			cl::finish();
+			queue.finish();
 #endif
 
 
 			cl::Buffer deviceResult(queue, copiedParticles.begin(), copiedParticles.end(), false);
 
 #ifdef DEBUG
-			cl::finish();
+			queue.finish();
 #endif
 
 
@@ -419,7 +419,7 @@ namespace ocl {
 				throw;
 			}
 #ifdef DEBUG
-			cl::finish();
+			queue.finish();
 #endif
 
 			hrc::time_point gpuKernelE = hrc::now();
@@ -429,7 +429,7 @@ namespace ocl {
 
 			cl::copy(queue, deviceResult, copiedParticles.begin(), copiedParticles.end());
 #ifdef DEBUG
-			cl::finish();
+			queue.finish();
 #endif
 
 			hrc::time_point gpuXferRE = hrc::now();

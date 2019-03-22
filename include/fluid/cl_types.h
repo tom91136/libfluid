@@ -19,6 +19,7 @@ typedef cl_uint4 uint4;
 
 #define M_PI_F 3.1415926f
 #define global
+#define local
 #define kernel
 #define constant
 #define __private
