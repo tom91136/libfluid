@@ -21,6 +21,9 @@
 #include <algorithm>
 #include <CL/cl2.hpp>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include "fluid.hpp"
 #include "oclsph_type.h"
 #include "zcurve.h"
@@ -29,7 +32,40 @@
 
 // #define DEBUG
 
+namespace fsutils {
+
+	bool statDir(const std::string &path) {
+		struct stat info{};
+		if (stat(path.c_str(), &info) != 0) return false;
+		return static_cast<bool>(info.st_mode & S_IFDIR);
+	}
+
+
+}
+
 namespace clutil {
+
+	static std::vector<cl::Device> findDeviceWithSignature(const std::string &needle) {
+		std::vector<cl::Platform> platforms;
+		cl::Platform::get(&platforms);
+		std::vector<cl::Device> matching;
+		for (auto &p : platforms) {
+			std::vector<cl::Device> devices;
+			try {
+				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
+			} catch (const std::exception &e) {
+				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
+				          << "` : "
+				          << e.what() << std::endl;
+			}
+			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
+			             [needle](const cl::Device &device) {
+				             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
+				                    std::string::npos;
+			             });
+		}
+		return matching;
+	}
 
 	static void enumeratePlatformToCout() {
 		std::cout << "Enumerating OpenCL platforms:" << std::endl;
@@ -73,9 +109,15 @@ namespace clutil {
 			const std::string &file,
 			const std::string &include,
 			const std::string &flags = "") {
-		enumeratePlatformToCout();
 		std::cout << "Compiling CL kernel:`" << file << "` using " << std::endl;
 		std::ifstream t(file);
+
+
+		if (!fsutils::statDir(include))
+			throw std::runtime_error("Unable to stat dir:`" + include + "`");
+		if (!t.good()) throw std::runtime_error("Unable to read file:`" + file + "`");
+
+
 		std::stringstream source;
 		source << t.rdbuf();
 		cl::Program program = cl::Program(source.str());
@@ -148,9 +190,9 @@ namespace ocl {
 		const cl::Program clsph;
 
 	public:
-		explicit SphSolver(N h, const std::string& kernelPath, const cl::Device& device) :
+		explicit SphSolver(N h, const std::string &kernelPath, const cl::Device &device) :
 				h(h),
-				device(std::move(device)),
+				device(device),
 				context(cl::Context(device)),
 				clsph(clutil::loadProgramFromFile(
 						kernelPath + "oclsph_kernel.cl",
@@ -253,13 +295,13 @@ namespace ocl {
 			hrc::time_point sortS = hrc::now();
 
 			// ska_sort(hostAtoms.begin(), hostAtoms.end(),
-			        //  [](const ClSphAtom &a) { return a.zIndex; });
+			//  [](const ClSphAtom &a) { return a.zIndex; });
 
 			std::sort(hostAtoms.begin(), hostAtoms.end(),
 			          [](const ClSphAtom &l, const ClSphAtom &r) {
 				          return l.zIndex < r.zIndex;
 			          });
-					  
+
 			hrc::time_point sortE = hrc::now();
 
 			hrc::time_point gtS = hrc::now();
@@ -278,11 +320,11 @@ namespace ocl {
 #ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
-			          << " AABB:" << glm::to_string(sizes)
-			          << " min:" << glm::to_string(min)
-			          << " max:" << glm::to_string(max)
-			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
-			          << std::endl;
+					  << " AABB:" << glm::to_string(sizes)
+					  << " min:" << glm::to_string(min)
+					  << " max:" << glm::to_string(max)
+					  << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
+					  << std::endl;
 
 			std::cout << "Go! " << std::endl;
 
@@ -299,8 +341,8 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Device atoms: "
-			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
-			          << std::endl;
+					  << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
+					  << std::endl;
 #endif
 
 
@@ -310,8 +352,8 @@ namespace ocl {
 			cl::finish();
 #ifdef DEBUG
 			std::cout << "Device GT  : "
-			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
-			          << std::endl;
+					  << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
+					  << std::endl;
 #endif
 
 

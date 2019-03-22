@@ -2,13 +2,11 @@
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
 
-
 #include <memory>
 #include <chrono>
 #include <random>
 #include <iostream>
 #include <fstream>
-//#include <experimental/filesystem>
 
 #include "fluid/fluid.hpp"
 #include "fluid/surface.hpp"
@@ -96,7 +94,7 @@ static inline auto headerEntries() {
 }
 
 template<typename T, typename N>
-void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &xs) {
+void write_particles(mio::mmap_sink &sink, const std::vector<fluid::Particle<T, N>> &xs) {
 
 	Header header = Header(xs.size());
 	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
@@ -106,7 +104,7 @@ void write_particles(mio::mmap_sink &sink, std::vector<fluid::Particle<T, N>> &x
 }
 
 template<typename N>
-void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs) {
+void write_triangles(mio::mmap_sink &sink, const std::vector<surface::Triangle<N>> &xs) {
 	Header header = Header(xs.size());
 	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
 	for (const surface::Triangle<N> &t :  xs) {
@@ -116,13 +114,12 @@ void write_triangles(mio::mmap_sink &sink, std::vector<surface::Triangle<N>> &xs
 
 
 mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
-	const auto pathStr = path;//.string();
-	std::ofstream file(pathStr, std::ios::out | std::ios::trunc);
+	std::ofstream file(path, std::ios::out | std::ios::trunc);
 	std::string s(length, ' ');
 	file << s;
 
 	std::error_code error;
-	mio::mmap_sink sink = mio::make_mmap_sink(pathStr, 0, mio::map_entire_file, error);
+	mio::mmap_sink sink = mio::make_mmap_sink(path, 0, mio::map_entire_file, error);
 	if (error) {
 		std::cout << "MMF(" << path << ") failed:" << error.message() << std::endl;
 		exit(1);
@@ -156,7 +153,7 @@ template<typename T, typename N>
 struct ParticleCloud {
 	const std::vector<fluid::Particle<T, N>> &pts;
 
-	ParticleCloud(const std::vector<fluid::Particle<T, N>> &pts) : pts(pts) {}
+	explicit ParticleCloud(const std::vector<fluid::Particle<T, N>> &pts) : pts(pts) {}
 
 	inline size_t kdtree_get_point_count() const { return pts.size(); }
 
@@ -173,7 +170,7 @@ struct ParticleCloud {
 //#define DO_SURFACE
 
 
-void writeFile(std::string filename, std::string content) {
+void writeFile(const std::string &filename, const std::string &content) {
 	std::ofstream file;
 	file.open(filename);
 	file << content;
@@ -230,10 +227,31 @@ void run() {
 
 	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
+
+	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
+//	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
+
+	clutil::enumeratePlatformToCout();
+
+	const std::string signature = "Ellesmere";
+	auto found = clutil::findDeviceWithSignature(signature);
+	if (found.empty()) {
+		throw std::runtime_error("No CL device found with signature:`" + signature + "`");
+	}
+
+	std::cout << "Matching devices(" << found.size() << "):" << std::endl;
+	for (const auto &d : found) std::cout << "\t" << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+
+	if (found.size() > 1) {
+		std::cout << "Found more than one device signature:`" << signature
+		          << "`"  ", using the first one." << std::endl;
+	}
+
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
-	// C:\Users\Tom\libfluid\include\fluid
-	// /home/tom/libfluid/include/fluid/
-	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(0.1, "C:\\Users\\Tom\\libfluid\\include\\fluid\\",  cl::Device::getDefault()));
+	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(
+			0.1,
+			kernelPaths,
+			found.front()));
 
 	using hrc = high_resolution_clock;
 
