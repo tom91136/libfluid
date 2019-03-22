@@ -3,6 +3,7 @@
 
 #ifndef __OPENCL_C_VERSION__
 
+#include <cstddef>
 #include <CL/cl_platform.h>
 
 // non CL compiler
@@ -17,11 +18,14 @@ typedef cl_uint2 uint2;
 typedef cl_uint3 uint3;
 typedef cl_uint4 uint4;
 
-#define M_PI_F 3.1415926f
+
+// OpenCL stubs
+#define M_PI_F 0f
 #define global
 #define local
 #define kernel
 #define constant
+#define read_only
 #define __private
 
 #define NEW_ERROR_TYPE(ERR) {ERR, #ERR}
@@ -113,8 +117,13 @@ const char *clResolveError(const cl_int error) {
 #else
 
 #define global global
+#define local local
+
+#define __private __private
 #define kernel kernel
 #define constant constant
+#define read_only read_only
+
 
 #define ALIGNED_(x) __attribute__ ((aligned(x)))
 

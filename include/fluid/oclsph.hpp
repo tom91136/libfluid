@@ -190,6 +190,8 @@ namespace ocl {
 		const cl::Device device;
 		const cl::Context context;
 		const cl::Program clsph;
+		const cl::Program clmc;
+
 		cl::CommandQueue queue;
 
 	public:
@@ -201,6 +203,11 @@ namespace ocl {
 				clsph(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclsph_kernel.cl",
+						kernelPath,
+						"-DH=((float)" + std::to_string(h) + ")")),
+				clmc(clutil::loadProgramFromFile(
+						context,
+						kernelPath + "oclmc_kernel.cl",
 						kernelPath,
 						"-DH=((float)" + std::to_string(h) + ")")) {}
 
@@ -372,6 +379,10 @@ namespace ocl {
 #endif
 
 
+			std::vector<float> hostFields(gridTableN);
+			cl::Buffer deviceFields(queue, hostFields.begin(), hostFields.end(), false);
+
+
 			hrc::time_point gpuXferE = hrc::now();
 
 			hrc::time_point gpuFunctorS = hrc::now();
@@ -385,6 +396,13 @@ namespace ocl {
 			auto finaliseKernel = cl::KernelFunctor<
 					ClSphConfig &, cl::Buffer &, cl::Buffer &
 			>(clsph, "sph_finalise");
+
+
+			auto createFieldKernel = cl::KernelFunctor<
+					float3, float,
+					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
+					cl::Buffer &
+			>(clsph, "sph_create_field");
 
 
 			ClSphConfig clConfig;
@@ -410,8 +428,20 @@ namespace ocl {
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN));
 				}
+
+
+				createFieldKernel(
+						cl::EnqueueArgs(queue, cl::NDRange(sizes.x, sizes.y, sizes.z)),
+						clutil::vec3ToCl(min), h,
+						clConfig,
+						deviceAtoms, static_cast<uint>(atomsN),
+						deviceGridTable, static_cast<uint>(gridTableN), deviceFields);
+
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 				               clConfig, deviceAtoms, deviceResult);
+
+
+
 
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "

@@ -92,12 +92,12 @@ static inline void sortArray27(size_t d[27]) {
 #undef SWAP
 }
 
-#define FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN) \
+#define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
 { \
     uint3 __coord = (uint3) ( \
-            coordAtZCurveGridIndex0(a->zIndex), \
-            coordAtZCurveGridIndex1(a->zIndex), \
-            coordAtZCurveGridIndex2(a->zIndex)); \
+            coordAtZCurveGridIndex0((zIndex) ), \
+            coordAtZCurveGridIndex1((zIndex) ), \
+            coordAtZCurveGridIndex2((zIndex) )); \
     size_t __offsets[27] = { \
         zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z - 1), \
         zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z - 1), \
@@ -131,7 +131,7 @@ static inline void sortArray27(size_t d[27]) {
     for (size_t __i = 0; __i < 27; ++__i) { \
         size_t __offset = __offsets[__i]; \
         size_t __start = (gridTable)[__offset]; \
-        size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (atomN); \
+        size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
         for (size_t __ni = __start; __ni < __end; ++__ni) { \
             const global ClSphAtom *b = &(atoms)[__ni]; \
 
@@ -143,12 +143,12 @@ static inline void sortArray27(size_t d[27]) {
 
 #else
 
-#define FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN) \
+#define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
 { \
 	uint3 __coord = (uint3) ( \
-			coordAtZCurveGridIndex0(a->zIndex), \
-			coordAtZCurveGridIndex1(a->zIndex), \
-			coordAtZCurveGridIndex2(a->zIndex)); \
+			coordAtZCurveGridIndex0((zIndex)), \
+			coordAtZCurveGridIndex1((zIndex)), \
+			coordAtZCurveGridIndex2((zIndex))); \
 	for (size_t __i = 0; __i < 27; ++__i) { \
 		const uint3 __delta = __coord + NEIGHBOUR_OFFSETS[__i]; \
 		const size_t __offset = zCurveGridIndexAtCoord(__delta.x, __delta.y, __delta.z); \
@@ -174,7 +174,7 @@ kernel void sph_lambda(
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
 
-	FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN)
+	FOR_EACH_NEIGHBOUR_BEGIN(a->zIndex, b, atoms, atomN, gridTable, gridTableN)
 				const float r = fast_distance(a->pStar, b->pStar);
 				norm2V = fma(spikyKernelGradient(a->pStar, b->pStar, r), 1.f / RHO, norm2V);
 				rho = fma(b->particle.mass, poly6Kernel(r), rho);
@@ -201,7 +201,7 @@ kernel void sph_delta(
 	float3 deltaP = (float3) (0.f);
 
 
-	FOR_EACH_NEIGHBOUR_BEGIN(a, b, atoms, atomN, gridTable, gridTableN)
+	FOR_EACH_NEIGHBOUR_BEGIN(a->zIndex, b, atoms, atomN, gridTable, gridTableN)
 				const float r = fast_distance(a->pStar, b->pStar);
 				const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
 				const float factor = (a->lambda + b->lambda + corr) / RHO;
@@ -263,4 +263,56 @@ kernel void sph_finalise(
 	a->particle.position = a->pStar * config.scale;
 	a->particle.velocity = fma(deltaX, (1.f / config.dt), a->particle.velocity) * VD;
 	results[id] = a->particle;
+}
+
+const constant float MBC = 100.f;
+const constant float MBCC = MBC * MBC;
+
+kernel void sph_create_field(
+		float3 offset, float length,
+		const ClSphConfig config,
+		const global ClSphAtom *atoms, uint atomN,
+		const global uint *gridTable, uint gridTableN,
+		global float *field
+) {
+
+	const size_t x = get_global_id(0);
+	const size_t y = get_global_id(1);
+	const size_t z = get_global_id(2);
+
+	const float3 a = ((float3) (x, y, z) * length) + offset;
+
+	const size_t zIndex = zCurveGridIndexAtCoord(
+			(size_t) ((a.x - offset.x) / length),
+			(size_t) ((a.y - offset.y) / length),
+			(size_t) ((a.z - offset.z) / length));
+
+//	const size_t __start = (gridTable)[zIndex];
+//	const size_t __end = ((zIndex + 1) < (gridTableN)) ? (gridTable)[zIndex + 1] : (__start);
+//	size_t amount = __end - __start;
+//	printf("%d -> %d (%d)", __start, __end, __end - __start);
+
+//	printf("%f %f %f => %ld(%ld,%ld,%ld),  %f %f %f => %ld (%ld,%ld,%ld) \n", a.x, a.y, a.z, zIndex,
+//	       coordAtZCurveGridIndex0(zIndex),
+//	       coordAtZCurveGridIndex1(zIndex),
+//	       coordAtZCurveGridIndex2(zIndex),
+//
+//	       atoms[0].pStar.x, atoms[0].pStar.y, atoms[0].pStar.z, atoms[0].zIndex,
+//	       coordAtZCurveGridIndex0(atoms[0].zIndex),
+//	       coordAtZCurveGridIndex1(atoms[0].zIndex),
+//	       coordAtZCurveGridIndex2(atoms[0].zIndex)
+//	);
+
+	float v = 0.f;
+//	float o = 0.f;
+	FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN)
+//			printf("\t[%d,%d,%d] %d %d\n",x, y, z, b->zIndex, b->particle.id);
+				const float3 l = b->particle.position - a;
+				const float l2 = dot(l, l);
+				v += (MBCC / l2) * 2;
+	FOR_EACH_NEIGHBOUR_END
+//	printf("(%f) %f [%ld]", v, o, amount);
+
+
+	field[zIndex] = v;
 }

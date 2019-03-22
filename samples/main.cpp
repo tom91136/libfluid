@@ -204,7 +204,7 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (15) * 1000;
+	const size_t pcount = (20) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 3;
 	const num_t scaling = 350; // less = less space between particle
@@ -246,6 +246,17 @@ void run() {
 		std::cout << "Found more than one device signature:`" << signature
 		          << "`"  ", using the first one." << std::endl;
 	}
+
+//
+//	for (int x = 0; x < 10; ++x) {
+//		for (int y = 0; y < 10; ++y) {
+//			for (int z = 0; z < 10; ++z) {
+//				std::cout << "> " << glm::to_string(glm::vec3(x, y, z)) << " -> " << zCurveGridIndexAtCoord(x, y, z) << std::endl;
+//			}
+//		}
+//	}
+				std::cout << " -> " << zCurveGridIndexAtCoord(62, 36, 66) << std::endl;
+
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
 	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(
