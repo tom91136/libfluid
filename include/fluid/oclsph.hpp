@@ -56,14 +56,14 @@ namespace clutil {
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-				          << "` : "
-				          << e.what() << std::endl;
+						  << "` : "
+						  << e.what() << std::endl;
 			}
 			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
-			             [needle](const cl::Device &device) {
-				             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
-				                    std::string::npos;
-			             });
+						 [needle](const cl::Device &device) {
+							 return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
+									std::string::npos;
+						 });
 		}
 		return matching;
 	}
@@ -78,14 +78,14 @@ namespace clutil {
 			try {
 
 				std::cout << "\t├─┬Platform"
-				          << (platform == p ? "(Default):" : ":")
-				          << p.getInfo<CL_PLATFORM_NAME>()
-				          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-				          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-				          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-				          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-				          << "\n\t│ └Devices"
-				          << std::endl;
+						  << (platform == p ? "(Default):" : ":")
+						  << p.getInfo<CL_PLATFORM_NAME>()
+						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+						  << "\n\t│ └Devices"
+						  << std::endl;
 				std::vector<cl::Device> devices;
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 				for (auto &d : devices) {
@@ -99,8 +99,8 @@ namespace clutil {
 				}
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-				          << "` : "
-				          << e.what() << std::endl;
+						  << "` : "
+						  << e.what() << std::endl;
 			}
 		}
 
@@ -132,11 +132,11 @@ namespace clutil {
 			}
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
-		                            " -w"
-		                            " -cl-mad-enable"
-		                            " -cl-no-signed-zeros"
-		                            " -cl-unsafe-math-optimizations"
-		                            " -cl-finite-math-only";
+									" -w"
+									" -cl-mad-enable"
+									" -cl-no-signed-zeros"
+									" -cl-unsafe-math-optimizations"
+									" -cl-finite-math-only";
 		const std::string build = clFlags + " -I " + include + " " + flags;
 		std::cout << "Using args:`" << build << "`" << std::endl;
 		try {
@@ -246,9 +246,38 @@ namespace ocl {
 			}
 		}
 
+
+		std::vector<surface::Triangle<N>> sampleLattice(
+				N isolevel,
+				const tvec3<N> min, N step,
+				const surface::Lattice<N> &lattice) {
+
+			std::vector<surface::Triangle<N>> triangles;
+
+//#ifndef _MSC_VER
+//#pragma omp declare reduction (merge : std::vector<surface::Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+//#pragma omp parallel for collapse(3) reduction(merge: triangles)
+//#endif
+			for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
+				for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
+					for (size_t z = 0; z < lattice.zSize() - 1; ++z) {
+						std::array<N, 8> ns{};
+						std::array<tvec3<N>, 8> vs{};
+						for (size_t j = 0; j < 8; ++j) {
+							tvec3<size_t> that = tvec3<size_t>(x, y, z) + surface::CUBE_OFFSETS[j];
+							vs[j] = tvec3<N>(that) * step + min;
+							ns[j] = lattice(x, y, z);
+						}
+						surface::marchSingle(isolevel, ns, vs, triangles);
+					}
+				}
+			}
+			return triangles;
+		}
+
 		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
-		                                          std::vector<fluid::Particle<T, N>> &xs,
-		                                          const std::vector<fluid::MeshCollider<N>> &colliders) override {
+												  std::vector<fluid::Particle<T, N>> &xs,
+												  const std::vector<fluid::MeshCollider<N>> &colliders) override {
 
 			using hrc = std::chrono::high_resolution_clock;
 			using std::chrono::nanoseconds;
@@ -301,9 +330,9 @@ namespace ocl {
 			N padding = h * 2;
 			min -= padding;
 			max += padding;
-			glm::tvec3<size_t> sizes((max - min) / h);
+			glm::tvec3<size_t> extent((max - min) / h);
 
-			const size_t gridTableN = zCurveGridIndexAtCoord(sizes.x, sizes.y, sizes.z);
+			const size_t gridTableN = zCurveGridIndexAtCoord(extent.x, extent.y, extent.z);
 			hrc::time_point aabbCpyE = hrc::now();
 
 			hrc::time_point zCurveS = hrc::now();
@@ -327,9 +356,9 @@ namespace ocl {
 			//  [](const ClSphAtom &a) { return a.zIndex; });
 
 			std::sort(hostAtoms.begin(), hostAtoms.end(),
-			          [](const ClSphAtom &l, const ClSphAtom &r) {
-				          return l.zIndex < r.zIndex;
-			          });
+					  [](const ClSphAtom &l, const ClSphAtom &r) {
+						  return l.zIndex < r.zIndex;
+					  });
 
 			hrc::time_point sortE = hrc::now();
 
@@ -349,11 +378,11 @@ namespace ocl {
 #ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
-			          << " AABB:" << glm::to_string(sizes)
-			          << " min:" << glm::to_string(min)
-			          << " max:" << glm::to_string(max)
-			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
-			          << std::endl;
+					  << " AABB:" << glm::to_string(extent)
+					  << " min:" << glm::to_string(min)
+					  << " max:" << glm::to_string(max)
+					  << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
+					  << std::endl;
 
 			std::cout << "Go! " << std::endl;
 
@@ -364,10 +393,8 @@ namespace ocl {
 
 			std::vector<ClSphParticle> copiedParticles(atomsN);
 
-			size_t divisior = 2;
-
-			std::vector<float> copiedFields(
-					sizes.x * divisior * sizes.y * divisior * sizes.z * divisior);
+			size_t sampleResolution = 2;
+			tvec3<size_t> sampleSize = extent * sampleResolution;
 
 
 			hrc::time_point da1 = hrc::now();
@@ -376,8 +403,8 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Device atoms: "
-			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
-			          << std::endl;
+					  << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
+					  << std::endl;
 			queue.finish();
 #endif
 
@@ -388,8 +415,8 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Device GT  : "
-			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
-			          << std::endl;
+					  << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
+					  << std::endl;
 			queue.finish();
 #endif
 
@@ -401,8 +428,8 @@ namespace ocl {
 #endif
 
 
-			cl::Buffer deviceFields(queue, copiedFields.begin(), copiedFields.end(), false);
-
+			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
+			cl::Buffer deviceFields(context, CL_MEM_READ_WRITE, sizeof(N) * mcLattice.size());
 
 			hrc::time_point gpuXferE = hrc::now();
 
@@ -452,20 +479,19 @@ namespace ocl {
 
 
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
-				               clConfig, deviceAtoms, deviceResult);
+							   clConfig, deviceAtoms, deviceResult);
 
 				createFieldKernel(
-						cl::EnqueueArgs(queue, cl::NDRange(sizes.x * divisior,
-								sizes.y * divisior,
-						                                   sizes.z * divisior)),
-						clutil::vec3ToCl(min), h/2, clutil::uvec3ToCl(sizes * divisior),
+						cl::EnqueueArgs(queue, cl::NDRange(
+								sampleSize.x, sampleSize.y, sampleSize.z)),
+						clutil::vec3ToCl(min), h / sampleResolution, clutil::uvec3ToCl(sampleSize),
 						clConfig,
 						deviceAtoms, static_cast<uint>(atomsN),
 						deviceGridTable, static_cast<uint>(gridTableN), deviceFields);
 
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
 #ifdef DEBUG
@@ -476,7 +502,7 @@ namespace ocl {
 
 
 			hrc::time_point gpuXferRS = hrc::now();
-			cl::copy(queue, deviceFields, copiedFields.begin(), copiedFields.end());
+			cl::copy(queue, deviceFields, mcLattice.vector().begin(), mcLattice.vector().end());
 
 			cl::copy(queue, deviceResult, copiedParticles.begin(), copiedParticles.end());
 #ifdef DEBUG
@@ -529,116 +555,26 @@ namespace ocl {
 					<< std::endl;
 #endif
 
-
-			const static std::array<std::tuple<size_t, size_t, size_t>, 8> &verticies = {
-					std::make_tuple(0, 0, 0),
-					std::make_tuple(1, 0, 0),
-					std::make_tuple(1, 1, 0),
-					std::make_tuple(0, 1, 0),
-					std::make_tuple(0, 0, 1),
-					std::make_tuple(1, 0, 1),
-					std::make_tuple(1, 1, 1),
-					std::make_tuple(0, 1, 1),
-			};
-
-
 			std::vector<surface::Triangle<N>> triangles;
-			std::vector<tvec3<N>> points;
+
+
+			hrc::time_point mcStart = hrc::now();
 
 
 			static const float isolevel = 100.f;
 
-#ifndef _MSC_VER
-#pragma omp declare reduction (merge : std::vector<surface::Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-#pragma omp parallel for collapse(3) reduction(merge: triangles)
-#endif
-			for (size_t x = 0; x < (sizes.x * divisior) - 1; ++x) {
-				for (size_t y = 0; y < (sizes.y * divisior) - 1; ++y) {
-					for (size_t z = 0; z < (sizes.z * divisior) - 1; ++z) {
-
-						std::array<N, 8> ns{};
-						std::array<tvec3<N>, 8> vs{};
-
-						for (size_t j = 0; j < 8; ++j) {
-
-							size_t ox = x + std::get<0>(verticies[j]);
-							size_t oy = y + std::get<1>(verticies[j]);
-							size_t oz = z + std::get<2>(verticies[j]);
+			sampleLattice(isolevel, min, h / sampleResolution, mcLattice);
 
 
-							vs[j] = tvec3<N>(
-									ox * (h /divisior) + min.x,
-									oy * (h /divisior) + min.y,
-									oz * (h /divisior) + min.z);
+			hrc::time_point mcEnd = hrc::now();
 
-							ns[j] = copiedFields[index3d(ox, oy, oz,
-							                             sizes.x * divisior,
-							                             sizes.y * divisior,
-							                             sizes.z * divisior)];
+			auto mc = duration_cast<nanoseconds>(mcEnd - mcStart).count();
 
-						}
-
-						size_t ci = 0;
-						if (ns[0] < isolevel) ci |= 1;
-						if (ns[1] < isolevel) ci |= 2;
-						if (ns[2] < isolevel) ci |= 4;
-						if (ns[3] < isolevel) ci |= 8;
-						if (ns[4] < isolevel) ci |= 16;
-						if (ns[5] < isolevel) ci |= 32;
-						if (ns[6] < isolevel) ci |= 64;
-						if (ns[7] < isolevel) ci |= 128;
-
-						/* Cube is entirely in/out of the surface */
-						if (surface::edgeTable[ci] == 0)
-							std::vector<surface::Triangle<N>>
-							();
-
-						std::array<tvec3<N>, 12> ts;
-						/* Find the vertices where the surface intersects the cube */
-						if (surface::edgeTable[ci] & 1 << 0)
-							ts[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
-						if (surface::edgeTable[ci] & 1 << 1)
-							ts[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
-						if (surface::edgeTable[ci] & 1 << 2)
-							ts[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
-						if (surface::edgeTable[ci] & 1 << 3)
-							ts[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
-						if (surface::edgeTable[ci] & 1 << 4)
-							ts[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
-						if (surface::edgeTable[ci] & 1 << 5)
-							ts[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
-						if (surface::edgeTable[ci] & 1 << 6)
-							ts[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
-						if (surface::edgeTable[ci] & 1 << 7)
-							ts[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
-						if (surface::edgeTable[ci] & 1 << 8)
-							ts[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
-						if (surface::edgeTable[ci] & 1 << 9)
-							ts[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
-						if (surface::edgeTable[ci] & 1 << 10)
-							ts[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
-						if (surface::edgeTable[ci] & 1 << 11)
-							ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
-
-						for (size_t i = 0; surface::triTable[ci][i] != -1; i += 3) {
-//						points.emplace_back(ts[surface::triTable[ci][i + 0]]);
-//						points.emplace_back(ts[surface::triTable[ci][i + 1]]);
-//						points.emplace_back(ts[surface::triTable[ci][i + 2]]);
-
-							triangles.emplace_back(
-									ts[surface::triTable[ci][i]] * config.scale,
-									ts[surface::triTable[ci][i + 1]] * config.scale,
-									ts[surface::triTable[ci][i + 2]] * config.scale);
-						}
-
-
-					}
-				}
-			}
-
+			std::cout << "MC: " << (mc / 1000000.0) << "ms" << std::endl;
 
 			return triangles;
 		}
+
 
 	};
 

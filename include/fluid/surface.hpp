@@ -19,9 +19,19 @@
 
 namespace surface {
 
+	const static std::array<glm::tvec3<size_t>, 8> CUBE_OFFSETS = {
+			glm::tvec3<size_t>(0, 0, 0),
+			glm::tvec3<size_t>(1, 0, 0),
+			glm::tvec3<size_t>(1, 1, 0),
+			glm::tvec3<size_t>(0, 1, 0),
+			glm::tvec3<size_t>(0, 0, 1),
+			glm::tvec3<size_t>(1, 0, 1),
+			glm::tvec3<size_t>(1, 1, 1),
+			glm::tvec3<size_t>(0, 1, 1)
+	};
 
 	//<editor-fold>
-	static const std::array<int, 256> edgeTable = {
+	const static std::array<int, 256> edgeTable = {
 			0x0, 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
 			0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
 			0x190, 0x99, 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -58,7 +68,7 @@ namespace surface {
 	//</editor-fold>
 
 	//<editor-fold>
-	static const std::array<std::array<int, 16>, 256> triTable =
+	const static std::array<std::array<int, 16>, 256> triTable =
 			{{
 					 {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 					 {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -460,11 +470,18 @@ namespace surface {
 
 	template<typename T>
 	class Lattice {
+
+	private:
+		const size_t d1, d2, d3;
+		std::vector<T> data;
+
 	public:
-		Lattice(const size_t d1 = 0,
+		explicit Lattice(
+				const size_t d1 = 0,
 				const size_t d2 = 0,
 				const size_t d3 = 0, T const &t = T()) :
 				d1(d1), d2(d2), d3(d3), data(d1 * d2 * d3, t) {}
+
 
 		T &operator()(size_t i, size_t j, size_t k) {
 			return data[i * d2 * d3 + j * d3 + k];
@@ -482,10 +499,9 @@ namespace surface {
 
 		size_t size() const { return data.size(); }
 
+		std::vector<T> &vector() { return data; }
 
-	private:
-		const size_t d1, d2, d3;
-		std::vector<T> data;
+
 	};
 
 
@@ -515,6 +531,63 @@ namespace surface {
 		}
 		return lattice;
 	}
+
+
+	template<typename N>
+	void marchSingle(const N isolevel,
+					 const std::array<N, 8> &ns, const std::array<tvec3<N>, 8> &vs,
+					 std::vector<Triangle<N>> &triangles) {
+
+
+		size_t ci = 0;
+		if (ns[0] < isolevel) ci |= 1;
+		if (ns[1] < isolevel) ci |= 2;
+		if (ns[2] < isolevel) ci |= 4;
+		if (ns[3] < isolevel) ci |= 8;
+		if (ns[4] < isolevel) ci |= 16;
+		if (ns[5] < isolevel) ci |= 32;
+		if (ns[6] < isolevel) ci |= 64;
+		if (ns[7] < isolevel) ci |= 128;
+
+		/* Cube is entirely in/out of the surface */
+		if (surface::edgeTable[ci] == 0) std::vector<surface::Triangle<N>>();
+
+		std::array<tvec3<N>, 12> ts;
+		/* Find the vertices where the surface intersects the cube */
+		if (surface::edgeTable[ci] & 1 << 0)
+			ts[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
+		if (surface::edgeTable[ci] & 1 << 1)
+			ts[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
+		if (surface::edgeTable[ci] & 1 << 2)
+			ts[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
+		if (surface::edgeTable[ci] & 1 << 3)
+			ts[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
+		if (surface::edgeTable[ci] & 1 << 4)
+			ts[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
+		if (surface::edgeTable[ci] & 1 << 5)
+			ts[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
+		if (surface::edgeTable[ci] & 1 << 6)
+			ts[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
+		if (surface::edgeTable[ci] & 1 << 7)
+			ts[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
+		if (surface::edgeTable[ci] & 1 << 8)
+			ts[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
+		if (surface::edgeTable[ci] & 1 << 9)
+			ts[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
+		if (surface::edgeTable[ci] & 1 << 10)
+			ts[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
+		if (surface::edgeTable[ci] & 1 << 11)
+			ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
+
+		for (size_t i = 0; surface::triTable[ci][i] != -1; i += 3) {
+			triangles.emplace_back(
+					ts[surface::triTable[ci][i]],
+					ts[surface::triTable[ci][i + 1]],
+					ts[surface::triTable[ci][i + 2]]);
+		}
+
+	}
+
 
 	template<typename N>
 	std::vector<Triangle<N>> parameterise(const N isolevel,

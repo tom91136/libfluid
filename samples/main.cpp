@@ -225,7 +225,7 @@ void run() {
 	float D = 15.f;
 	auto P = static_cast<size_t>(2000.f / D);
 
-	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
+//	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 
 	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
@@ -233,7 +233,7 @@ void run() {
 
 	clutil::enumeratePlatformToCout();
 
-	const std::string signature = "Ellesmere";
+	const std::string signature = "Intel";
 	auto found = clutil::findDeviceWithSignature(signature);
 	if (found.empty()) {
 		throw std::runtime_error("No CL device found with signature:`" + signature + "`");
