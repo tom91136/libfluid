@@ -153,7 +153,7 @@ static inline void sortArray27(size_t d[27]) {
 		const uint3 __delta = __coord + NEIGHBOUR_OFFSETS[__i]; \
 		const size_t __offset = zCurveGridIndexAtCoord(__delta.x, __delta.y, __delta.z); \
 		const size_t __start = (gridTable)[__offset]; \
-		const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (atomN); \
+		const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
 		for (size_t __ni = __start; __ni < __end; ++__ni)  { \
 			const global ClSphAtom *b = &(atoms)[__ni]; \
 
@@ -265,69 +265,31 @@ kernel void sph_finalise(
 	results[id] = a->particle;
 }
 
-const constant float MBC = 50.f;
-const constant float MBCC = MBC * MBC;
-
-
-
-
 kernel void sph_create_field(
-		float3 offset, float length, uint3 sizes,
 		const ClSphConfig config,
 		const global ClSphAtom *atoms, uint atomN,
 		const global uint *gridTable, uint gridTableN,
-		global float *field
-) {
+		const float3 min, const ClMcConfig mcConfig,
+		global float *field, const uint3 sizes) {
 
 	const size_t x = get_global_id(0);
 	const size_t y = get_global_id(1);
 	const size_t z = get_global_id(2);
 
+	const float3 pos = (float3) (x, y, z);
+	const float step = H / mcConfig.sampleResolution;
+	const float3 a = (min + (pos * step)) * config.scale;
 
-	const float3 a = ((float3) (x, y, z) * length ) + offset;
-	const float3 off = (a-offset) / length;
-//	const size_t zIndex = zCurveGridIndexAtCoord( (size_t)off.x,(size_t)off.y,(size_t)off.z );
+	const size_t zIndex = zCurveGridIndexAtCoord(
+			(size_t) ( pos.x / mcConfig.sampleResolution),
+			(size_t) ( pos.y / mcConfig.sampleResolution),
+			(size_t) ( pos.z / mcConfig.sampleResolution));
 
-	const size_t zIndex = zCurveGridIndexAtCoord((size_t)x/2, (size_t)y/2, (size_t)z/2);
-//			(size_t) ((a.x - offset.x) / length),
-//			(size_t) ((a.y - offset.y) / length),
-//			(size_t) ((a.z - offset.z) / length));
-
-//	const size_t __start = (gridTable)[zIndex];
-//	const size_t __end = ((zIndex + 1) < (gridTableN)) ? (gridTable)[zIndex + 1] : (__start);
-//	size_t amount = __end - __start;
-//	printf("%d -> %d (%d)", __start, __end, __end - __start);
-
-//	printf("%f %f %f => %ld(%ld,%ld,%ld),  %f %f %f => %ld (%ld,%ld,%ld) \n", a.x, a.y, a.z, zIndex,
-//	       coordAtZCurveGridIndex0(zIndex),
-//	       coordAtZCurveGridIndex1(zIndex),
-//	       coordAtZCurveGridIndex2(zIndex),
-//
-//	       atoms[0].pStar.x, atoms[0].pStar.y, atoms[0].pStar.z, atoms[0].zIndex,
-//	       coordAtZCurveGridIndex0(atoms[0].zIndex),
-//	       coordAtZCurveGridIndex1(atoms[0].zIndex),
-//	       coordAtZCurveGridIndex2(atoms[0].zIndex)
-//	);
-
+	const float sN = pown(mcConfig.particleSize, 2);
 	float v = 0.f;
-
-//	float o = 0.f;
 	FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN)
-//			printf("\t[%d,%d,%d] %d %d\n",x, y, z, b->zIndex, b->particle.id);
-
-//			if(distance((b->particle.position) , (a  * config.scale)) < 350) {
-//				printf("PP=%f, A=%f\n", b->pStar.x, a.x);
-				const float3 l = (b->particle.position) - (a  * config.scale);
-				const float l2 = dot(l, l);
-				v += (MBCC / l2) ;
-
-//			}
-
+				const float3 l = (b->particle.position) - a;
+				v += (sN / dot(l, l)) * mcConfig.particleInfluence;
 	FOR_EACH_NEIGHBOUR_END
-//	printf("(%f) %f [%ld]", v, o, amount);
-
-
-
-
-	field[index3d(x, y, z, sizes.x,sizes.y,sizes.z)] = v;
+	field[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
 }

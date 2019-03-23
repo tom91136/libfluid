@@ -218,7 +218,7 @@ void run() {
 	std::cout << "Mark" << std::endl;
 
 	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
-	auto mmfTSink = mkMmf("triangles.mmf", 500000 * triangleType.first + headerType.first);
+	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10  * triangleType.first + headerType.first);
 
 	std::cout << "Go" << std::endl;
 
@@ -233,7 +233,7 @@ void run() {
 
 	clutil::enumeratePlatformToCout();
 
-	const std::string signature = "Intel";
+	const std::string signature = "Elles";
 	auto found = clutil::findDeviceWithSignature(signature);
 	if (found.empty()) {
 		throw std::runtime_error("No CL device found with signature:`" + signature + "`");

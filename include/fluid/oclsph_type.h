@@ -22,7 +22,6 @@ typedef struct ClSphParticle {
 	ALIGNED_(4) float mass;
 	ALIGNED_(16) float3 position;
 	ALIGNED_(16) float3 velocity;
-//	ALIGNED_(16) float3 __padding;
 } ClSphParticle;
 
 typedef struct ClSphAtom {
@@ -32,8 +31,13 @@ typedef struct ClSphAtom {
 	ALIGNED_(16) float3 omega;
 	ALIGNED_(4) float lambda;
 	ALIGNED_(8) size_t zIndex;
-//	ALIGNED_(4) float __padding;
-
 } ClSphAtom;
+
+typedef struct ClMcConfig {
+	ALIGNED_(4) float sampleResolution;
+	ALIGNED_(4) float particleSize;
+	ALIGNED_(4) float particleInfluence;
+} ClMcConfig;
+
 
 #endif //LIBFLUID_CLSPH_TYPE

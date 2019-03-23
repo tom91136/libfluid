@@ -39,6 +39,8 @@ else ()
             )
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
     set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)
+    target_link_libraries(main PUBLIC $<$<CONFIG:DEBUG>:-Wl,-lasan>)
+
 endif ()
 
 target_compile_options(main PUBLIC "$<$<CONFIG:RELEASE>:${RELEASE_OPTIONS}>")

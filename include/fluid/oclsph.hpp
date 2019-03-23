@@ -56,14 +56,14 @@ namespace clutil {
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-						  << "` : "
-						  << e.what() << std::endl;
+				          << "` : "
+				          << e.what() << std::endl;
 			}
 			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
-						 [needle](const cl::Device &device) {
-							 return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
-									std::string::npos;
-						 });
+			             [needle](const cl::Device &device) {
+				             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
+				                    std::string::npos;
+			             });
 		}
 		return matching;
 	}
@@ -78,14 +78,14 @@ namespace clutil {
 			try {
 
 				std::cout << "\t├─┬Platform"
-						  << (platform == p ? "(Default):" : ":")
-						  << p.getInfo<CL_PLATFORM_NAME>()
-						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-						  << "\n\t│ └Devices"
-						  << std::endl;
+				          << (platform == p ? "(Default):" : ":")
+				          << p.getInfo<CL_PLATFORM_NAME>()
+				          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+				          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+				          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+				          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+				          << "\n\t│ └Devices"
+				          << std::endl;
 				std::vector<cl::Device> devices;
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 				for (auto &d : devices) {
@@ -99,8 +99,8 @@ namespace clutil {
 				}
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-						  << "` : "
-						  << e.what() << std::endl;
+				          << "` : "
+				          << e.what() << std::endl;
 			}
 		}
 
@@ -132,11 +132,11 @@ namespace clutil {
 			}
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
-									" -w"
-									" -cl-mad-enable"
-									" -cl-no-signed-zeros"
-									" -cl-unsafe-math-optimizations"
-									" -cl-finite-math-only";
+		                            " -w"
+		                            " -cl-mad-enable"
+		                            " -cl-no-signed-zeros"
+		                            " -cl-unsafe-math-optimizations"
+		                            " -cl-finite-math-only";
 		const std::string build = clFlags + " -I " + include + " " + flags;
 		std::cout << "Using args:`" << build << "`" << std::endl;
 		try {
@@ -248,25 +248,26 @@ namespace ocl {
 
 
 		std::vector<surface::Triangle<N>> sampleLattice(
-				N isolevel,
+				N isolevel, N scale,
 				const tvec3<N> min, N step,
 				const surface::Lattice<N> &lattice) {
 
 			std::vector<surface::Triangle<N>> triangles;
 
-//#ifndef _MSC_VER
-//#pragma omp declare reduction (merge : std::vector<surface::Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-//#pragma omp parallel for collapse(3) reduction(merge: triangles)
-//#endif
+#ifndef _MSC_VER
+#pragma omp declare reduction (merge : std::vector<surface::Triangle<N>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+#pragma omp parallel for collapse(3) reduction(merge: triangles)
+#endif
 			for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
 				for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
 					for (size_t z = 0; z < lattice.zSize() - 1; ++z) {
 						std::array<N, 8> ns{};
 						std::array<tvec3<N>, 8> vs{};
 						for (size_t j = 0; j < 8; ++j) {
-							tvec3<size_t> that = tvec3<size_t>(x, y, z) + surface::CUBE_OFFSETS[j];
-							vs[j] = tvec3<N>(that) * step + min;
-							ns[j] = lattice(x, y, z);
+							tvec3<size_t> offset = tvec3<size_t>(x, y, z) +
+							                       surface::CUBE_OFFSETS[j];
+							ns[j] = lattice(offset.x, offset.y, offset.z);
+							vs[j] = (tvec3<N>(offset) * step + min) * scale;
 						}
 						surface::marchSingle(isolevel, ns, vs, triangles);
 					}
@@ -275,9 +276,10 @@ namespace ocl {
 			return triangles;
 		}
 
+	public:
 		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
-												  std::vector<fluid::Particle<T, N>> &xs,
-												  const std::vector<fluid::MeshCollider<N>> &colliders) override {
+		                                          std::vector<fluid::Particle<T, N>> &xs,
+		                                          const std::vector<fluid::MeshCollider<N>> &colliders) override {
 
 			using hrc = std::chrono::high_resolution_clock;
 			using std::chrono::nanoseconds;
@@ -356,9 +358,9 @@ namespace ocl {
 			//  [](const ClSphAtom &a) { return a.zIndex; });
 
 			std::sort(hostAtoms.begin(), hostAtoms.end(),
-					  [](const ClSphAtom &l, const ClSphAtom &r) {
-						  return l.zIndex < r.zIndex;
-					  });
+			          [](const ClSphAtom &l, const ClSphAtom &r) {
+				          return l.zIndex < r.zIndex;
+			          });
 
 			hrc::time_point sortE = hrc::now();
 
@@ -378,11 +380,11 @@ namespace ocl {
 #ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
-					  << " AABB:" << glm::to_string(extent)
-					  << " min:" << glm::to_string(min)
-					  << " max:" << glm::to_string(max)
-					  << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
-					  << std::endl;
+			          << " AABB:" << glm::to_string(extent)
+			          << " min:" << glm::to_string(min)
+			          << " max:" << glm::to_string(max)
+			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
+			          << std::endl;
 
 			std::cout << "Go! " << std::endl;
 
@@ -393,8 +395,14 @@ namespace ocl {
 
 			std::vector<ClSphParticle> copiedParticles(atomsN);
 
-			size_t sampleResolution = 2;
-			tvec3<size_t> sampleSize = extent * sampleResolution;
+			ClMcConfig mcConfig;
+			mcConfig.sampleResolution = 2.f;
+			mcConfig.particleSize = 50.f;
+			mcConfig.particleInfluence = 1.22;
+
+
+			tvec3<size_t> sampleSize = tvec3<size_t>(
+					glm::ceil(tvec3<N>(extent) * mcConfig.sampleResolution));
 
 
 			hrc::time_point da1 = hrc::now();
@@ -403,8 +411,8 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Device atoms: "
-					  << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
-					  << std::endl;
+			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
+			          << std::endl;
 			queue.finish();
 #endif
 
@@ -415,8 +423,8 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Device GT  : "
-					  << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
-					  << std::endl;
+			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
+			          << std::endl;
 			queue.finish();
 #endif
 
@@ -429,7 +437,7 @@ namespace ocl {
 
 
 			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
-			cl::Buffer deviceFields(context, CL_MEM_READ_WRITE, sizeof(N) * mcLattice.size());
+			cl::Buffer deviceFields(context, CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
 
 			hrc::time_point gpuXferE = hrc::now();
 
@@ -447,9 +455,9 @@ namespace ocl {
 
 
 			auto createFieldKernel = cl::KernelFunctor<
-					float3, float, uint3,
 					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
-					cl::Buffer &
+					float3, ClMcConfig,
+					cl::Buffer &, uint3
 			>(clsph, "sph_create_field");
 
 
@@ -479,19 +487,21 @@ namespace ocl {
 
 
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
-							   clConfig, deviceAtoms, deviceResult);
+				               clConfig, deviceAtoms, deviceResult);
 
 				createFieldKernel(
 						cl::EnqueueArgs(queue, cl::NDRange(
 								sampleSize.x, sampleSize.y, sampleSize.z)),
-						clutil::vec3ToCl(min), h / sampleResolution, clutil::uvec3ToCl(sampleSize),
 						clConfig,
 						deviceAtoms, static_cast<uint>(atomsN),
-						deviceGridTable, static_cast<uint>(gridTableN), deviceFields);
+						deviceGridTable, static_cast<uint>(gridTableN),
+
+						clutil::vec3ToCl(min), mcConfig,
+						deviceFields, clutil::uvec3ToCl(sampleSize));
 
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
 #ifdef DEBUG
@@ -502,7 +512,11 @@ namespace ocl {
 
 
 			hrc::time_point gpuXferRS = hrc::now();
-			cl::copy(queue, deviceFields, mcLattice.vector().begin(), mcLattice.vector().end());
+
+
+			cl::copy(queue, deviceFields, mcLattice.begin(), mcLattice.end());
+
+//			std::fill(vc.begin(), vc.end(), -100);
 
 			cl::copy(queue, deviceResult, copiedParticles.begin(), copiedParticles.end());
 #ifdef DEBUG
@@ -555,22 +569,24 @@ namespace ocl {
 					<< std::endl;
 #endif
 
-			std::vector<surface::Triangle<N>> triangles;
-
 
 			hrc::time_point mcStart = hrc::now();
 
 
-			static const float isolevel = 100.f;
-
-			sampleLattice(isolevel, min, h / sampleResolution, mcLattice);
+			std::vector<surface::Triangle<N>> triangles =
+					sampleLattice(100, config.scale,
+					              min, h / mcConfig.sampleResolution,
+					              mcLattice);
 
 
 			hrc::time_point mcEnd = hrc::now();
 
 			auto mc = duration_cast<nanoseconds>(mcEnd - mcStart).count();
 
-			std::cout << "MC: " << (mc / 1000000.0) << "ms" << std::endl;
+			std::cout << "MC: " << (mc / 1000000.0) << "ms @ " << mcLattice.size() << " res="
+			          << mcLattice.xSize() << "x"
+			          << mcLattice.ySize() << "x"
+			          << mcLattice.zSize() << std::endl;
 
 			return triangles;
 		}

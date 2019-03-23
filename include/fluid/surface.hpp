@@ -338,6 +338,7 @@ namespace surface {
 		tvec3<N> v0;
 		tvec3<N> v1;
 		tvec3<N> v2;
+		tvec3<N> normal;
 
 		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
 				v0(v0), v1(v1), v2(v2) {}
@@ -365,6 +366,7 @@ namespace surface {
 	template<typename N>
 	struct PackedVertex {
 		tvec3<N> position;
+
 		bool operator<(const PackedVertex that) const {
 			return memcmp((void *) this, (void *) &that, sizeof(PackedVertex)) > 0;
 		};
@@ -471,7 +473,6 @@ namespace surface {
 	template<typename T>
 	class Lattice {
 
-	private:
 		const size_t d1, d2, d3;
 		std::vector<T> data;
 
@@ -499,8 +500,9 @@ namespace surface {
 
 		size_t size() const { return data.size(); }
 
-		std::vector<T> &vector() { return data; }
+		decltype(auto) begin() { return data.begin(); }
 
+		decltype(auto) end() { return data.end(); }
 
 	};
 
@@ -534,9 +536,9 @@ namespace surface {
 
 
 	template<typename N>
-	void marchSingle(const N isolevel,
-					 const std::array<N, 8> &ns, const std::array<tvec3<N>, 8> &vs,
-					 std::vector<Triangle<N>> &triangles) {
+	inline void marchSingle(const N isolevel,
+	                        const std::array<N, 8> &ns, const std::array<tvec3<N>, 8> &vs,
+	                        std::vector<Triangle<N>> &triangles) {
 
 
 		size_t ci = 0;
@@ -550,40 +552,28 @@ namespace surface {
 		if (ns[7] < isolevel) ci |= 128;
 
 		/* Cube is entirely in/out of the surface */
-		if (surface::edgeTable[ci] == 0) std::vector<surface::Triangle<N>>();
+		if (edgeTable[ci] == 0) return;
 
 		std::array<tvec3<N>, 12> ts;
 		/* Find the vertices where the surface intersects the cube */
-		if (surface::edgeTable[ci] & 1 << 0)
-			ts[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
-		if (surface::edgeTable[ci] & 1 << 1)
-			ts[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
-		if (surface::edgeTable[ci] & 1 << 2)
-			ts[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
-		if (surface::edgeTable[ci] & 1 << 3)
-			ts[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
-		if (surface::edgeTable[ci] & 1 << 4)
-			ts[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
-		if (surface::edgeTable[ci] & 1 << 5)
-			ts[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
-		if (surface::edgeTable[ci] & 1 << 6)
-			ts[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
-		if (surface::edgeTable[ci] & 1 << 7)
-			ts[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
-		if (surface::edgeTable[ci] & 1 << 8)
-			ts[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
-		if (surface::edgeTable[ci] & 1 << 9)
-			ts[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
-		if (surface::edgeTable[ci] & 1 << 10)
-			ts[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
-		if (surface::edgeTable[ci] & 1 << 11)
-			ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
+		if (edgeTable[ci] & 1 << 0) ts[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
+		if (edgeTable[ci] & 1 << 1) ts[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
+		if (edgeTable[ci] & 1 << 2) ts[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
+		if (edgeTable[ci] & 1 << 3) ts[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
+		if (edgeTable[ci] & 1 << 4) ts[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
+		if (edgeTable[ci] & 1 << 5) ts[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
+		if (edgeTable[ci] & 1 << 6) ts[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
+		if (edgeTable[ci] & 1 << 7) ts[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
+		if (edgeTable[ci] & 1 << 8) ts[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
+		if (edgeTable[ci] & 1 << 9) ts[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
+		if (edgeTable[ci] & 1 << 10) ts[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
+		if (edgeTable[ci] & 1 << 11) ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
 
-		for (size_t i = 0; surface::triTable[ci][i] != -1; i += 3) {
+		for (size_t i = 0; triTable[ci][i] != -1; i += 3) {
 			triangles.emplace_back(
-					ts[surface::triTable[ci][i]],
-					ts[surface::triTable[ci][i + 1]],
-					ts[surface::triTable[ci][i + 2]]);
+					ts[triTable[ci][i]],
+					ts[triTable[ci][i + 1]],
+					ts[triTable[ci][i + 2]]);
 		}
 
 	}
@@ -591,8 +581,8 @@ namespace surface {
 
 	template<typename N>
 	std::vector<Triangle<N>> parameterise(const N isolevel,
-										  MCLattice<N> lattice,
-										  const std::function<N(tvec3<N> &)> &f) {
+	                                      MCLattice<N> lattice,
+	                                      const std::function<N(tvec3<N> &)> &f) {
 
 		Lattice<N> field = Lattice<N>(lattice.xSize(), lattice.ySize(), lattice.zSize(), 0);
 
