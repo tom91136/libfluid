@@ -265,11 +265,14 @@ kernel void sph_finalise(
 	results[id] = a->particle;
 }
 
-const constant float MBC = 100.f;
+const constant float MBC = 50.f;
 const constant float MBCC = MBC * MBC;
 
+
+
+
 kernel void sph_create_field(
-		float3 offset, float length,
+		float3 offset, float length, uint3 sizes,
 		const ClSphConfig config,
 		const global ClSphAtom *atoms, uint atomN,
 		const global uint *gridTable, uint gridTableN,
@@ -280,12 +283,15 @@ kernel void sph_create_field(
 	const size_t y = get_global_id(1);
 	const size_t z = get_global_id(2);
 
-	const float3 a = ((float3) (x, y, z) * length) + offset;
 
-	const size_t zIndex = zCurveGridIndexAtCoord(
-			(size_t) ((a.x - offset.x) / length),
-			(size_t) ((a.y - offset.y) / length),
-			(size_t) ((a.z - offset.z) / length));
+	const float3 a = ((float3) (x, y, z) * length ) + offset;
+	const float3 off = (a-offset) / length;
+//	const size_t zIndex = zCurveGridIndexAtCoord( (size_t)off.x,(size_t)off.y,(size_t)off.z );
+
+	const size_t zIndex = zCurveGridIndexAtCoord((size_t)x/2, (size_t)y/2, (size_t)z/2);
+//			(size_t) ((a.x - offset.x) / length),
+//			(size_t) ((a.y - offset.y) / length),
+//			(size_t) ((a.z - offset.z) / length));
 
 //	const size_t __start = (gridTable)[zIndex];
 //	const size_t __end = ((zIndex + 1) < (gridTableN)) ? (gridTable)[zIndex + 1] : (__start);
@@ -304,15 +310,24 @@ kernel void sph_create_field(
 //	);
 
 	float v = 0.f;
+
 //	float o = 0.f;
 	FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN)
 //			printf("\t[%d,%d,%d] %d %d\n",x, y, z, b->zIndex, b->particle.id);
-				const float3 l = b->particle.position - a;
+
+//			if(distance((b->particle.position) , (a  * config.scale)) < 350) {
+//				printf("PP=%f, A=%f\n", b->pStar.x, a.x);
+				const float3 l = (b->particle.position) - (a  * config.scale);
 				const float l2 = dot(l, l);
-				v += (MBCC / l2) * 2;
+				v += (MBCC / l2) ;
+
+//			}
+
 	FOR_EACH_NEIGHBOUR_END
 //	printf("(%f) %f [%ld]", v, o, amount);
 
 
-	field[zIndex] = v;
+
+
+	field[index3d(x, y, z, sizes.x,sizes.y,sizes.z)] = v;
 }

@@ -35,6 +35,7 @@ else ()
             #            -Wold-style-cast
             -Wcast-align
             -Wpedantic
+            -Werror=return-type
             )
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
     set(DEBUG_OPTIONS -O1 -fno-omit-frame-pointer -fsanitize=address -march=native)

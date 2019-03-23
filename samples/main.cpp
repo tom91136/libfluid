@@ -204,9 +204,9 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (20) * 1000;
+	const size_t pcount = (40) * 1000;
 	const size_t iter = 5000;
-	const size_t solverIter = 3;
+	const size_t solverIter = 4;
 	const num_t scaling = 350; // less = less space between particle
 
 
@@ -273,7 +273,7 @@ void run() {
 	auto max = tvec3<num_t>(500);
 
 	auto config = fluid::Config<num_t>(
-			static_cast<num_t>(0.0083 * 1),
+			static_cast<num_t>(0.0083 * 1.2),
 			scaling,
 			solverIter,
 			tvec3<num_t>(0, 9.8, 0),
@@ -291,7 +291,7 @@ void run() {
 		config.max = max + tvec3<num_t>(xx, 1, zz);
 
 		hrc::time_point t1 = hrc::now();
-		solver->advance(config, xs, colliders);
+		auto triangles = solver->advance(config, xs, colliders);
 		hrc::time_point t2 = hrc::now();
 
 
@@ -354,6 +354,9 @@ void run() {
 		write_triangles(mmfTSink, triangles);
 #endif
 		write_particles(mmfPSink, xs);
+		write_triangles(mmfTSink, triangles);
+		std::cout << "Trgs=" << triangles.size() << std::endl;
+
 		hrc::time_point mmt2 = hrc::now();
 
 

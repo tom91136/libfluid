@@ -10,6 +10,7 @@
 #include <algorithm>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
+#include "surface.hpp"
 
 
 namespace fluid {
@@ -124,9 +125,10 @@ namespace fluid {
 
 		virtual ~SphSolver() = default;
 
-		virtual void advance(const Config<N> &config,
-		                     std::vector<Particle<T, N>> &xs,
-		                     const std::vector<MeshCollider<N>> &colliders) = 0;
+		virtual std::vector<surface::Triangle<N>> advance(
+				const Config<N> &config,
+				std::vector<Particle<T, N>> &xs,
+				const std::vector<MeshCollider<N>> &colliders) = 0;
 	};
 
 
