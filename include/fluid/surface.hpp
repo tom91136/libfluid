@@ -12,6 +12,7 @@
 #include <algorithm>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
+#include "glm/gtx/normal.hpp"
 #include <cstdlib>
 #include <memory>
 #include <array>
@@ -338,9 +339,14 @@ namespace surface {
 		tvec3<N> v0;
 		tvec3<N> v1;
 		tvec3<N> v2;
-		tvec3<N> normal;
+//		tvec3<N> normal;
 
-		explicit Triangle(const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
+		explicit Triangle(
+				const tvec3<N> &v0,
+				const tvec3<N> &v1,
+				const tvec3<N> &v2
+//				, const tvec3<N> &normal
+		) :
 				v0(v0), v1(v1), v2(v2) {}
 
 		friend std::ostream &operator<<(std::ostream &os, const Triangle &triangle) {
@@ -348,6 +354,7 @@ namespace surface {
 			   << glm::to_string(triangle.v0) << ","
 			   << glm::to_string(triangle.v1) << ","
 			   << glm::to_string(triangle.v2)
+			   //			   << ", n=" << glm::to_string(triangle.normal)
 			   << ")";
 			return os;
 		}
@@ -469,7 +476,6 @@ namespace surface {
 					vs[triTable[ci][i + 2]]);
 	}
 
-
 	template<typename T>
 	class Lattice {
 
@@ -537,7 +543,8 @@ namespace surface {
 
 	template<typename N>
 	inline void marchSingle(const N isolevel,
-	                        const std::array<N, 8> &ns, const std::array<tvec3<N>, 8> &vs,
+	                        const std::array<N, 8> &ns,
+	                        const std::array<tvec3<N>, 8> &vs,
 	                        std::vector<Triangle<N>> &triangles) {
 
 
@@ -570,10 +577,18 @@ namespace surface {
 		if (edgeTable[ci] & 1 << 11) ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
 
 		for (size_t i = 0; triTable[ci][i] != -1; i += 3) {
+
+			auto v0 = ts[triTable[ci][i]];
+			auto v1 = ts[triTable[ci][i + 1]];
+			auto v2 = ts[triTable[ci][i + 2]];
+
+			auto norm = glm::triangleNormal(v0, v1, v2);
+
+
 			triangles.emplace_back(
-					ts[triTable[ci][i]],
-					ts[triTable[ci][i + 1]],
-					ts[triTable[ci][i + 2]]);
+					v0,
+					v1,
+					v2);
 		}
 
 	}

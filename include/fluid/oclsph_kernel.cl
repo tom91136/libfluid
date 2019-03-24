@@ -94,7 +94,7 @@ static inline void sortArray27(size_t d[27]) {
 
 #define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
 { \
-    uint3 __coord = (uint3) ( \
+    const uint3 __coord = (uint3) ( \
             coordAtZCurveGridIndex0((zIndex) ), \
             coordAtZCurveGridIndex1((zIndex) ), \
             coordAtZCurveGridIndex2((zIndex) )); \
@@ -129,9 +129,9 @@ static inline void sortArray27(size_t d[27]) {
     }; \
     sortArray27(__offsets);  \
     for (size_t __i = 0; __i < 27; ++__i) { \
-        size_t __offset = __offsets[__i]; \
-        size_t __start = (gridTable)[__offset]; \
-        size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
+        const size_t __offset = __offsets[__i]; \
+        const size_t __start = (gridTable)[__offset]; \
+        const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
         for (size_t __ni = __start; __ni < __end; ++__ni) { \
             const global ClSphAtom *b = &(atoms)[__ni]; \
 
@@ -145,7 +145,7 @@ static inline void sortArray27(size_t d[27]) {
 
 #define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
 { \
-	uint3 __coord = (uint3) ( \
+	const uint3 __coord = (uint3) ( \
 			coordAtZCurveGridIndex0((zIndex)), \
 			coordAtZCurveGridIndex1((zIndex)), \
 			coordAtZCurveGridIndex2((zIndex))); \
@@ -163,7 +163,15 @@ static inline void sortArray27(size_t d[27]) {
 } \
 
 
+
 #endif
+
+
+inline static float fast_length_sq(float3 a){
+	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
+}
+
+
 kernel void sph_lambda(
 		const ClSphConfig config,
 		global ClSphAtom *atoms, uint atomN,
@@ -173,14 +181,14 @@ kernel void sph_lambda(
 	global ClSphAtom *a = &atoms[id];
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
-
+	const float oneOverRho = 1.f / RHO;
 	FOR_EACH_NEIGHBOUR_BEGIN(a->zIndex, b, atoms, atomN, gridTable, gridTableN)
 				const float r = fast_distance(a->pStar, b->pStar);
-				norm2V = fma(spikyKernelGradient(a->pStar, b->pStar, r), 1.f / RHO, norm2V);
-				rho = fma(b->particle.mass, poly6Kernel(r), rho);
+				norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), oneOverRho, norm2V);
+				rho = mad(b->particle.mass, poly6Kernel(r), rho);
 	FOR_EACH_NEIGHBOUR_END
 
-	float norm2 = dot(norm2V, norm2V); // dot self = length2
+	float norm2 = fast_length_sq(norm2V); // dot self = length2
 	float C1 = (rho / RHO - 1.f);
 	a->lambda = -C1 / (norm2 + CFM_EPSILON);
 }
@@ -205,7 +213,7 @@ kernel void sph_delta(
 				const float r = fast_distance(a->pStar, b->pStar);
 				const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
 				const float factor = (a->lambda + b->lambda + corr) / RHO;
-				deltaP = fma(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
+				deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
 	FOR_EACH_NEIGHBOUR_END
 
 	a->deltaP = deltaP;
@@ -261,7 +269,7 @@ kernel void sph_finalise(
 	global ClSphAtom *a = &atoms[id];
 	const float3 deltaX = a->pStar - a->particle.position / config.scale;
 	a->particle.position = a->pStar * config.scale;
-	a->particle.velocity = fma(deltaX, (1.f / config.dt), a->particle.velocity) * VD;
+	a->particle.velocity = mad(deltaX, (1.f / config.dt), a->particle.velocity) * VD;
 	results[id] = a->particle;
 }
 
@@ -281,15 +289,21 @@ kernel void sph_create_field(
 	const float3 a = (min + (pos * step)) * config.scale;
 
 	const size_t zIndex = zCurveGridIndexAtCoord(
-			(size_t) ( pos.x / mcConfig.sampleResolution),
-			(size_t) ( pos.y / mcConfig.sampleResolution),
-			(size_t) ( pos.z / mcConfig.sampleResolution));
+			(size_t) (pos.x / mcConfig.sampleResolution),
+			(size_t) (pos.y / mcConfig.sampleResolution),
+			(size_t) (pos.z / mcConfig.sampleResolution));
 
 	const float sN = pown(mcConfig.particleSize, 2);
+	const float threshold = H * config.scale * 1;
 	float v = 0.f;
 	FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN)
-				const float3 l = (b->particle.position) - a;
-				v += (sN / dot(l, l)) * mcConfig.particleInfluence;
+				if (fast_distance(b->particle.position, a) < threshold) {
+					const float3 l = (b->particle.position) - a;
+					const float len = fast_length_sq(l);
+					v += (sN /
+					      pow(len, mcConfig.particleInfluence));
+
+				}
 	FOR_EACH_NEIGHBOUR_END
 	field[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
 }

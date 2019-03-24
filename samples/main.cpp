@@ -56,6 +56,9 @@ static const char v1_z_[] = "v1.z";
 static const char v2_x_[] = "v2.x";
 static const char v2_y_[] = "v2.y";
 static const char v2_z_[] = "v2.z";
+static const char normal_x_[] = "normal.x";
+static const char normal_y_[] = "normal.y";
+static const char normal_z_[] = "normal.z";
 
 template<typename N>
 static inline auto triangleEntries() {
@@ -69,6 +72,9 @@ static inline auto triangleEntries() {
 			ENTRY(v2_x_, CLS(surface::Triangle<N>), v2.x),
 			ENTRY(v2_y_, CLS(surface::Triangle<N>), v2.y),
 			ENTRY(v2_z_, CLS(surface::Triangle<N>), v2.z)
+//			ENTRY(normal_x_, CLS(surface::Triangle<N>), normal.x),
+//			ENTRY(normal_y_, CLS(surface::Triangle<N>), normal.y),
+//			ENTRY(normal_z_, CLS(surface::Triangle<N>), normal.z)
 	);
 }
 
@@ -206,8 +212,8 @@ void run() {
 	omp_set_num_threads(4);
 	const size_t pcount = (40) * 1000;
 	const size_t iter = 5000;
-	const size_t solverIter = 4;
-	const num_t scaling = 350; // less = less space between particle
+	const size_t solverIter = 3;
+	const num_t scaling = 650; // less = less space between particle
 
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
@@ -218,7 +224,7 @@ void run() {
 	std::cout << "Mark" << std::endl;
 
 	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
-	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10  * triangleType.first + headerType.first);
+	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10 * triangleType.first + headerType.first);
 
 	std::cout << "Go" << std::endl;
 
@@ -247,17 +253,6 @@ void run() {
 		          << "`"  ", using the first one." << std::endl;
 	}
 
-//
-//	for (int x = 0; x < 10; ++x) {
-//		for (int y = 0; y < 10; ++y) {
-//			for (int z = 0; z < 10; ++z) {
-//				std::cout << "> " << glm::to_string(glm::vec3(x, y, z)) << " -> " << zCurveGridIndexAtCoord(x, y, z) << std::endl;
-//			}
-//		}
-//	}
-				std::cout << " -> " << zCurveGridIndexAtCoord(62, 36, 66) << std::endl;
-
-
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
 	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(
 			0.1,
@@ -269,11 +264,11 @@ void run() {
 	hrc::time_point start = hrc::now();
 
 
-	auto min = tvec3<num_t>(-500);
-	auto max = tvec3<num_t>(500);
+	auto min = tvec3<num_t>(-1000);
+	auto max = tvec3<num_t>(1000, 1000, 1000);
 
 	auto config = fluid::Config<num_t>(
-			static_cast<num_t>(0.0083 * 1.2),
+			static_cast<num_t>(0.0083 * 1.66),
 			scaling,
 			solverIter,
 			tvec3<num_t>(0, 9.8, 0),

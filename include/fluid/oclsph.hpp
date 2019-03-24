@@ -267,9 +267,18 @@ namespace ocl {
 							tvec3<size_t> offset = tvec3<size_t>(x, y, z) +
 							                       surface::CUBE_OFFSETS[j];
 							ns[j] = lattice(offset.x, offset.y, offset.z);
+
 							vs[j] = (tvec3<N>(offset) * step + min) * scale;
+
+
+
+//							lattice(offset.x, offset.y, offset.z)
+
+
+//							nns[j] = (tvec3<N>(offset) * step + min) * scale;
+
 						}
-						surface::marchSingle(isolevel, ns, vs, triangles);
+						surface::marchSingle(isolevel, ns,   vs, triangles);
 					}
 				}
 			}
@@ -398,7 +407,7 @@ namespace ocl {
 			ClMcConfig mcConfig;
 			mcConfig.sampleResolution = 2.f;
 			mcConfig.particleSize = 50.f;
-			mcConfig.particleInfluence = 1.22;
+			mcConfig.particleInfluence = 0.8;
 
 
 			tvec3<size_t> sampleSize = tvec3<size_t>(
@@ -526,7 +535,7 @@ namespace ocl {
 			hrc::time_point gpuXferRE = hrc::now();
 
 #pragma omp parallel for
-			for (int i = 0; i < xs.size(); ++i) {
+			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				const ClSphParticle &p = copiedParticles[i];
 				fluid::Particle<T, N> &particle = xs[i];
 
