@@ -222,8 +222,8 @@ namespace cpu {
 //					}
 
 
-					auto clamped = glm::min(config.max,
-					                        glm::max(config.min, current.getPosition()));
+					auto clamped = glm::min(config.maxBound,
+					                        glm::max(config.minBound, current.getPosition()));
 
 					a.now = clamped / config.scale;
 					a.velocity = current.getVelocity();

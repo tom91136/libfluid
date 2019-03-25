@@ -107,8 +107,8 @@ namespace fluid {
 		size_t iteration;
 		glm::tvec3<N> constantForce;
 
-		glm::tvec3<N> min;
-		glm::tvec3<N> max;
+		glm::tvec3<N> minBound;
+		glm::tvec3<N> maxBound;
 
 		explicit Config(N dt, N scale, size_t iteration,
 		                const glm::tvec3<N> &constantForce,
@@ -116,7 +116,7 @@ namespace fluid {
 		                const glm::tvec3<N> &max) : dt(dt), scale(scale),
 		                                            iteration(iteration),
 		                                            constantForce(constantForce),
-		                                            min(min), max(max) {}
+		                                            minBound(min), maxBound(max) {}
 	};
 
 	template<typename T, typename N>

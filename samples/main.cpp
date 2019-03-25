@@ -131,15 +131,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-                tvec3<N> origin,
-                std::vector<fluid::Particle<size_t, num_t >> &xs) {
+				tvec3<N> origin,
+				std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -249,7 +249,7 @@ void run() {
 
 	if (found.size() > 1) {
 		std::cout << "Found more than one device signature:`" << signature
-		          << "`"  ", using the first one." << std::endl;
+				  << "`"  ", using the first one." << std::endl;
 	}
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
@@ -275,14 +275,20 @@ void run() {
 
 	float i = 0;
 
-	const std::vector<fluid::MeshCollider<num_t>> colliders;
+	const std::vector<fluid::MeshCollider<num_t>> colliders = {
+			fluid::MeshCollider<num_t>(
+					{surface::Triangle<num_t>(
+							tvec3<num_t>(0),
+							tvec3<num_t>(0),
+							tvec3<num_t>(0))})
+	};
 
 	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
 		auto xx = (std::sin(i) * 220) * 1;
 		auto zz = (std::cos(i) * 50) * 1;
-		config.min = min + tvec3<num_t>(xx, 1, zz);
-		config.max = max + tvec3<num_t>(xx, 1, zz);
+		config.minBound = min + tvec3<num_t>(xx, 1, zz);
+		config.maxBound = max + tvec3<num_t>(xx, 1, zz);
 
 		hrc::time_point t1 = hrc::now();
 		auto triangles = solver->advance(config, xs, colliders);
@@ -358,12 +364,12 @@ void run() {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-		          << "Solver:" << (solve / 1000000.0) << "ms "
-		          << "Surface:" << (param / 1000000.0) << "ms "
-		          << "IPC:" << (mmf / 1000000.0) << "ms "
-		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-		          << xs.size()
-		          << std::endl;
+				  << "Solver:" << (solve / 1000000.0) << "ms "
+				  << "Surface:" << (param / 1000000.0) << "ms "
+				  << "IPC:" << (mmf / 1000000.0) << "ms "
+				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+				  << xs.size()
+				  << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();

@@ -250,7 +250,7 @@ kernel void sph_delta(
 	collideTriangle2(mesh, meshN, a->particle.position, &resp);
 
 	// clamp to extent
-	resp.position = min(config.max, max(config.min, resp.position));
+	resp.position = min(config.maxBound, max(config.minBound, resp.position));
 
 
 	a->pStar = resp.position / config.scale;

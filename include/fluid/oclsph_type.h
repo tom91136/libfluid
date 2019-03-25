@@ -8,8 +8,8 @@ typedef struct ClSphConfig {
 	ALIGNED_(4) float scale;
 	ALIGNED_(8) size_t iteration;
 	ALIGNED_(16) float3 constForce;
-	ALIGNED_(16) float3 min;
-	ALIGNED_(16) float3 max;
+	ALIGNED_(16) float3 minBound;
+	ALIGNED_(16) float3 maxBound;
 } ClSphConfig;
 
 typedef enum ALIGNED_(4) ClSphType {

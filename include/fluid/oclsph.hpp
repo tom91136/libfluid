@@ -1,3 +1,8 @@
+#include <utility>
+
+#include <utility>
+#include <iomanip>
+
 
 #ifndef LIBFLUID_CLSPH_HPP
 #define LIBFLUID_CLSPH_HPP
@@ -56,14 +61,14 @@ namespace clutil {
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-				          << "` : "
-				          << e.what() << std::endl;
+						  << "` : "
+						  << e.what() << std::endl;
 			}
 			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
-			             [needle](const cl::Device &device) {
-				             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
-				                    std::string::npos;
-			             });
+						 [needle](const cl::Device &device) {
+							 return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
+									std::string::npos;
+						 });
 		}
 		return matching;
 	}
@@ -78,14 +83,14 @@ namespace clutil {
 			try {
 
 				std::cout << "\t├─┬Platform"
-				          << (platform == p ? "(Default):" : ":")
-				          << p.getInfo<CL_PLATFORM_NAME>()
-				          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-				          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-				          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-				          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-				          << "\n\t│ └Devices"
-				          << std::endl;
+						  << (platform == p ? "(Default):" : ":")
+						  << p.getInfo<CL_PLATFORM_NAME>()
+						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+						  << "\n\t│ └Devices"
+						  << std::endl;
 				std::vector<cl::Device> devices;
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 				for (auto &d : devices) {
@@ -99,8 +104,8 @@ namespace clutil {
 				}
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-				          << "` : "
-				          << e.what() << std::endl;
+						  << "` : "
+						  << e.what() << std::endl;
 			}
 		}
 
@@ -132,12 +137,12 @@ namespace clutil {
 			}
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
-		                            " -w"
-		                            " -cl-strict-aliasing"
-		                            " -cl-mad-enable"
-		                            " -cl-no-signed-zeros"
-		                            " -cl-unsafe-math-optimizations"
-		                            " -cl-finite-math-only";
+									" -w"
+									" -cl-strict-aliasing"
+									" -cl-mad-enable"
+									" -cl-no-signed-zeros"
+									" -cl-unsafe-math-optimizations"
+									" -cl-finite-math-only";
 		const std::string build = clFlags + " -I " + include + " " + flags;
 		std::cout << "Using args:`" << build << "`" << std::endl;
 		try {
@@ -266,7 +271,7 @@ namespace ocl {
 						std::array<tvec3<N>, 8> vs{};
 						for (size_t j = 0; j < 8; ++j) {
 							tvec3<size_t> offset = tvec3<size_t>(x, y, z) +
-							                       surface::CUBE_OFFSETS[j];
+												   surface::CUBE_OFFSETS[j];
 							ns[j] = lattice(offset.x, offset.y, offset.z);
 
 							vs[j] = (tvec3<N>(offset) * step + min) * scale;
@@ -286,37 +291,65 @@ namespace ocl {
 			return triangles;
 		}
 
-	public:
-		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
-		                                          std::vector<fluid::Particle<T, N>> &xs,
-		                                          const std::vector<fluid::MeshCollider<N>> &colliders) override {
+
+		class Stopwatch {
 
 			using hrc = std::chrono::high_resolution_clock;
-			using std::chrono::nanoseconds;
-			using std::chrono::milliseconds;
-			using std::chrono::duration_cast;
+			typedef std::chrono::time_point<std::chrono::system_clock> time;
+
+			struct Entry {
+				std::string name;
+				hrc::time_point begin;
+				hrc::time_point end;
+				Entry(std::string name,
+					  const time &begin) : name(std::move(name)), begin(begin) {}
+			};
+
+			std::string name;
+			std::vector<Entry> entries;
+
+		public:
+			explicit Stopwatch(std::string name) : name(std::move(name)) {}
+
+		public:
+			std::function<void(void)> start(const std::string &name) {
+				entries.emplace_back(name, std::chrono::system_clock::now());
+				Entry &added = entries.back();
+				return [this, &added]() { added.end = std::chrono::system_clock::now(); };
+			}
+
+			friend std::ostream &operator<<(std::ostream &os, const Stopwatch &stopwatch) {
+				os << "Stopwatch[ " << stopwatch.name << "]:\n";
+
+				size_t maxLen = std::max_element(stopwatch.entries.begin(), stopwatch.entries.end(),
+												 [](const Entry &l, const Entry &r) {
+													 return l.name.size() < r.name.size();
+												 })->name.size();
+
+				for (const Entry &e: stopwatch.entries) {
+					os << "    ->"
+					   << std::setw(static_cast<int>(maxLen - e.name.size()))
+					   << "`" << e.name << "` = " <<
+					   (std::chrono::duration_cast<std::chrono::nanoseconds>(
+							   e.end - e.begin).count() / 1000'000.0) << "ms" << std::endl;
+				}
+				return os;
+			}
+
+		};
 
 
-			hrc::time_point aabbCpyS = hrc::now();
+		std::vector<ClSphAtom> advectAndCopy(const fluid::Config<N> &config,
+											 const std::vector<fluid::Particle<T, N>> &xs) {
 
-			tvec3<N> min(std::numeric_limits<N>::max());
-			tvec3<N> max(std::numeric_limits<N>::min());
-
-			const size_t atomsN = xs.size();
-			std::vector<ClSphAtom> hostAtoms(xs.size());
-
-
-#if _OPENMP > 201307
-#pragma omp declare reduction(glmMin: tvec3<N>: omp_out = glm::min(omp_in, omp_out))
-#pragma omp declare reduction(glmMax: tvec3<N>: omp_out = glm::max(omp_in, omp_out))
-#pragma omp parallel for reduction(glmMin:min) reduction(glmMax:max)
-#endif
+			std::vector<ClSphAtom> atoms(xs.size());
+#pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				const fluid::Particle<T, N> &p = xs[i];
 				const tvec3<N> velocity =
 						(p.mass * config.constantForce) * config.dt + p.velocity;
 				const tvec3<N> pStar = (velocity * config.dt) + (p.position / config.scale);
-				ClSphAtom &atom = hostAtoms[i];
+				ClSphAtom &atom = atoms[i];
 				ClSphParticle &particle = atom.particle;
 				particle.id = p.id,
 				particle.type = resolve(p.type),
@@ -324,57 +357,116 @@ namespace ocl {
 				particle.position = clutil::vec3ToCl(p.position),
 				particle.velocity = clutil::vec3ToCl(velocity);
 				atom.pStar = clutil::vec3ToCl(pStar);
-				min = glm::min(pStar, min);
-				max = glm::max(pStar, max);
 			}
-//
-//			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
-//				const float3 &pStar = hostAtoms[i].pStar;
-//				min.x = glm::min(pStar.x, min.x);
-//				min.y = glm::min(pStar.y, min.y);
-//				min.z = glm::min(pStar.z, min.z);
-//				max.x = glm::max(pStar.x, max.x);
-//				max.y = glm::max(pStar.y, max.y);
-//				max.z = glm::max(pStar.z, max.z);
-//			}
+			return atoms;
+		}
 
 
-			N padding = h * 2;
-			min -= padding;
-			max += padding;
-			glm::tvec3<size_t> extent((max - min) / h);
+		const std::tuple<ClSphConfig, tvec3<N>, tvec3<size_t> > computeBoundAndIndex(
+				const fluid::Config<N> &config,
+				std::vector<ClSphAtom> &atoms) const {
 
-			const size_t gridTableN = zCurveGridIndexAtCoord(extent.x, extent.y, extent.z);
-			hrc::time_point aabbCpyE = hrc::now();
+			tvec3<N> minExtent(std::numeric_limits<N>::max());
+			tvec3<N> maxExtent(std::numeric_limits<N>::min());
+#if _OPENMP > 201307
+#pragma omp declare reduction(glmMin: tvec3<N>: omp_out = glm::min(omp_in, omp_out))
+#pragma omp declare reduction(glmMax: tvec3<N>: omp_out = glm::max(omp_in, omp_out))
+#pragma omp parallel for reduction(glmMin:minExtent) reduction(glmMax:maxExtent)
+#endif
+			for (int i = 0; i < static_cast<int>(atoms.size()); ++i) {
+				minExtent = glm::min(clutil::clToVec3<N>(atoms[i].pStar), minExtent);
+				maxExtent = glm::max(clutil::clToVec3<N>(atoms[i].pStar), maxExtent);
+			}
 
-			hrc::time_point zCurveS = hrc::now();
-
+			const N padding = h * 2;
+			minExtent -= padding;
+			maxExtent += padding;
 
 #pragma omp parallel for
-			for (int i = 0; i < static_cast<int>(hostAtoms.size()); ++i) {
-				const float3 pStar = hostAtoms[i].pStar;
-				hostAtoms[i].zIndex = zCurveGridIndexAtCoord(
-						static_cast<size_t>((pStar.x - min.x) / h),
-						static_cast<size_t>((pStar.y - min.y) / h),
-						static_cast<size_t>((pStar.z - min.z) / h));
+			for (int i = 0; i < static_cast<int>(atoms.size()); ++i) {
+				const float3 pStar = atoms[i].pStar;
+				atoms[i].zIndex = zCurveGridIndexAtCoord(
+						static_cast<size_t>((pStar.x - minExtent.x) / h),
+						static_cast<size_t>((pStar.y - minExtent.y) / h),
+						static_cast<size_t>((pStar.z - minExtent.z) / h));
 			}
 
+			ClSphConfig clConfig;
+			clConfig.dt = config.dt;
+			clConfig.scale = config.scale;
+			clConfig.iteration = static_cast<size_t>(config.iteration);
+			clConfig.minBound = clutil::vec3ToCl(config.minBound);
+			clConfig.maxBound = clutil::vec3ToCl(config.maxBound);
+			return std::make_tuple(clConfig, minExtent,
+								   glm::tvec3<size_t>((maxExtent - minExtent) / h));
+		}
 
-			hrc::time_point zCurveE = hrc::now();
 
-			hrc::time_point sortS = hrc::now();
+		void overwrite(std::vector<fluid::Particle<T, N>> &xs,
+					   const std::vector<ClSphParticle> &hostParticles) {
+#pragma omp parallel for
+			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
+				const ClSphParticle &p = hostParticles[i];
+				fluid::Particle<T, N> &particle = xs[i];
+				particle.id = static_cast<T>(p.id);
+				particle.type = resolve(p.type);
+				particle.mass = static_cast<N>(p.mass);
+				particle.position = clutil::clToVec3<N>(p.position);
+				particle.velocity = clutil::clToVec3<N>(p.velocity);
+//				std::cout << "GPU >> "
+//				          << " t=" << particle.t
+//				          << " p=" << glm::to_string(particle.position)
+//				          << " v=" << glm::to_string(particle.velocity) << "\n";
+			}
+		}
+
+	public:
+		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
+												  std::vector<fluid::Particle<T, N>> &xs,
+												  const std::vector<fluid::MeshCollider<N>> &colliders) override {
+
+
+			Stopwatch watch = Stopwatch("CPU advance");
+
+			ClMcConfig mcConfig;
+			mcConfig.sampleResolution = 3.f;
+			mcConfig.particleSize = 50.f;
+			mcConfig.particleInfluence = 0.8;
+
+
+			auto advect = watch.start("CPU advect+copy");
+			std::vector<ClSphAtom> hostAtoms = advectAndCopy(config, xs);
+			const size_t atomsN = xs.size();
+			advect();
+
+
+			auto bound = watch.start("CPU bound+zindex");
+
+			ClSphConfig clConfig;
+			tvec3<N> minExtent;
+			tvec3<size_t> extent;
+
+			std::tie(clConfig, minExtent, extent) = computeBoundAndIndex(config, hostAtoms);
+
+			bound();
+
+			auto sortz = watch.start("CPU sortz");
+
+			std::sort(hostAtoms.begin(), hostAtoms.end(),
+					  [](const ClSphAtom &l, const ClSphAtom &r) {
+						  return l.zIndex < r.zIndex;
+					  });
 
 			// ska_sort(hostAtoms.begin(), hostAtoms.end(),
 			//  [](const ClSphAtom &a) { return a.zIndex; });
 
-			std::sort(hostAtoms.begin(), hostAtoms.end(),
-			          [](const ClSphAtom &l, const ClSphAtom &r) {
-				          return l.zIndex < r.zIndex;
-			          });
+			sortz();
 
-			hrc::time_point sortE = hrc::now();
 
-			hrc::time_point gtS = hrc::now();
+			auto gridtable = watch.start("CPU gridtable");
+
+
+			const size_t gridTableN = zCurveGridIndexAtCoord(extent.x, extent.y, extent.z);
 
 			std::vector<uint> hostGridTable(gridTableN);
 			uint gridIndex = 0;
@@ -385,17 +477,17 @@ namespace ocl {
 				}
 			}
 
-			hrc::time_point gtE = hrc::now();
+			gridtable();
 
 
-			hrc::time_point combineColliderS = hrc::now();
+			auto collider_concat = watch.start("CPU collider++");
 
 
 			std::vector<ClSphTraiangle> hostColliderMesh;
 
 			for (int i = 0; i < static_cast<int>(colliders.size()); ++i) {
 				auto xs = colliders[i].triangles;
-				for (int j = 0; j <static_cast<int>(xs.size()); ++j) {
+				for (int j = 0; j < static_cast<int>(xs.size()); ++j) {
 					ClSphTraiangle trig;
 					trig.a = clutil::vec3ToCl(xs[i].v0);
 					trig.b = clutil::vec3ToCl(xs[i].v1);
@@ -404,79 +496,18 @@ namespace ocl {
 				}
 			}
 
-			hrc::time_point combineColliderE = hrc::now();
+			collider_concat();
 
 
 #ifdef DEBUG
-
-			std::cout << "atomsN = " << atomsN
-			          << " AABB:" << glm::to_string(extent)
-			          << " min:" << glm::to_string(min)
-			          << " max:" << glm::to_string(max)
-			          << " gridTable = " << hostGridTable.size() << " gridTableN = " << gridTableN
-			          << std::endl;
-
-			std::cout << "Go! " << std::endl;
-
+			std::cout << "Atoms = " << atomsN
+					  << " Extent = " << glm::to_string(extent)
+					  << " GridTable = " << hostGridTable.size()
+					  << std::endl;
 #endif
 
+			auto functors = watch.start("CPU functors");
 
-			hrc::time_point gpuXferS = hrc::now();
-
-			std::vector<ClSphParticle> copiedParticles(atomsN);
-
-			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 3.f;
-			mcConfig.particleSize = 50.f;
-			mcConfig.particleInfluence = 0.8;
-
-
-			tvec3<size_t> sampleSize = tvec3<size_t>(
-					glm::ceil(tvec3<N>(extent) * mcConfig.sampleResolution));
-
-
-			hrc::time_point da1 = hrc::now();
-			cl::Buffer deviceAtoms(queue, hostAtoms.begin(), hostAtoms.end(), false);
-			hrc::time_point da2 = hrc::now();
-
-
-			cl::Buffer deviceColliderMesh(queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
-
-
-
-#ifdef DEBUG
-			std::cout << "Device atoms: "
-			          << (duration_cast<nanoseconds>(da2 - da1).count() / 1000000.0) << "ms"
-			          << std::endl;
-			queue.finish();
-#endif
-
-
-			hrc::time_point dgt1 = hrc::now();
-			cl::Buffer deviceGridTable(queue, hostGridTable.begin(), hostGridTable.end(), true);
-			hrc::time_point dgt2 = hrc::now();
-
-#ifdef DEBUG
-			std::cout << "Device GT  : "
-			          << (duration_cast<nanoseconds>(dgt2 - dgt1).count() / 1000000.0) << "ms"
-			          << std::endl;
-			queue.finish();
-#endif
-
-
-			cl::Buffer deviceResult(queue, copiedParticles.begin(), copiedParticles.end(), false);
-
-#ifdef DEBUG
-			queue.finish();
-#endif
-
-
-			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
-			cl::Buffer deviceFields(context, CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
-
-			hrc::time_point gpuXferE = hrc::now();
-
-			hrc::time_point gpuFunctorS = hrc::now();
 
 			auto lambdaKernel = cl::KernelFunctor<
 					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint
@@ -497,17 +528,37 @@ namespace ocl {
 			>(clsph, "sph_create_field");
 
 
-			ClSphConfig clConfig;
-			clConfig.dt = config.dt;
-			clConfig.scale = config.scale;
-			clConfig.iteration = static_cast<size_t>(config.iteration);
-			clConfig.min = clutil::vec3ToCl(config.min);
-			clConfig.max = clutil::vec3ToCl(config.max);
+			functors();
 
-			hrc::time_point gpuFunctorE = hrc::now();
 
-			hrc::time_point gpuKernelS = hrc::now();
+			const tvec3<size_t> sampleSize = tvec3<size_t>(
+					glm::ceil(tvec3<N>(extent) * mcConfig.sampleResolution));
+
+			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
+			std::vector<ClSphParticle> hostParticles(atomsN);
+
+
 			try {
+
+				auto kernel_copy = watch.start("GPU kernel_copy");
+				cl::Buffer deviceAtoms(
+						queue, hostAtoms.begin(), hostAtoms.end(), false);
+				cl::Buffer deviceColliderMesh(
+						queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
+				cl::Buffer deviceGridTable(
+						queue, hostGridTable.begin(), hostGridTable.end(), true);
+
+				cl::Buffer deviceParticles(
+						context, CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
+				cl::Buffer deviceFields(
+						context, CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
+
+#ifdef DEBUG
+				queue.finish();
+#endif
+				kernel_copy();
+
+				auto kernel_exec = watch.start("GPU kernel_exec");
 				for (size_t itr = 0; itr < config.iteration; ++itr) {
 					lambdaKernel(
 							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
@@ -519,66 +570,42 @@ namespace ocl {
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
 							deviceGridTable, static_cast<uint>(gridTableN),
-					deviceColliderMesh, static_cast<uint>(hostColliderMesh.size())
+							deviceColliderMesh, static_cast<uint>(hostColliderMesh.size())
 
 					);
 				}
-
-
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
-				               clConfig, deviceAtoms, deviceResult);
-
+							   clConfig, deviceAtoms, deviceParticles);
 				createFieldKernel(
 						cl::EnqueueArgs(queue, cl::NDRange(
 								sampleSize.x, sampleSize.y, sampleSize.z)),
 						clConfig,
 						deviceAtoms, static_cast<uint>(atomsN),
 						deviceGridTable, static_cast<uint>(gridTableN),
-
-						clutil::vec3ToCl(min), mcConfig,
+						clutil::vec3ToCl(minExtent), mcConfig,
 						deviceFields, clutil::uvec3ToCl(sampleSize));
+#ifdef DEBUG
+				queue.finish();
+#endif
+				kernel_exec();
+
+				auto kernel_return = watch.start("GPU kernel_return");
+				cl::copy(queue, deviceFields, mcLattice.begin(), mcLattice.end());
+				cl::copy(queue, deviceParticles, hostParticles.begin(), hostParticles.end());
+#ifdef DEBUG
+				queue.finish();
+#endif
+				kernel_return();
 
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
-#ifdef DEBUG
-			queue.finish();
-#endif
 
-			hrc::time_point gpuKernelE = hrc::now();
-
-
-			hrc::time_point gpuXferRS = hrc::now();
-
-
-			cl::copy(queue, deviceFields, mcLattice.begin(), mcLattice.end());
-
-//			std::fill(vc.begin(), vc.end(), -100);
-
-			cl::copy(queue, deviceResult, copiedParticles.begin(), copiedParticles.end());
-#ifdef DEBUG
-			queue.finish();
-#endif
-
-			hrc::time_point gpuXferRE = hrc::now();
-
-#pragma omp parallel for
-			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
-				const ClSphParticle &p = copiedParticles[i];
-				fluid::Particle<T, N> &particle = xs[i];
-
-				particle.id = static_cast<T>(p.id);
-				particle.type = resolve(p.type);
-				particle.mass = static_cast<N>(p.mass);
-				particle.position = clutil::clToVec3<N>(p.position);
-				particle.velocity = clutil::clToVec3<N>(p.velocity);
-//				std::cout << "GPU >> "
-//				          << " t=" << particle.t
-//				          << " p=" << glm::to_string(particle.position)
-//				          << " v=" << glm::to_string(particle.velocity) << "\n";
-			}
+			auto write_back = watch.start("write_back");
+			overwrite(xs, hostParticles);
+			write_back();
 
 //			cl::copy(atoms, actualAtoms.begin(), actualAtoms.end());
 //		for (auto b : actualAtoms) {
@@ -586,43 +613,14 @@ namespace ocl {
 //		}
 
 
-#ifdef DEBUG
-
-			auto aabbCpy = duration_cast<nanoseconds>(aabbCpyE - aabbCpyS).count();
-			auto zCurve = duration_cast<nanoseconds>(zCurveE - zCurveS).count();
-			auto sort = duration_cast<nanoseconds>(sortE - sortS).count();
-			auto gt = duration_cast<nanoseconds>(gtE - gtS).count();
-			auto gpuKernel = duration_cast<nanoseconds>(gpuKernelE - gpuKernelS).count();
-			auto gpuXfer = duration_cast<nanoseconds>(gpuXferE - gpuXferS).count();
-			auto gpuXferR = duration_cast<nanoseconds>(gpuXferRE - gpuXferRS).count();
-			auto gpuFunctor = duration_cast<nanoseconds>(gpuFunctorE - gpuFunctorS).count();
-			std::cout
-					<< "\tCPU aabbCpy= " << (aabbCpy / 1000000.0) << "ms\n"
-					<< "\tCPU zCurve = " << (zCurve / 1000000.0) << "ms\n"
-					<< "\tCPU sort   = " << (sort / 1000000.0) << "ms\n"
-					<< "\tCPU gt     = " << (gt / 1000000.0) << "ms\n"
-					<< "\tGPU xfer     = " << (gpuXfer / 1000000.0) << "ms\n"
-					<< "\tGPU xferR    = " << (gpuXferR / 1000000.0) << "ms\n"
-					<< "\tGPU functor  = " << (gpuFunctor / 1000000.0) << "ms\n"
-					<< "\tGPU kernel   = " << (gpuKernel / 1000000.0) << "ms\n"
-					<< std::endl;
-#endif
-
-
-			hrc::time_point mcStart = hrc::now();
-
+			auto march = watch.start("CPU mc");
 
 			std::vector<surface::Triangle<N>> triangles =
 					sampleLattice(100, config.scale,
-					              min, h / mcConfig.sampleResolution,
-					              mcLattice);
+								  minExtent, h / mcConfig.sampleResolution, mcLattice);
 
 
-			hrc::time_point mcEnd = hrc::now();
-
-			auto mc = duration_cast<nanoseconds>(mcEnd - mcStart).count();
-
-
+			march();
 
 
 //			std::vector<unsigned short> outIdx;
@@ -639,12 +637,16 @@ namespace ocl {
 //					<< "\n\tVBI   = " << (vbi / 1000000.0) << "ms\n"
 //					<< std::endl;
 
-			std::cout << "MC: " << (mc / 1000000.0) << "ms @ " << mcLattice.size() << " res="
-			          << mcLattice.xSize() << "x"
-			          << mcLattice.ySize() << "x"
-			          << mcLattice.zSize()
-			          << std::endl;
 
+
+#ifdef DEBUG
+			std::cout << "MC lattice: " << mcLattice.size() << " res="
+					  << mcLattice.xSize() << "x"
+					  << mcLattice.ySize() << "x"
+					  << mcLattice.zSize()
+					  << std::endl;
+			std::cout << watch << std::endl;
+#endif
 
 			return triangles;
 		}
