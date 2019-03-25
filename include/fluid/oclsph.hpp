@@ -133,6 +133,7 @@ namespace clutil {
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
 		                            " -w"
+							        " -cl-strict-aliasing"
 		                            " -cl-mad-enable"
 		                            " -cl-no-signed-zeros"
 		                            " -cl-unsafe-math-optimizations"

@@ -35,15 +35,15 @@ static const char velocity_z_[] = "velocity.z";
 template<typename T, typename N>
 static inline auto particleEntries() {
 	return mmf::makeEntries(
-			ENTRY(id_, CLS(fluid::Particle<T, N>), id),
-			ENTRY(type_, CLS(fluid::Particle<T, N>), type),
-			ENTRY(mass_, CLS(fluid::Particle<T, N>), mass),
-			ENTRY(position_x_, CLS(fluid::Particle<T, N>), position.x),
-			ENTRY(position_y_, CLS(fluid::Particle<T, N>), position.y),
-			ENTRY(position_z_, CLS(fluid::Particle<T, N>), position.z),
-			ENTRY(velocity_x_, CLS(fluid::Particle<T, N>), velocity.x),
-			ENTRY(velocity_y_, CLS(fluid::Particle<T, N>), velocity.y),
-			ENTRY(velocity_z_, CLS(fluid::Particle<T, N>), velocity.z)
+			DECL_MEMBER(id_, CLS(fluid::Particle<T, N>), id),
+			DECL_MEMBER(type_, CLS(fluid::Particle<T, N>), type),
+			DECL_MEMBER(mass_, CLS(fluid::Particle<T, N>), mass),
+			DECL_MEMBER(position_x_, CLS(fluid::Particle<T, N>), position.x),
+			DECL_MEMBER(position_y_, CLS(fluid::Particle<T, N>), position.y),
+			DECL_MEMBER(position_z_, CLS(fluid::Particle<T, N>), position.z),
+			DECL_MEMBER(velocity_x_, CLS(fluid::Particle<T, N>), velocity.x),
+			DECL_MEMBER(velocity_y_, CLS(fluid::Particle<T, N>), velocity.y),
+			DECL_MEMBER(velocity_z_, CLS(fluid::Particle<T, N>), velocity.z)
 	);
 }
 
@@ -63,15 +63,15 @@ static const char normal_z_[] = "normal.z";
 template<typename N>
 static inline auto triangleEntries() {
 	return mmf::makeEntries(
-			ENTRY(v0_x_, CLS(surface::Triangle<N>), v0.x),
-			ENTRY(v0_y_, CLS(surface::Triangle<N>), v0.y),
-			ENTRY(v0_z_, CLS(surface::Triangle<N>), v0.z),
-			ENTRY(v1_x_, CLS(surface::Triangle<N>), v1.x),
-			ENTRY(v1_y_, CLS(surface::Triangle<N>), v1.y),
-			ENTRY(v1_z_, CLS(surface::Triangle<N>), v1.z),
-			ENTRY(v2_x_, CLS(surface::Triangle<N>), v2.x),
-			ENTRY(v2_y_, CLS(surface::Triangle<N>), v2.y),
-			ENTRY(v2_z_, CLS(surface::Triangle<N>), v2.z)
+			DECL_MEMBER(v0_x_, CLS(surface::Triangle<N>), v0.x),
+			DECL_MEMBER(v0_y_, CLS(surface::Triangle<N>), v0.y),
+			DECL_MEMBER(v0_z_, CLS(surface::Triangle<N>), v0.z),
+			DECL_MEMBER(v1_x_, CLS(surface::Triangle<N>), v1.x),
+			DECL_MEMBER(v1_y_, CLS(surface::Triangle<N>), v1.y),
+			DECL_MEMBER(v1_z_, CLS(surface::Triangle<N>), v1.z),
+			DECL_MEMBER(v2_x_, CLS(surface::Triangle<N>), v2.x),
+			DECL_MEMBER(v2_y_, CLS(surface::Triangle<N>), v2.y),
+			DECL_MEMBER(v2_z_, CLS(surface::Triangle<N>), v2.z)
 //			ENTRY(normal_x_, CLS(surface::Triangle<N>), normal.x),
 //			ENTRY(normal_y_, CLS(surface::Triangle<N>), normal.y),
 //			ENTRY(normal_z_, CLS(surface::Triangle<N>), normal.z)
@@ -94,8 +94,8 @@ struct Header {
 
 static inline auto headerEntries() {
 	return mmf::makeEntries(
-			ENTRY(timestamp_, CLS(Header), timestamp),
-			ENTRY(entries_, CLS(Header), entries)
+			DECL_MEMBER(timestamp_, CLS(Header), timestamp),
+			DECL_MEMBER(entries_, CLS(Header), entries)
 	);
 }
 
@@ -210,9 +210,9 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (40) * 1000;
-	const size_t iter = 100000;
-	const size_t solverIter = 3;
+	const size_t pcount = (120) * 1000;
+	const size_t iter = 10;
+	const size_t solverIter = 5;
 	const num_t scaling = 650; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;

@@ -51,123 +51,143 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 	       (float3) (0.f);
 }
 
+#define FOR_SINGLE_GRID(zIndex, b, atoms, gridTable, gridTableN, op) \
+{ \
+    const size_t __offset = (zIndex); \
+    const size_t __start = (gridTable)[__offset]; \
+    const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
+    for (size_t __ni = __start; __ni < __end; ++__ni)  { \
+        const global ClSphAtom *b = &(atoms)[__ni]; \
+        op; \
+    } \
+} \
+
+#define SWP_(x, y, d) \
+{ \
+    const size_t __tmp = min((d)[(y)], (d)[(x)]); \
+    (d)[(y)] = max((d)[(y)], (d)[(x)]); \
+    (d)[(x)] = __tmp; \
+}; \
+
+
+inline void sortArray27(size_t d[27]) {
+	// optimal sort network
+	//@formatter:off
+	SWP_(1, 2, d) SWP_(0, 2, d) SWP_(0, 1, d) SWP_(4, 5, d) SWP_(3, 5, d) SWP_(3, 4, d)
+	SWP_(0, 3, d) SWP_(1, 4, d) SWP_(2, 5, d) SWP_(2, 4, d) SWP_(1, 3, d) SWP_(2, 3, d)
+	SWP_(7, 8, d) SWP_(6, 8, d) SWP_(6, 7, d) SWP_(9, 10, d) SWP_(11, 12, d) SWP_(9, 11, d)
+	SWP_(10, 12, d) SWP_(10, 11, d) SWP_(6, 10, d) SWP_(6, 9, d) SWP_(7, 11, d) SWP_(8, 12, d)
+	SWP_(8, 11, d) SWP_(7, 9, d) SWP_(8, 10, d) SWP_(8, 9, d) SWP_(0, 7, d) SWP_(0, 6, d)
+	SWP_(1, 8, d) SWP_(2, 9, d) SWP_(2, 8, d) SWP_(1, 6, d) SWP_(2, 7, d) SWP_(2, 6, d)
+	SWP_(3, 10, d) SWP_(4, 11, d) SWP_(5, 12, d) SWP_(5, 11, d) SWP_(4, 10, d) SWP_(5, 10, d)
+	SWP_(3, 7, d) SWP_(3, 6, d) SWP_(4, 8, d) SWP_(5, 9, d) SWP_(5, 8, d) SWP_(4, 6, d)
+	SWP_(5, 7, d) SWP_(5, 6, d) SWP_(14, 15, d) SWP_(13, 15, d) SWP_(13, 14, d) SWP_(16, 17, d)
+	SWP_(18, 19, d) SWP_(16, 18, d) SWP_(17, 19, d) SWP_(17, 18, d) SWP_(13, 17, d) SWP_(13, 16, d)
+	SWP_(14, 18, d) SWP_(15, 19, d) SWP_(15, 18, d) SWP_(14, 16, d) SWP_(15, 17, d) SWP_(15, 16, d)
+	SWP_(21, 22, d) SWP_(20, 22, d) SWP_(20, 21, d) SWP_(23, 24, d) SWP_(25, 26, d) SWP_(23, 25, d)
+	SWP_(24, 26, d) SWP_(24, 25, d) SWP_(20, 24, d) SWP_(20, 23, d) SWP_(21, 25, d) SWP_(22, 26, d)
+	SWP_(22, 25, d) SWP_(21, 23, d) SWP_(22, 24, d) SWP_(22, 23, d) SWP_(13, 20, d) SWP_(14, 21, d)
+	SWP_(15, 22, d) SWP_(15, 21, d) SWP_(14, 20, d) SWP_(15, 20, d) SWP_(16, 23, d) SWP_(17, 24, d)
+	SWP_(17, 23, d) SWP_(18, 25, d) SWP_(19, 26, d) SWP_(19, 25, d) SWP_(18, 23, d) SWP_(19, 24, d)
+	SWP_(19, 23, d) SWP_(16, 20, d) SWP_(17, 21, d) SWP_(17, 20, d) SWP_(18, 22, d) SWP_(19, 22, d)
+	SWP_(18, 20, d) SWP_(19, 21, d) SWP_(19, 20, d) SWP_(0, 14, d) SWP_(0, 13, d) SWP_(1, 15, d)
+	SWP_(2, 16, d) SWP_(2, 15, d) SWP_(1, 13, d) SWP_(2, 14, d) SWP_(2, 13, d) SWP_(3, 17, d)
+	SWP_(4, 18, d) SWP_(5, 19, d) SWP_(5, 18, d) SWP_(4, 17, d) SWP_(5, 17, d) SWP_(3, 14, d)
+	SWP_(3, 13, d) SWP_(4, 15, d) SWP_(5, 16, d) SWP_(5, 15, d) SWP_(4, 13, d) SWP_(5, 14, d)
+	SWP_(5, 13, d) SWP_(6, 20, d) SWP_(7, 21, d) SWP_(8, 22, d) SWP_(8, 21, d) SWP_(7, 20, d)
+	SWP_(8, 20, d) SWP_(9, 23, d) SWP_(10, 24, d) SWP_(10, 23, d) SWP_(11, 25, d) SWP_(12, 26, d)
+	SWP_(12, 25, d) SWP_(11, 23, d) SWP_(12, 24, d) SWP_(12, 23, d) SWP_(9, 20, d) SWP_(10, 21, d)
+	SWP_(10, 20, d) SWP_(11, 22, d) SWP_(12, 22, d) SWP_(11, 20, d) SWP_(12, 21, d) SWP_(12, 20, d)
+	SWP_(6, 13, d) SWP_(7, 14, d) SWP_(8, 15, d) SWP_(8, 14, d) SWP_(7, 13, d) SWP_(8, 13, d)
+	SWP_(9, 16, d) SWP_(10, 17, d) SWP_(10, 16, d) SWP_(11, 18, d) SWP_(12, 19, d) SWP_(12, 18, d)
+	SWP_(11, 16, d) SWP_(12, 17, d) SWP_(12, 16, d) SWP_(9, 13, d) SWP_(10, 14, d) SWP_(10, 13, d)
+	SWP_(11, 15, d) SWP_(12, 15, d) SWP_(11, 13, d) SWP_(12, 14, d) SWP_(12, 13, d)
+	//@formatter:on
+}
+
 #define SORTED
 
 #ifdef SORTED
 
-static inline void sortArray27(size_t d[27]) {
-	// optimal sort network
-#define SWAP(x, y) { const size_t tmp = min(d[y], d[x]); d[y] = max(d[y], d[x]); d[x] = tmp; };
-	//@formatter:off
-	SWAP(1, 2) SWAP(0, 2) SWAP(0, 1) SWAP(4, 5) SWAP(3, 5) SWAP(3, 4)
-	SWAP(0, 3) SWAP(1, 4) SWAP(2, 5) SWAP(2, 4) SWAP(1, 3) SWAP(2, 3)
-	SWAP(7, 8) SWAP(6, 8) SWAP(6, 7) SWAP(9, 10) SWAP(11, 12) SWAP(9, 11)
-	SWAP(10, 12) SWAP(10, 11) SWAP(6, 10) SWAP(6, 9) SWAP(7, 11) SWAP(8, 12)
-	SWAP(8, 11) SWAP(7, 9) SWAP(8, 10) SWAP(8, 9) SWAP(0, 7) SWAP(0, 6)
-	SWAP(1, 8) SWAP(2, 9) SWAP(2, 8) SWAP(1, 6) SWAP(2, 7) SWAP(2, 6)
-	SWAP(3, 10) SWAP(4, 11) SWAP(5, 12) SWAP(5, 11) SWAP(4, 10) SWAP(5, 10)
-	SWAP(3, 7) SWAP(3, 6) SWAP(4, 8) SWAP(5, 9) SWAP(5, 8) SWAP(4, 6)
-	SWAP(5, 7) SWAP(5, 6) SWAP(14, 15) SWAP(13, 15) SWAP(13, 14) SWAP(16, 17)
-	SWAP(18, 19) SWAP(16, 18) SWAP(17, 19) SWAP(17, 18) SWAP(13, 17) SWAP(13, 16)
-	SWAP(14, 18) SWAP(15, 19) SWAP(15, 18) SWAP(14, 16) SWAP(15, 17) SWAP(15, 16)
-	SWAP(21, 22) SWAP(20, 22) SWAP(20, 21) SWAP(23, 24) SWAP(25, 26) SWAP(23, 25)
-	SWAP(24, 26) SWAP(24, 25) SWAP(20, 24) SWAP(20, 23) SWAP(21, 25) SWAP(22, 26)
-	SWAP(22, 25) SWAP(21, 23) SWAP(22, 24) SWAP(22, 23) SWAP(13, 20) SWAP(14, 21)
-	SWAP(15, 22) SWAP(15, 21) SWAP(14, 20) SWAP(15, 20) SWAP(16, 23) SWAP(17, 24)
-	SWAP(17, 23) SWAP(18, 25) SWAP(19, 26) SWAP(19, 25) SWAP(18, 23) SWAP(19, 24)
-	SWAP(19, 23) SWAP(16, 20) SWAP(17, 21) SWAP(17, 20) SWAP(18, 22) SWAP(19, 22)
-	SWAP(18, 20) SWAP(19, 21) SWAP(19, 20) SWAP(0, 14) SWAP(0, 13) SWAP(1, 15)
-	SWAP(2, 16) SWAP(2, 15) SWAP(1, 13) SWAP(2, 14) SWAP(2, 13) SWAP(3, 17)
-	SWAP(4, 18) SWAP(5, 19) SWAP(5, 18) SWAP(4, 17) SWAP(5, 17) SWAP(3, 14)
-	SWAP(3, 13) SWAP(4, 15) SWAP(5, 16) SWAP(5, 15) SWAP(4, 13) SWAP(5, 14)
-	SWAP(5, 13) SWAP(6, 20) SWAP(7, 21) SWAP(8, 22) SWAP(8, 21) SWAP(7, 20)
-	SWAP(8, 20) SWAP(9, 23) SWAP(10, 24) SWAP(10, 23) SWAP(11, 25) SWAP(12, 26)
-	SWAP(12, 25) SWAP(11, 23) SWAP(12, 24) SWAP(12, 23) SWAP(9, 20) SWAP(10, 21)
-	SWAP(10, 20) SWAP(11, 22) SWAP(12, 22) SWAP(11, 20) SWAP(12, 21) SWAP(12, 20)
-	SWAP(6, 13) SWAP(7, 14) SWAP(8, 15) SWAP(8, 14) SWAP(7, 13) SWAP(8, 13)
-	SWAP(9, 16) SWAP(10, 17) SWAP(10, 16) SWAP(11, 18) SWAP(12, 19) SWAP(12, 18)
-	SWAP(11, 16) SWAP(12, 17) SWAP(12, 16) SWAP(9, 13) SWAP(10, 14) SWAP(10, 13)
-	SWAP(11, 15) SWAP(12, 15) SWAP(11, 13) SWAP(12, 14) SWAP(12, 13)
-	//@formatter:on
-#undef SWAP
-}
-
-#define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
+#define FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, op) \
 { \
-    const uint3 __coord = (uint3) ( \
-            coordAtZCurveGridIndex0((zIndex) ), \
-            coordAtZCurveGridIndex1((zIndex) ), \
-            coordAtZCurveGridIndex2((zIndex) )); \
+    const uint __x = coordAtZCurveGridIndex0((zIndex)); \
+    const uint __y = coordAtZCurveGridIndex1((zIndex)); \
+    const uint __z = coordAtZCurveGridIndex2((zIndex)); \
     size_t __offsets[27] = { \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z - 1), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z + 0), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y - 1, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y - 1, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y - 1, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 0, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 0, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 0, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x - 1, __coord.y + 1, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 0, __coord.y + 1, __coord.z + 1), \
-        zCurveGridIndexAtCoord(__coord.x + 1, __coord.y + 1, __coord.z + 1) \
+        zCurveGridIndexAtCoord(__x - 1, __y - 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y - 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y - 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 0, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 0, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 0, __z - 1), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 1, __z - 1), \
+        zCurveGridIndexAtCoord(__x - 1, __y - 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 0, __y - 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 1, __y - 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 0, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 0, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 0, __z + 0), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 0), \
+        zCurveGridIndexAtCoord(__x - 1, __y - 1, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y - 1, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y - 1, __z + 1), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 0, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 0, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 0, __z + 1), \
+        zCurveGridIndexAtCoord(__x - 1, __y + 1, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 1), \
+        zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 1) \
     }; \
     sortArray27(__offsets);  \
-    for (size_t __i = 0; __i < 27; ++__i) { \
-        const size_t __offset = __offsets[__i]; \
-        const size_t __start = (gridTable)[__offset]; \
-        const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
-        for (size_t __ni = __start; __ni < __end; ++__ni) { \
-            const global ClSphAtom *b = &(atoms)[__ni]; \
-
-
-#define FOR_EACH_NEIGHBOUR_END  \
-        } \
-    } \
+    for(size_t __i = 0; __i < 27; __i++) \
+        FOR_SINGLE_GRID(__offsets[__i], b, atoms, gridTable, gridTableN, op);  \
 } \
 
 #else
 
-#define FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN) \
+#define FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, op) \
 { \
-	const uint3 __coord = (uint3) ( \
-			coordAtZCurveGridIndex0((zIndex)), \
-			coordAtZCurveGridIndex1((zIndex)), \
-			coordAtZCurveGridIndex2((zIndex))); \
-	for (size_t __i = 0; __i < 27; ++__i) { \
-		const uint3 __delta = __coord + NEIGHBOUR_OFFSETS[__i]; \
-		const size_t __offset = zCurveGridIndexAtCoord(__delta.x, __delta.y, __delta.z); \
-		const size_t __start = (gridTable)[__offset]; \
-		const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
-		for (size_t __ni = __start; __ni < __end; ++__ni)  { \
-			const global ClSphAtom *b = &(atoms)[__ni]; \
-
-#define FOR_EACH_NEIGHBOUR_END  \
-		} \
-	} \
+	const uint __x = coordAtZCurveGridIndex0((zIndex)); \
+	const uint __y = coordAtZCurveGridIndex1((zIndex)); \
+	const uint __z = coordAtZCurveGridIndex2((zIndex)); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y - 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y - 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y - 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 0, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 0, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 0, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 1, __z - 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y - 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y - 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y - 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 0, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 0, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 0, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 0), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y - 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y - 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y - 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 0, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 0, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 0, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x - 1, __y + 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
+	FOR_SINGLE_GRID(zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 1), b, atoms, gridTable, gridTableN, op); \
 } \
-
-
 
 #endif
 
 
-inline static float fast_length_sq(float3 a){
+inline float fast_length_sq(float3 a) {
 	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
 }
 
@@ -182,11 +202,12 @@ kernel void sph_lambda(
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
 	const float oneOverRho = 1.f / RHO;
-	FOR_EACH_NEIGHBOUR_BEGIN(a->zIndex, b, atoms, atomN, gridTable, gridTableN)
-				const float r = fast_distance(a->pStar, b->pStar);
-				norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), oneOverRho, norm2V);
-				rho = mad(b->particle.mass, poly6Kernel(r), rho);
-	FOR_EACH_NEIGHBOUR_END
+	FOR_EACH_NEIGHBOUR(a->zIndex, b, atoms, atomN, gridTable, gridTableN, {
+		const float r = fast_distance(a->pStar, b->pStar);
+		norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), oneOverRho, norm2V);
+		rho = mad(b->particle.mass, poly6Kernel(r), rho);
+	});
+
 
 	float norm2 = fast_length_sq(norm2V); // dot self = length2
 	float C1 = (rho / RHO - 1.f);
@@ -209,12 +230,12 @@ kernel void sph_delta(
 	float3 deltaP = (float3) (0.f);
 
 
-	FOR_EACH_NEIGHBOUR_BEGIN(a->zIndex, b, atoms, atomN, gridTable, gridTableN)
-				const float r = fast_distance(a->pStar, b->pStar);
-				const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
-				const float factor = (a->lambda + b->lambda + corr) / RHO;
-				deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
-	FOR_EACH_NEIGHBOUR_END
+	FOR_EACH_NEIGHBOUR(a->zIndex, b, atoms, atomN, gridTable, gridTableN, {
+		const float r = fast_distance(a->pStar, b->pStar);
+		const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
+		const float factor = (a->lambda + b->lambda + corr) / RHO;
+		deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
+	});
 
 	a->deltaP = deltaP;
 
@@ -296,14 +317,14 @@ kernel void sph_create_field(
 	const float sN = pown(mcConfig.particleSize, 2);
 	const float threshold = H * config.scale * 1;
 	float v = 0.f;
-	FOR_EACH_NEIGHBOUR_BEGIN(zIndex, b, atoms, atomN, gridTable, gridTableN)
-				if (fast_distance(b->particle.position, a) < threshold) {
-					const float3 l = (b->particle.position) - a;
-					const float len = fast_length_sq(l);
-					v += (sN /
-					      pow(len, mcConfig.particleInfluence));
+	FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, {
+		if (fast_distance(b->particle.position, a) < threshold) {
+			const float3 l = (b->particle.position) - a;
+			const float len = fast_length_sq(l);
+			v += (sN /
+			      pow(len, mcConfig.particleInfluence));
 
-				}
-	FOR_EACH_NEIGHBOUR_END
+		}
+	});
 	field[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
 }

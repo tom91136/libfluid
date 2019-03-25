@@ -10,7 +10,7 @@
 namespace mmf {
 
 #define CLS(...) __VA_ARGS__
-#define ENTRY(name, CLS, F)  mmf::Entry<name, decltype(CLS::F), CLS>( \
+#define DECL_MEMBER(name, CLS, F)  mmf::Entry<name, decltype(CLS::F), CLS>( \
             [](const CLS &x) { return x.F; }, \
             [](CLS &x, const decltype(CLS::F) &v) { x.F = v; } ) \
 
@@ -45,7 +45,7 @@ namespace mmf {
 
 
 		template<typename W>
-		inline size_t read(W &sink, const Struct &s, const size_t offset) {
+		inline size_t read(const W &sink, Struct &s, const size_t offset) {
 			union {
 				Type d;
 				unsigned char bytes[size];
@@ -153,18 +153,18 @@ namespace mmf {
 
 	namespace reader {
 		template<typename W, class S, class T>
-		inline static size_t read(W &w, const S &s, const size_t offset, T &t) {
+		inline static size_t read(const W &w, S &s, const size_t offset, T &t) {
 			return t.read(w, s, offset);
 		}
 
 		template<typename W, class S, class T, class ...Rest>
-		inline static size_t read(W &w, const S &s, const size_t offset, T t, Rest...es) {
+		inline static size_t read(const W &w, S &s, const size_t offset, T t, Rest...es) {
 			size_t next = read(w, s, offset, t);
 			return read(w, s, next, es...);
 		}
 
 		template<typename W, class S, std::size_t... Is, class ...Rest>
-		inline static size_t readPacked_impl(W &w, const S &s, const size_t offset,
+		inline static size_t readPacked_impl(const W &w, S &s, const size_t offset,
 		                                     const std::tuple<Rest...> &xs,
 		                                     const std::index_sequence<Is...>) {
 			return read(w, s, offset, std::get<Is>(xs)...);
@@ -172,7 +172,7 @@ namespace mmf {
 
 		template<typename W, class S, class ...Rest>
 		inline static size_t
-		readPacked(W &w, const S &s, const size_t offset, const Entries<Rest...> &e) {
+		readPacked(const W &w, S &s, const size_t offset, const Entries<Rest...> &e) {
 			return readPacked_impl(w, s, offset, e.args, std::index_sequence_for<Rest...>());
 		}
 

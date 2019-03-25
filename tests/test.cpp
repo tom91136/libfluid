@@ -2,8 +2,10 @@
 #include <catch2/catch.hpp>
 #include <chrono>
 #include <iostream>
+#include <mmf.hpp>
 #include "fluid/fluid.hpp"
 #include "fluid/cpusph.hpp"
+#include "mio/mmap.hpp"
 
 using namespace fluid;
 using glm::tvec3;
@@ -11,6 +13,121 @@ using glm::tvec3;
 typedef float num_t;
 typedef tvec3<num_t> v3n;
 typedef size_t p_t;
+
+
+mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
+	std::ofstream file(path, std::ios::out | std::ios::trunc);
+	std::string s(length, ' ');
+	file << s;
+
+	std::error_code error;
+	mio::mmap_sink sink = mio::make_mmap_sink(path, 0, mio::map_entire_file, error);
+	if (error) {
+		std::cout << "MMF(" << path << ") failed:" << error.message() << std::endl;
+		exit(1);
+	} else {
+		std::cout << "MMF(" << path << ") size: "
+		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+	}
+	return sink;
+}
+
+template<typename T>
+struct Foo {
+	T a, b, c;
+	char _c{};
+	int _i{};
+	long _l{};
+
+	Foo(T a, T b, T c, char _c, int _i, long _l) : a(a), b(b), c(c), _c(_c), _i(_i), _l(_l) {}
+
+	Foo() = default;
+
+	bool operator==(const Foo &rhs) const {
+		return a == rhs.a && b == rhs.b && c == rhs.c &&
+		       _c == rhs._c && _i == rhs._i && _l == rhs._l;
+	}
+
+	bool operator!=(const Foo &rhs) const {
+		return !(rhs == *this);
+	}
+
+	friend std::ostream &operator<<(std::ostream &os, const Foo &foo) {
+		os << "a: " << foo.a << " b: " << foo.b << " c: " << foo.c <<
+		   " _c: " << foo._c << " _i: " << foo._i << " _l: " << foo._l;
+		return os;
+	}
+};
+
+static const char a[] = "a";
+static const char b[] = "b";
+static const char c[] = "c";
+
+static const char _c[] = "_c";
+static const char _i[] = "_i";
+static const char _l[] = "_l";
+
+template<typename T>
+static inline auto fooEntries() {
+	return mmf::makeEntries(
+			DECL_MEMBER(a, CLS(Foo<T>), a),
+			DECL_MEMBER(b, CLS(Foo<T>), b),
+			DECL_MEMBER(c, CLS(Foo<T>), c),
+			DECL_MEMBER(_c, CLS(Foo<T>), _c),
+			DECL_MEMBER(_i, CLS(Foo<T>), _i),
+			DECL_MEMBER(_l, CLS(Foo<T>), _l)
+	);
+}
+
+
+TEST_CASE("mmf ipc is isomorphic") {
+
+	auto fe = fooEntries<float>();
+
+	auto meta = mmf::meta::writeMetaPacked<decltype(fe)>();
+
+	std::vector<char> buffer(meta.first);
+
+	auto expected = Foo<float>(
+			glm::pi<float>(),
+			glm::half_pi<float>(),
+			glm::quarter_pi<float>(),
+			'z', 42, 44);
+
+
+	SECTION("offset is correct") {
+		REQUIRE(meta.first ==
+		        sizeof(Foo<float>::a) + sizeof(Foo<float>::b) + sizeof(Foo<float>::c) +
+		        sizeof(Foo<float>::_c) + sizeof(Foo<float>::_i) + sizeof(Foo<float>::_l)
+		);
+	}
+
+	SECTION("offset is correct after write") {
+		size_t offset = mmf::writer::writePacked(buffer, expected, 0, fe);
+		REQUIRE(meta.first == offset);
+	}
+
+	SECTION("object is not actually equal before read") {
+		auto actual = Foo<float>();
+		REQUIRE(actual != expected);
+	}
+
+	SECTION("offset is correct after read") {
+		auto actual = Foo<float>();
+		// no need to write first
+		size_t offset = mmf::reader::readPacked(buffer, actual, 0, fe);
+		REQUIRE(meta.first == offset);
+	}
+
+	SECTION("data is preserved") {
+		auto actual = Foo<float>();
+		mmf::writer::writePacked(buffer, expected, 0, fe);
+		mmf::reader::readPacked(buffer, actual, 0, fe);
+		REQUIRE(actual == expected);
+	}
+
+
+}
 
 TEST_CASE("Solver is correct") {
 
