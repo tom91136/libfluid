@@ -1,4 +1,5 @@
 #include "oclsph_type.h"
+#include "oclsph_collision.h"
 #include "zcurve.h"
 
 
@@ -217,8 +218,9 @@ kernel void sph_lambda(
 
 kernel void sph_delta(
 		const ClSphConfig config,
-		global ClSphAtom *atoms, uint atomN,
-		const global uint *gridTable, uint gridTableN
+		global ClSphAtom *atoms, const uint atomN,
+		const global uint *gridTable, const uint gridTableN,
+		const global ClSphTraiangle *mesh, const uint meshN
 ) {
 	const size_t id = get_global_id(0);
 
@@ -236,23 +238,23 @@ kernel void sph_delta(
 		const float factor = (a->lambda + b->lambda + corr) / RHO;
 		deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
 	});
-
 	a->deltaP = deltaP;
 
 	// collision
 
 
-	float3 currentP = (a->pStar + a->deltaP) * config.scale;
-	float3 currentV = a->particle.velocity;
-//	currentP = clamp(currentP, -500.f, 500.f);
+	ClSphResponse resp;
+	resp.position = (a->pStar + a->deltaP) * config.scale;
+	resp.velocity = a->particle.velocity;
+
+	collideTriangle2(mesh, meshN, a->particle.position, &resp);
+
+	// clamp to extent
+	resp.position = min(config.max, max(config.min, resp.position));
 
 
-	currentP = min(config.max, max(config.min, currentP));
-
-	// TODO handle colliders
-
-	a->pStar = currentP / config.scale;
-	a->particle.velocity = currentV;
+	a->pStar = resp.position / config.scale;
+	a->particle.velocity = resp.velocity;
 
 
 #ifdef DEBUG

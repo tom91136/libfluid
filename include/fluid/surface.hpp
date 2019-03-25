@@ -421,6 +421,45 @@ namespace surface {
 
 
 	template<typename N>
+	void indexVBOOne(tvec3<N> point,
+	                 std::vector<unsigned short> &out_indices,
+	                 std::vector<tvec3<N>> &out_vertices,
+	                 std::map<PackedVertex<N>, unsigned short> &VertexToOutIndex
+	) {
+
+
+		PackedVertex<N> packed = {point};
+		// Try to find a similar vertex in out_XXXX
+		unsigned short index;
+		bool found = getSimilarVertexIndex_fast(packed, VertexToOutIndex, index);
+		if (found) { // A similar vertex is already in the VBO, use it instead !
+			out_indices.push_back(index);
+		} else { // If not, it needs to be added in the output data.
+			out_vertices.push_back(point);
+			unsigned short newindex = (unsigned short) out_vertices.size() - 1;
+			out_indices.push_back(newindex);
+			VertexToOutIndex[packed] = newindex;
+		}
+	}
+
+
+	template<typename N>
+	void indexVBO2(
+			const std::vector<Triangle<N>> &in_vertices,
+			std::vector<unsigned short> &out_indices,
+			std::vector<tvec3<N>> &out_vertices
+	) {
+
+		std::map<PackedVertex<N>, unsigned short> VertexToOutIndex;
+		for (size_t i = 0; i < in_vertices.size(); i++) {
+			indexVBOOne(in_vertices[i].v0, out_indices, out_vertices, VertexToOutIndex);
+			indexVBOOne(in_vertices[i].v1, out_indices, out_vertices, VertexToOutIndex);
+			indexVBOOne(in_vertices[i].v2, out_indices, out_vertices, VertexToOutIndex);
+		}
+	}
+
+
+	template<typename N>
 	struct GridCell {
 		std::array<tvec3<N>, 8> p;
 		std::array<N, 8> val;

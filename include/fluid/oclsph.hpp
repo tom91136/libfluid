@@ -133,7 +133,7 @@ namespace clutil {
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
 		                            " -w"
-							        " -cl-strict-aliasing"
+		                            " -cl-strict-aliasing"
 		                            " -cl-mad-enable"
 		                            " -cl-no-signed-zeros"
 		                            " -cl-unsafe-math-optimizations"
@@ -279,7 +279,7 @@ namespace ocl {
 //							nns[j] = (tvec3<N>(offset) * step + min) * scale;
 
 						}
-						surface::marchSingle(isolevel, ns,   vs, triangles);
+						surface::marchSingle(isolevel, ns, vs, triangles);
 					}
 				}
 			}
@@ -387,6 +387,26 @@ namespace ocl {
 
 			hrc::time_point gtE = hrc::now();
 
+
+			hrc::time_point combineColliderS = hrc::now();
+
+
+			std::vector<ClSphTraiangle> hostColliderMesh;
+
+			for (int i = 0; i < static_cast<int>(colliders.size()); ++i) {
+				auto xs = colliders[i].triangles;
+				for (int j = 0; j <static_cast<int>(xs.size()); ++j) {
+					ClSphTraiangle trig;
+					trig.a = clutil::vec3ToCl(xs[i].v0);
+					trig.b = clutil::vec3ToCl(xs[i].v1);
+					trig.c = clutil::vec3ToCl(xs[i].v2);
+					hostColliderMesh.push_back(trig);
+				}
+			}
+
+			hrc::time_point combineColliderE = hrc::now();
+
+
 #ifdef DEBUG
 
 			std::cout << "atomsN = " << atomsN
@@ -406,7 +426,7 @@ namespace ocl {
 			std::vector<ClSphParticle> copiedParticles(atomsN);
 
 			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 2.f;
+			mcConfig.sampleResolution = 3.f;
 			mcConfig.particleSize = 50.f;
 			mcConfig.particleInfluence = 0.8;
 
@@ -418,6 +438,11 @@ namespace ocl {
 			hrc::time_point da1 = hrc::now();
 			cl::Buffer deviceAtoms(queue, hostAtoms.begin(), hostAtoms.end(), false);
 			hrc::time_point da2 = hrc::now();
+
+
+			cl::Buffer deviceColliderMesh(queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
+
+
 
 #ifdef DEBUG
 			std::cout << "Device atoms: "
@@ -457,7 +482,8 @@ namespace ocl {
 					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint
 			>(clsph, "sph_lambda");
 			auto deltaKernel = cl::KernelFunctor<
-					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint
+					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
+					cl::Buffer &, uint
 			>(clsph, "sph_delta");
 			auto finaliseKernel = cl::KernelFunctor<
 					ClSphConfig &, cl::Buffer &, cl::Buffer &
@@ -492,7 +518,10 @@ namespace ocl {
 							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
-							deviceGridTable, static_cast<uint>(gridTableN));
+							deviceGridTable, static_cast<uint>(gridTableN),
+					deviceColliderMesh, static_cast<uint>(hostColliderMesh.size())
+
+					);
 				}
 
 
@@ -593,10 +622,29 @@ namespace ocl {
 
 			auto mc = duration_cast<nanoseconds>(mcEnd - mcStart).count();
 
+
+
+
+//			std::vector<unsigned short> outIdx;
+//			std::vector<tvec3<N>> outVert;
+//			hrc::time_point vbiStart = hrc::now();
+//			surface::indexVBO2<N>(triangles, outIdx, outVert);
+//			hrc::time_point vbiEnd = hrc::now();
+//			auto vbi = duration_cast<nanoseconds>(vbiEnd - vbiStart).count();
+//
+//			std::cout
+//					<< "\n\tTrigs = " << triangles.size()
+//					<< "\n\tIdx   = " << outIdx.size()
+//					<< "\n\tVert  = " << outVert.size()
+//					<< "\n\tVBI   = " << (vbi / 1000000.0) << "ms\n"
+//					<< std::endl;
+
 			std::cout << "MC: " << (mc / 1000000.0) << "ms @ " << mcLattice.size() << " res="
 			          << mcLattice.xSize() << "x"
 			          << mcLattice.ySize() << "x"
-			          << mcLattice.zSize() << std::endl;
+			          << mcLattice.zSize()
+			          << std::endl;
+
 
 			return triangles;
 		}

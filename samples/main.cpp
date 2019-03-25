@@ -210,8 +210,8 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (120) * 1000;
-	const size_t iter = 10;
+	const size_t pcount = (40) * 1000;
+	const size_t iter = 5000;
 	const size_t solverIter = 5;
 	const num_t scaling = 650; // less = less space between particle
 
