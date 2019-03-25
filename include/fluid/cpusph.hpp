@@ -187,7 +187,7 @@ namespace cpu {
 						(*a.p6ks)[l] = p6k;
 //						std::cout << "[" << a.particle->t << "]["<< b->particle->t << "]NS:" << nss  <<std::endl;
 
-						nss += b->particle->t;
+						nss += b->particle->id;
 					}
 					auto norm2 = glm::length2(norm2V);
 					N C = (rho / RHO - 1.f);

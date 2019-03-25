@@ -12,7 +12,7 @@
 #include "fluid/surface.hpp"
 #include "fluid/oclsph.hpp"
 #include "fluid/cpusph.hpp"
-#include "fluid/writer.hpp"
+#include "fluid/mmf.hpp"
 
 #include "omp.h"
 
@@ -22,7 +22,7 @@ typedef float num_t;
 using glm::tvec3;
 
 
-static const char t_[] = "t";
+static const char id_[] = "id";
 static const char type_[] = "type";
 static const char mass_[] = "mass";
 static const char position_x_[] = "position.x";
@@ -34,8 +34,8 @@ static const char velocity_z_[] = "velocity.z";
 
 template<typename T, typename N>
 static inline auto particleEntries() {
-	return writer::makeEntries(
-			ENTRY(t_, CLS(fluid::Particle<T, N>), t),
+	return mmf::makeEntries(
+			ENTRY(id_, CLS(fluid::Particle<T, N>), id),
 			ENTRY(type_, CLS(fluid::Particle<T, N>), type),
 			ENTRY(mass_, CLS(fluid::Particle<T, N>), mass),
 			ENTRY(position_x_, CLS(fluid::Particle<T, N>), position.x),
@@ -62,7 +62,7 @@ static const char normal_z_[] = "normal.z";
 
 template<typename N>
 static inline auto triangleEntries() {
-	return writer::makeEntries(
+	return mmf::makeEntries(
 			ENTRY(v0_x_, CLS(surface::Triangle<N>), v0.x),
 			ENTRY(v0_y_, CLS(surface::Triangle<N>), v0.y),
 			ENTRY(v0_z_, CLS(surface::Triangle<N>), v0.z),
@@ -93,7 +93,7 @@ struct Header {
 };
 
 static inline auto headerEntries() {
-	return writer::makeEntries(
+	return mmf::makeEntries(
 			ENTRY(timestamp_, CLS(Header), timestamp),
 			ENTRY(entries_, CLS(Header), entries)
 	);
@@ -103,18 +103,18 @@ template<typename T, typename N>
 void write_particles(mio::mmap_sink &sink, const std::vector<fluid::Particle<T, N>> &xs) {
 
 	Header header = Header(xs.size());
-	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
+	size_t offset = mmf::writer::writePacked(sink, header, 0, headerEntries());
 	for (const fluid::Particle<T, N> &p :  xs) {
-		offset = writer::writePacked(sink, p, offset, particleEntries<T, N>());
+		offset = mmf::writer::writePacked(sink, p, offset, particleEntries<T, N>());
 	}
 }
 
 template<typename N>
 void write_triangles(mio::mmap_sink &sink, const std::vector<surface::Triangle<N>> &xs) {
 	Header header = Header(xs.size());
-	size_t offset = writer::writePacked(sink, header, 0, headerEntries());
+	size_t offset = mmf::writer::writePacked(sink, header, 0, headerEntries());
 	for (const surface::Triangle<N> &t :  xs) {
-		offset = writer::writePacked(sink, t, offset, triangleEntries<N>());
+		offset = mmf::writer::writePacked(sink, t, offset, triangleEntries<N>());
 	}
 }
 
@@ -193,9 +193,9 @@ int main(int argc, char *argv[]) {
 
 void run() {
 
-	auto particleType = writer::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
-	auto triangleType = writer::writeMetaPacked<decltype(triangleEntries<num_t>())>();
-	auto headerType = writer::writeMetaPacked<decltype(headerEntries())>();
+	auto particleType = mmf::meta::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
+	auto triangleType = mmf::meta::writeMetaPacked<decltype(triangleEntries<num_t>())>();
+	auto headerType = mmf::meta::writeMetaPacked<decltype(headerEntries())>();
 
 	writeFile("header.json", headerType.second.dump(1));
 	writeFile("particle.json", particleType.second.dump(1));
@@ -211,10 +211,9 @@ void run() {
 
 	omp_set_num_threads(4);
 	const size_t pcount = (40) * 1000;
-	const size_t iter = 5000;
+	const size_t iter = 100000;
 	const size_t solverIter = 3;
 	const num_t scaling = 650; // less = less space between particle
-
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;

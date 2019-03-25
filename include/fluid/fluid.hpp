@@ -26,7 +26,7 @@ namespace fluid {
 
 	template<typename T, typename N>
 	struct Particle {
-		T t;
+		T id;
 		Type type;
 		N mass;
 		tvec3<N> position;
@@ -35,13 +35,13 @@ namespace fluid {
 
 		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
 		                  const tvec3<N> &velocity) :
-				t(t), type(type), mass(mass), position(position), velocity(velocity) {
+				id(t), type(type), mass(mass), position(position), velocity(velocity) {
 //			neighbours = std::make_unique<std::vector<uint32_t >>();
 
 		}
 
 		friend std::ostream &operator<<(std::ostream &os, const Particle &particle) {
-			os << "t: " << particle.t
+			os << "t: " << particle.id
 			   << ", mass: " << particle.mass
 			   << ", pos: " << glm::to_string(particle.position)
 			   << ", vel: " << glm::to_string(particle.velocity);
@@ -49,7 +49,7 @@ namespace fluid {
 		}
 
 		bool operator==(const Particle &rhs) const {
-			return t == rhs.t &&
+			return id == rhs.id &&
 			       mass == rhs.mass &&
 			       position == rhs.position &&
 			       velocity == rhs.velocity;

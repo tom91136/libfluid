@@ -317,7 +317,7 @@ namespace ocl {
 				const tvec3<N> pStar = (velocity * config.dt) + (p.position / config.scale);
 				ClSphAtom &atom = hostAtoms[i];
 				ClSphParticle &particle = atom.particle;
-				particle.id = p.t,
+				particle.id = p.id,
 				particle.type = resolve(p.type),
 				particle.mass = p.mass,
 				particle.position = clutil::vec3ToCl(p.position),
@@ -539,7 +539,7 @@ namespace ocl {
 				const ClSphParticle &p = copiedParticles[i];
 				fluid::Particle<T, N> &particle = xs[i];
 
-				particle.t = static_cast<T>(p.id);
+				particle.id = static_cast<T>(p.id);
 				particle.type = resolve(p.type);
 				particle.mass = static_cast<N>(p.mass);
 				particle.position = clutil::clToVec3<N>(p.position);

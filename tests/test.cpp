@@ -58,7 +58,7 @@ TEST_CASE("Solver is correct") {
 
 	for (size_t j = 0; j < 10; ++j) {
 		// FIXME values are wrong
-		REQUIRE(expected[j].t == actual[j].t);
+		REQUIRE(expected[j].id == actual[j].id);
 		REQUIRE(abs(expected[j].mass - actual[j].mass) < 0.001);
 		REQUIRE(glm::distance(expected[j].velocity, actual[j].velocity) < 0.95);
 		REQUIRE(glm::distance(expected[j].position, actual[j].position) < 0.95);
