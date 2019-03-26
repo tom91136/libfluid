@@ -299,8 +299,8 @@ namespace ocl {
 
 			struct Entry {
 				std::string name;
-				hrc::time_point begin;
-				hrc::time_point end;
+				time begin;
+				time end;
 				Entry(std::string name,
 					  const time &begin) : name(std::move(name)), begin(begin) {}
 			};
@@ -548,10 +548,10 @@ namespace ocl {
 				cl::Buffer deviceGridTable(
 						queue, hostGridTable.begin(), hostGridTable.end(), true);
 
-				cl::Buffer deviceParticles(
-						context, CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
-				cl::Buffer deviceFields(
-						context, CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
+				cl::Buffer deviceParticles(queue.getInfo<CL_QUEUE_CONTEXT>() ,
+				        CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
+				cl::Buffer deviceFields(queue.getInfo<CL_QUEUE_CONTEXT>() ,
+				        CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
 
 #ifdef DEBUG
 				queue.finish();
