@@ -112,10 +112,9 @@ inline void sortArray27(size_t d[27]) {
 
 #define FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, op) \
 { \
-    const uint __x = coordAtZCurveGridIndex0((zIndex)); \
-    const uint __y = coordAtZCurveGridIndex1((zIndex)); \
-    const uint __z = coordAtZCurveGridIndex2((zIndex)); \
-    if(__x == 0 || __y == 0 || __z == 0) return; \
+    const size_t __x = max((size_t) 1, coordAtZCurveGridIndex0((zIndex))); \
+    const size_t __y = max((size_t) 1, coordAtZCurveGridIndex1((zIndex))); \
+    const size_t __z = max((size_t) 1, coordAtZCurveGridIndex2((zIndex))); \
     size_t __offsets[27] = { \
         zCurveGridIndexAtCoord(__x - 1, __y - 1, __z - 1), \
         zCurveGridIndexAtCoord(__x + 0, __y - 1, __z - 1), \
@@ -248,7 +247,7 @@ kernel void sph_delta(
 	resp.position = (a->pStar + a->deltaP) * config.scale;
 	resp.velocity = a->particle.velocity;
 
-	collideTriangle2(mesh, meshN, a->particle.position, &resp);
+//	collideTriangle2(mesh, meshN, a->particle.position, &resp);
 
 	// clamp to extent
 	resp.position = min(config.maxBound, max(config.minBound, resp.position));
@@ -303,6 +302,9 @@ kernel void sph_create_field(
 		const global uint *gridTable, uint gridTableN,
 		const float3 min, const ClMcConfig mcConfig,
 		global float *field, const uint3 sizes) {
+
+
+
 
 	const size_t x = get_global_id(0);
 	const size_t y = get_global_id(1);
