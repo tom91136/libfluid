@@ -131,15 +131,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-				tvec3<N> origin,
-				std::vector<fluid::Particle<size_t, num_t >> &xs) {
+                tvec3<N> origin,
+                std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -216,9 +216,20 @@ void run() {
 	const num_t scaling = 650; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
-	size_t offset = 0;
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+//	size_t offset = 0;
+//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
+//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+
+	std::random_device dev;
+	std::mt19937 rng(dev());
+	std::uniform_int_distribution<std::mt19937::result_type> dist(1, 500);
+
+	for (size_t i = 0; i < pcount; ++i) {
+		xs.emplace_back(i, fluid::Fluid, 1.0,
+		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
+		                tvec3<num_t>(0));
+	}
+
 
 	std::cout << "Mark" << std::endl;
 
@@ -249,7 +260,7 @@ void run() {
 
 	if (found.size() > 1) {
 		std::cout << "Found more than one device signature:`" << signature
-				  << "`"  ", using the first one." << std::endl;
+		          << "`"  ", using the first one." << std::endl;
 	}
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
@@ -364,12 +375,12 @@ void run() {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-				  << "Solver:" << (solve / 1000000.0) << "ms "
-				  << "Surface:" << (param / 1000000.0) << "ms "
-				  << "IPC:" << (mmf / 1000000.0) << "ms "
-				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-				  << xs.size()
-				  << std::endl;
+		          << "Solver:" << (solve / 1000000.0) << "ms "
+		          << "Surface:" << (param / 1000000.0) << "ms "
+		          << "IPC:" << (mmf / 1000000.0) << "ms "
+		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+		          << xs.size()
+		          << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();

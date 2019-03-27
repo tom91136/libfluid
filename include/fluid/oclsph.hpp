@@ -1,6 +1,8 @@
 #include <utility>
 
 #include <utility>
+
+#include <utility>
 #include <iomanip>
 
 
@@ -35,7 +37,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-//#define DEBUG
+#define DEBUG
 
 namespace fsutils {
 
@@ -99,6 +101,8 @@ namespace clutil {
 							<< "\n\t│\t      ├Type    : " << d.getInfo<CL_DEVICE_TYPE>()
 							<< "\n\t│\t      ├Vendor  : " << d.getInfo<CL_DEVICE_VENDOR_ID>()
 							<< "\n\t│\t      ├Avail.  : " << d.getInfo<CL_DEVICE_AVAILABLE>()
+							<< "\n\t│\t      ├Max CU. : "
+							<< d.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>()
 							<< "\n\t│\t      └Version : " << d.getInfo<CL_DEVICE_VERSION>()
 							<< std::endl;
 				}
@@ -292,8 +296,8 @@ namespace ocl {
 				const std::string name;
 				const time begin;
 				time end;
-				Entry(const std::string &name,
-				      const time &begin) : name(name), begin(begin) {}
+				Entry(std::string name,
+				      const time &begin) : name(std::move(name)), begin(begin) {}
 			};
 
 			std::string name;
@@ -304,9 +308,9 @@ namespace ocl {
 
 		public:
 			std::function<void(void)> start(const std::string &name) {
-				entries.emplace_back(name, std::chrono::system_clock::now());
-				Entry &added = entries.back();
-				return [this, &added]() { added.end = std::chrono::system_clock::now(); };
+				const size_t size = entries.size();
+				entries.push_back(Entry(name, std::chrono::system_clock::now()));
+				return [size, this]() { entries[size].end = std::chrono::system_clock::now(); };
 			}
 
 			friend std::ostream &operator<<(std::ostream &os, const Stopwatch &stopwatch) {
@@ -528,10 +532,11 @@ namespace ocl {
 			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
 			std::vector<ClSphParticle> hostParticles(atomsN);
 
+			auto kernel_exec = watch.start("\t[GPU] ===total===");
 
 			try {
 
-				auto kernel_copy = watch.start("GPU kernel_copy");
+				auto kernel_copy = watch.start("\t[GPU] kernel_copy");
 				cl::Buffer deviceAtoms(
 						queue, hostAtoms.begin(), hostAtoms.end(), false);
 				cl::Buffer deviceColliderMesh(
@@ -549,9 +554,9 @@ namespace ocl {
 #endif
 				kernel_copy();
 
-				auto kernel_exec = watch.start("GPU kernel_exec");
 
-				auto lambda_delta = watch.start("GPU sph: lambda+delta*" + config.iteration);
+				auto lambda_delta = watch.start(
+						"\t[GPU] sph-lambda/delta*" + std::to_string(config.iteration));
 
 
 				for (size_t itr = 0; itr < config.iteration; ++itr) {
@@ -575,7 +580,7 @@ namespace ocl {
 				lambda_delta();
 
 
-				auto finalise = watch.start("GPU sph: finalise");
+				auto finalise = watch.start("\t[GPU] sph-finalise");
 
 
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
@@ -585,7 +590,7 @@ namespace ocl {
 #endif
 				finalise();
 
-				auto create_field = watch.start("GPU sph: field");
+				auto create_field = watch.start("\t[GPU] mc-field");
 
 				createFieldKernel(
 						cl::EnqueueArgs(queue, cl::NDRange(
@@ -603,9 +608,8 @@ namespace ocl {
 #ifdef DEBUG
 				queue.finish();
 #endif
-				kernel_exec();
 
-				auto kernel_return = watch.start("GPU kernel_return");
+				auto kernel_return = watch.start("\t[GPU] kernel_return");
 				cl::copy(queue, deviceFields, mcLattice.begin(), mcLattice.end());
 				cl::copy(queue, deviceParticles, hostParticles.begin(), hostParticles.end());
 #ifdef DEBUG
@@ -618,6 +622,8 @@ namespace ocl {
 				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
+			kernel_exec();
+
 
 			auto write_back = watch.start("write_back");
 			overwrite(xs, hostParticles);
