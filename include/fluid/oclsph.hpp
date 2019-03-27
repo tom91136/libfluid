@@ -35,7 +35,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 namespace fsutils {
 
@@ -138,7 +138,6 @@ namespace clutil {
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
 		                            " -w"
-		                            " -cl-strict-aliasing"
 		                            " -cl-mad-enable"
 		                            " -cl-no-signed-zeros"
 		                            " -cl-unsafe-math-optimizations"
@@ -215,7 +214,7 @@ namespace ocl {
 				h(h),
 				device(device),
 				context(cl::Context(device)),
-				queue(cl::CommandQueue(context, device, cl::QueueProperties::None)),
+				queue(cl::CommandQueue(context, device, cl::QueueProperties::OutOfOrder)),
 				clsph(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclsph_kernel.cl",
@@ -228,13 +227,6 @@ namespace ocl {
 						"-DH=((float)" + std::to_string(h) + ")")) {}
 
 	private:
-
-		tvec3<N> lerp(N isolevel, tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
-			if (std::abs(isolevel - v1) < 0.00001) return p1;
-			if (std::abs(isolevel - v2) < 0.00001) return p2;
-			if (std::abs(v1 - v2) < 0.00001) return p1;
-			return p1 + (p2 - p1) * ((isolevel - v1) / (v2 - v1));
-		}
 
 		static inline ClSphType resolve(fluid::Type t) {
 			switch (t) {
@@ -328,7 +320,7 @@ namespace ocl {
 				for (const Entry &e: stopwatch.entries) {
 					os << "    ->"
 					   << "`" << e.name << "` "
-					   << std::setw(static_cast<int>(maxLen - e.name.size()) ) << " : " <<
+					   << std::setw(static_cast<int>(maxLen - e.name.size())) << " : " <<
 					   (std::chrono::duration_cast<std::chrono::nanoseconds>(
 							   e.end - e.begin).count() / 1000'000.0) << "ms" << std::endl;
 				}
@@ -523,7 +515,7 @@ namespace ocl {
 			auto createFieldKernel = cl::KernelFunctor<
 					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
 					float3, ClMcConfig,
-					cl::Buffer &, uint3
+					cl::Buffer &, uint3, uint3
 			>(clsph, "sph_create_field");
 
 
@@ -531,7 +523,7 @@ namespace ocl {
 
 
 			const tvec3<size_t> sampleSize = tvec3<size_t>(
-					glm::ceil(tvec3<N>(extent) * mcConfig.sampleResolution));
+					glm::floor(tvec3<N>(extent) * mcConfig.sampleResolution)) + tvec3<size_t>(1);
 
 			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
 			std::vector<ClSphParticle> hostParticles(atomsN);
@@ -602,7 +594,7 @@ namespace ocl {
 						deviceAtoms, static_cast<uint>(atomsN),
 						deviceGridTable, static_cast<uint>(gridTableN),
 						clutil::vec3ToCl(minExtent), mcConfig,
-						deviceFields, clutil::uvec3ToCl(sampleSize));
+						deviceFields, clutil::uvec3ToCl(sampleSize), clutil::uvec3ToCl(extent));
 #ifdef DEBUG
 				queue.finish();
 #endif
@@ -664,7 +656,8 @@ namespace ocl {
 
 
 #ifdef DEBUG
-			std::cout << "MC lattice: " << mcLattice.size() << " res="
+			std::cout << "MC lattice: " << mcLattice.size() << " Grid=" << glm::to_string(extent)
+			          << " res="
 			          << mcLattice.xSize() << "x"
 			          << mcLattice.ySize() << "x"
 			          << mcLattice.zSize()

@@ -112,9 +112,9 @@ inline void sortArray27(size_t d[27]) {
 
 #define FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, op) \
 { \
-    const size_t __x = max((size_t) 1, coordAtZCurveGridIndex0((zIndex))); \
-    const size_t __y = max((size_t) 1, coordAtZCurveGridIndex1((zIndex))); \
-    const size_t __z = max((size_t) 1, coordAtZCurveGridIndex2((zIndex))); \
+    const size_t __x = coordAtZCurveGridIndex0((zIndex)); \
+    const size_t __y = coordAtZCurveGridIndex1((zIndex)); \
+    const size_t __z = coordAtZCurveGridIndex2((zIndex)); \
     size_t __offsets[27] = { \
         zCurveGridIndexAtCoord(__x - 1, __y - 1, __z - 1), \
         zCurveGridIndexAtCoord(__x + 0, __y - 1, __z - 1), \
@@ -187,11 +187,10 @@ inline void sortArray27(size_t d[27]) {
 
 #endif
 
-
-inline float fast_length_sq(float3 a) {
-	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
+inline float fast_length_sq(float3 v) {
+	return (v.x * v.x) + (v.y * v.y) + (v.z * v.z);
+//	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
 }
-
 
 kernel void sph_lambda(
 		const ClSphConfig config,
@@ -301,14 +300,13 @@ kernel void sph_create_field(
 		const global ClSphAtom *atoms, uint atomN,
 		const global uint *gridTable, uint gridTableN,
 		const float3 min, const ClMcConfig mcConfig,
-		global float *field, const uint3 sizes) {
-
-
+		global float *field, const uint3 sizes, const uint3 gridExtent) {
 
 
 	const size_t x = get_global_id(0);
 	const size_t y = get_global_id(1);
 	const size_t z = get_global_id(2);
+
 
 	const float3 pos = (float3) (x, y, z);
 	const float step = H / mcConfig.sampleResolution;
@@ -322,14 +320,65 @@ kernel void sph_create_field(
 	const float sN = pown(mcConfig.particleSize, 2);
 	const float threshold = H * config.scale * 1;
 	float v = 0.f;
-	FOR_EACH_NEIGHBOUR(zIndex, b, atoms, atomN, gridTable, gridTableN, {
-		if (fast_distance(b->particle.position, a) < threshold) {
-			const float3 l = (b->particle.position) - a;
-			const float len = fast_length_sq(l);
-			v += (sN /
-			      pow(len, mcConfig.particleInfluence));
 
-		}
-	});
+
+	const size_t __x = coordAtZCurveGridIndex0(zIndex);
+	const size_t __y = coordAtZCurveGridIndex1(zIndex);
+	const size_t __z = coordAtZCurveGridIndex2(zIndex);
+
+	if (__x == gridExtent.x && __y == gridExtent.y && __z == gridExtent.z) {
+		// XXX there is exactly one case where this may happens: the last element of the z-curve
+		return;
+	}
+
+	const size_t x_l = clamp(((int) __x) - 1, 0, (int) gridExtent.x - 1);
+	const size_t x_r = clamp(((int) __x) + 1, 0, (int) gridExtent.x - 1);
+	const size_t y_l = clamp(((int) __y) - 1, 0, (int) gridExtent.y - 1);
+	const size_t y_r = clamp(((int) __y) + 1, 0, (int) gridExtent.y - 1);
+	const size_t z_l = clamp(((int) __z) - 1, 0, (int) gridExtent.z - 1);
+	const size_t z_r = clamp(((int) __z) + 1, 0, (int) gridExtent.z - 1);
+
+	size_t offsets[27] = {
+			zCurveGridIndexAtCoord(x_l, y_l, z_l),
+			zCurveGridIndexAtCoord(__x, y_l, z_l),
+			zCurveGridIndexAtCoord(x_r, y_l, z_l),
+			zCurveGridIndexAtCoord(x_l, __y, z_l),
+			zCurveGridIndexAtCoord(__x, __y, z_l),
+			zCurveGridIndexAtCoord(x_r, __y, z_l),
+			zCurveGridIndexAtCoord(x_l, y_r, z_l),
+			zCurveGridIndexAtCoord(__x, y_r, z_l),
+			zCurveGridIndexAtCoord(x_r, y_r, z_l),
+			zCurveGridIndexAtCoord(x_l, y_l, __z),
+			zCurveGridIndexAtCoord(__x, y_l, __z),
+			zCurveGridIndexAtCoord(x_r, y_l, __z),
+			zCurveGridIndexAtCoord(x_l, __y, __z),
+			zCurveGridIndexAtCoord(__x, __y, __z),
+			zCurveGridIndexAtCoord(x_r, __y, __z),
+			zCurveGridIndexAtCoord(x_l, y_r, __z),
+			zCurveGridIndexAtCoord(__x, y_r, __z),
+			zCurveGridIndexAtCoord(x_r, y_r, __z),
+			zCurveGridIndexAtCoord(x_l, y_l, z_r),
+			zCurveGridIndexAtCoord(__x, y_l, z_r),
+			zCurveGridIndexAtCoord(x_r, y_l, z_r),
+			zCurveGridIndexAtCoord(x_l, __y, z_r),
+			zCurveGridIndexAtCoord(__x, __y, z_r),
+			zCurveGridIndexAtCoord(x_r, __y, z_r),
+			zCurveGridIndexAtCoord(x_l, y_r, z_r),
+			zCurveGridIndexAtCoord(__x, y_r, z_r),
+			zCurveGridIndexAtCoord(x_r, y_r, z_r)
+	};
+
+//	sortArray27(offsets);
+
+	for (size_t i = 0; i < 27; i++) {
+		FOR_SINGLE_GRID(offsets[i], b, atoms, gridTable, gridTableN, {
+			if (fast_distance(b->particle.position, a) < threshold) {
+				const float3 l = (b->particle.position) - a;
+				const float len = fast_length_sq(l);
+				v += (sN / pow(len, mcConfig.particleInfluence));
+			}
+		});
+	}
+
 	field[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
 }
