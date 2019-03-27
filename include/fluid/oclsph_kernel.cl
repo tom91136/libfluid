@@ -115,6 +115,7 @@ inline void sortArray27(size_t d[27]) {
     const uint __x = coordAtZCurveGridIndex0((zIndex)); \
     const uint __y = coordAtZCurveGridIndex1((zIndex)); \
     const uint __z = coordAtZCurveGridIndex2((zIndex)); \
+    if(__x == 0 || __y == 0 || __z == 0) return; \
     size_t __offsets[27] = { \
         zCurveGridIndexAtCoord(__x - 1, __y - 1, __z - 1), \
         zCurveGridIndexAtCoord(__x + 0, __y - 1, __z - 1), \
