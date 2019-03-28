@@ -210,10 +210,10 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	omp_set_num_threads(4);
-	const size_t pcount = (40) * 1000;
+	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 5;
-	const num_t scaling = 650; // less = less space between particle
+	const num_t scaling = 600; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 //	size_t offset = 0;
@@ -296,8 +296,8 @@ void run() {
 
 	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
-		auto xx = (std::sin(i) * 220) * 1;
-		auto zz = (std::cos(i) * 50) * 1;
+		auto xx = (std::sin(i) * 350) * 1;
+		auto zz = (std::cos(i) * 220) * 1;
 		config.minBound = min + tvec3<num_t>(xx, 1, zz);
 		config.maxBound = max + tvec3<num_t>(xx, 1, zz);
 

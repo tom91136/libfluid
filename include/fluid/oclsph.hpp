@@ -319,7 +319,7 @@ namespace ocl {
 				size_t maxLen = std::max_element(stopwatch.entries.begin(), stopwatch.entries.end(),
 				                                 [](const Entry &l, const Entry &r) {
 					                                 return l.name.size() < r.name.size();
-				                                 })->name.size() + 2;
+				                                 })->name.size() + 3;
 
 				for (const Entry &e: stopwatch.entries) {
 					os << "    ->"
@@ -424,7 +424,7 @@ namespace ocl {
 			Stopwatch watch = Stopwatch("CPU advance");
 
 			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 3.f;
+			mcConfig.sampleResolution = 2.5f;
 			mcConfig.particleSize = 50.f;
 			mcConfig.particleInfluence = 0.8;
 
