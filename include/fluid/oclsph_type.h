@@ -53,7 +53,7 @@ typedef struct ClSphResponse {
 } ClSphResponse;
 
 
-const constant uint _SIZES[] = {
+const constant size_t _SIZES[] = {
 		sizeof(size_t),
 		sizeof(uint),
 		sizeof(uint3),
@@ -67,7 +67,7 @@ const constant uint _SIZES[] = {
 		sizeof(ClSphResponse),
 };
 
-const constant  uint _SIZES_LENGTH = sizeof(_SIZES) / sizeof(_SIZES[0]);
+const constant size_t _SIZES_LENGTH = sizeof(_SIZES) / sizeof(_SIZES[0]);
 
 
 #endif //LIBFLUID_CLSPH_TYPE

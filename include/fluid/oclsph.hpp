@@ -242,6 +242,8 @@ namespace ocl {
 						kernelPath + "oclmc_kernel.cl",
 						kernelPath,
 						"-DH=((float)" + std::to_string(h) + ")")) {
+			checkSize();
+
 		}
 
 	private:
@@ -350,35 +352,35 @@ namespace ocl {
 
 		void checkSize() {
 
-			std::vector<uint> expected(_SIZES, _SIZES + _SIZES_LENGTH);
-
-			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-					  << clutil::mkString<uint>(expected, [](auto x) { return std::to_string(x); })
-					  << std::endl;
-
-			auto checkSizeKernel = cl::KernelFunctor<cl::Buffer &>(clsph, "check_size");
-			std::vector<uint> actual(_SIZES_LENGTH, 0);
+			std::vector<size_t> expected(_SIZES, _SIZES + _SIZES_LENGTH);
+			std::vector<size_t> actual(_SIZES_LENGTH, 0);
 
 			try {
-
-				cl::Buffer buffer(queue.getInfo<CL_QUEUE_CONTEXT>(), CL_MEM_WRITE_ONLY,
-								  sizeof(_SIZES));
-				checkSizeKernel(cl::EnqueueArgs(queue, cl::NDRange(_SIZES_LENGTH)), buffer);
-				cl::copy(buffer, actual.begin(), actual.end());
-				queue.flush();
-
+				cl::Buffer buffer(context, CL_MEM_WRITE_ONLY, sizeof(_SIZES));
+				cl::KernelFunctor<cl::Buffer &>(clsph, "check_size")
+						(cl::EnqueueArgs(queue, cl::NDRange(_SIZES_LENGTH)), buffer);
+				cl::copy(queue, buffer, actual.begin(), actual.end());
+				queue.finish();
 			} catch (cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
 						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
+
+#ifdef DEBUG
 			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-					  << clutil::mkString<uint>(actual,
-												[](auto x) { return std::to_string(x); })
+					  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
 					  << std::endl;
+
+
+			std::cout << "Expected(" << _SIZES_LENGTH << ")="
+					  << clutil::mkString<size_t>(expected,
+												  [](auto x) { return std::to_string(x); })
+					  << std::endl;
+#endif
+
+
 			assert(expected == actual);
-
-
 		}
 
 		std::vector<ClSphAtom> advectAndCopy(const fluid::Config<N> &config,
@@ -573,9 +575,6 @@ namespace ocl {
 			functors();
 
 
-			checkSize();
-
-
 			const tvec3<size_t> sampleSize = tvec3<size_t>(
 					glm::floor(tvec3<N>(extent) * mcConfig.sampleResolution)) + tvec3<size_t>(1);
 
@@ -594,9 +593,9 @@ namespace ocl {
 				cl::Buffer deviceGridTable(
 						queue, hostGridTable.begin(), hostGridTable.end(), true);
 
-				cl::Buffer deviceParticles(queue.getInfo<CL_QUEUE_CONTEXT>(),
+				cl::Buffer deviceParticles(context,
 										   CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
-				cl::Buffer deviceFields(queue.getInfo<CL_QUEUE_CONTEXT>(),
+				cl::Buffer deviceFields(context,
 										CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
 
 #ifdef DEBUG

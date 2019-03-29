@@ -244,8 +244,8 @@ void run() {
 //	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 
-//	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
-	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
+	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
+//	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
 
 	clutil::enumeratePlatformToCout();
 

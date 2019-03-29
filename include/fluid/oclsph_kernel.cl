@@ -61,8 +61,8 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 
 
 	return (r >= EPSILON && r <= H) ?
-	       (x - y) * (SpikyKernelFactor * native_divide(pown(H - r, 2) , r)) :
-	       (float3) (0.f);
+		   (x - y) * (SpikyKernelFactor * native_divide(pown(H - r, 2), r)) :
+		   (float3) (0.f);
 }
 
 #define FOR_SINGLE_GRID(zIndex, b, atoms, gridTable, gridTableN, op) \
@@ -205,8 +205,8 @@ inline float fast_length_sq(float3 v) {
 //	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
 }
 
-kernel void check_size(global uint *sizes) {
-	for (size_t i = 0; i < _SIZES_LENGTH; ++i) sizes[i] = _SIZES[i];
+kernel void check_size(global size_t *sizes) {
+	sizes[get_global_id(0)] = _SIZES[get_global_id(0)];
 }
 
 kernel void sph_lambda(
