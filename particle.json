@@ -1,0 +1,40 @@
+{
+ "fields": [
+  {
+   "name": "id",
+   "size": 4
+  },
+  {
+   "name": "type",
+   "size": 4
+  },
+  {
+   "name": "mass",
+   "size": 4
+  },
+  {
+   "name": "position.x",
+   "size": 4
+  },
+  {
+   "name": "position.y",
+   "size": 4
+  },
+  {
+   "name": "position.z",
+   "size": 4
+  },
+  {
+   "name": "velocity.x",
+   "size": 4
+  },
+  {
+   "name": "velocity.y",
+   "size": 4
+  },
+  {
+   "name": "velocity.z",
+   "size": 4
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "fields": [
+  {
+   "name": "timestamp",
+   "size": 4
+  },
+  {
+   "name": "entries",
+   "size": 4
+  }
+ ]
+}

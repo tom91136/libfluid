@@ -53,4 +53,21 @@ typedef struct ClSphResponse {
 } ClSphResponse;
 
 
+const constant uint _SIZES[] = {
+		sizeof(size_t),
+		sizeof(uint),
+		sizeof(uint3),
+		sizeof(float),
+		sizeof(float3),
+		sizeof(ClSphType),
+		sizeof(ClSphConfig),
+		sizeof(ClMcConfig),
+		sizeof(ClSphAtom),
+		sizeof(ClSphParticle),
+		sizeof(ClSphResponse),
+};
+
+const constant  uint _SIZES_LENGTH = sizeof(_SIZES) / sizeof(_SIZES[0]);
+
+
 #endif //LIBFLUID_CLSPH_TYPE

@@ -209,26 +209,26 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(4);
+	omp_set_num_threads(6);
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 5;
 	const num_t scaling = 600; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
-//	size_t offset = 0;
-//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
-//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+	size_t offset = 0;
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
 	std::random_device dev;
 	std::mt19937 rng(dev());
 	std::uniform_int_distribution<std::mt19937::result_type> dist(1, 500);
 
-	for (size_t i = 0; i < pcount; ++i) {
-		xs.emplace_back(i, fluid::Fluid, 1.0,
-		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
-		                tvec3<num_t>(0));
-	}
+//	for (size_t i = 0; i < pcount; ++i) {
+//		xs.emplace_back(i, fluid::Fluid, 1.0,
+//		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
+//		                tvec3<num_t>(0));
+//	}
 
 
 	std::cout << "Mark" << std::endl;
@@ -244,13 +244,13 @@ void run() {
 //	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 
-	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
-//	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
+//	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
+	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
 
 	clutil::enumeratePlatformToCout();
 
 
-	const std::vector<std::string> signatures = {"Ellesmere", "980", "NEO", "Tesla"};
+	const std::vector<std::string> signatures = {"Ellesmere", "Qudro", "1050", "980", "NEO", "Tesla"};
 	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
 	auto found = clutil::findDeviceWithSignature({signatures,});
 
@@ -371,7 +371,7 @@ void run() {
 #ifdef DO_SURFACE
 		write_triangles(mmfTSink, triangles);
 #endif
-		write_particles(mmfPSink, xs);
+//		write_particles(mmfPSink, xs);
 		write_triangles(mmfTSink, triangles);
 		std::cout << "Trgs=" << triangles.size() << std::endl;
 

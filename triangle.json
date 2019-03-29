@@ -1,0 +1,40 @@
+{
+ "fields": [
+  {
+   "name": "v0.x",
+   "size": 4
+  },
+  {
+   "name": "v0.y",
+   "size": 4
+  },
+  {
+   "name": "v0.z",
+   "size": 4
+  },
+  {
+   "name": "v1.x",
+   "size": 4
+  },
+  {
+   "name": "v1.y",
+   "size": 4
+  },
+  {
+   "name": "v1.z",
+   "size": 4
+  },
+  {
+   "name": "v2.x",
+   "size": 4
+  },
+  {
+   "name": "v2.y",
+   "size": 4
+  },
+  {
+   "name": "v2.z",
+   "size": 4
+  }
+ ]
+}

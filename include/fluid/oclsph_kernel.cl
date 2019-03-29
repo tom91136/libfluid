@@ -205,6 +205,10 @@ inline float fast_length_sq(float3 v) {
 //	return mad(a.x, a.x, mad(a.y, a.y, a.z * a.z));
 }
 
+kernel void check_size(global uint *sizes) {
+	for (size_t i = 0; i < _SIZES_LENGTH; ++i) sizes[i] = _SIZES[i];
+}
+
 kernel void sph_lambda(
 		const ClSphConfig config,
 		global ClSphAtom *atoms, uint atomN,
