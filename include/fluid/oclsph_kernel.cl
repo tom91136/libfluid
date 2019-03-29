@@ -14,8 +14,11 @@
 
 const constant float VD = 0.49f;// Velocity dampening;
 const constant float RHO = 6378.0f; // Reference density;
+const constant float RHO_RECIP = 1.f / RHO;
+
 const constant float EPSILON = 0.00000001f;
 const constant float CFM_EPSILON = 600.0f; // CFM propagation;
+const constant float CorrDeltaQ = 0.3f * H;
 
 const constant float C = 0.00001f;
 const constant float VORTICITY_EPSILON = 0.0005f;
@@ -43,12 +46,22 @@ const constant float Poly6Factor = 315.f / (64.f * M_PI_F * (HHH * HHH * HHH));
 const constant float SpikyKernelFactor = -(45.f / (M_PI_F * HHH * HHH));
 
 inline float poly6Kernel(const float r) {
-	return r <= H ? Poly6Factor * pown(HH - r * r, 3) : 0.f;
+	return select(0.f, Poly6Factor * pown(HH - r * r, 3), r <= H);
+//	return r <= H ? Poly6Factor * pown(HH - r * r, 3) : 0.f;
 }
 
+
+#define BETWEEN(a, x, b) ((x)-(a)*(x)-(b)) > 0.f
+
 inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r) {
+
+
+
+//	min(max(r, EPSILON), H)
+
+
 	return (r >= EPSILON && r <= H) ?
-	       (x - y) * (SpikyKernelFactor * (pown(H - r, 2) / r)) :
+	       (x - y) * (SpikyKernelFactor * native_divide(pown(H - r, 2) , r)) :
 	       (float3) (0.f);
 }
 
@@ -201,10 +214,9 @@ kernel void sph_lambda(
 	global ClSphAtom *a = &atoms[id];
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
-	const float oneOverRho = 1.f / RHO;
 	FOR_EACH_NEIGHBOUR(a->zIndex, b, atoms, atomN, gridTable, gridTableN, {
 		const float r = fast_distance(a->pStar, b->pStar);
-		norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), oneOverRho, norm2V);
+		norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), RHO_RECIP, norm2V);
 		rho = mad(b->particle.mass, poly6Kernel(r), rho);
 	});
 
@@ -225,7 +237,6 @@ kernel void sph_delta(
 
 	global ClSphAtom *a = &atoms[id];
 
-	const float CorrDeltaQ = 0.3f * H;
 	const float p6DeltaQ = poly6Kernel(CorrDeltaQ);
 
 	float3 deltaP = (float3) (0.f);

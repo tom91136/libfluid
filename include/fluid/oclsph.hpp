@@ -53,7 +53,15 @@ namespace fsutils {
 namespace clutil {
 
 
-	static std::vector<cl::Device> findDeviceWithSignature(const std::string &needle) {
+	template<typename T>
+	std::string mkString(const std::vector<T> &xs, const std::function<std::string(T)> &f) {
+		return std::accumulate(xs.begin(), xs.end(), std::string(),
+		                       [&f](const std::string &acc, const T &x) {
+			                       return acc + (acc.length() > 0 ? "," : "") + f(x);
+		                       });
+	}
+
+	static std::vector<cl::Device> findDeviceWithSignature(const std::vector<std::string> &needles) {
 		std::vector<cl::Platform> platforms;
 		cl::Platform::get(&platforms);
 		std::vector<cl::Device> matching;
@@ -67,9 +75,11 @@ namespace clutil {
 				          << e.what() << std::endl;
 			}
 			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
-			             [needle](const cl::Device &device) {
-				             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
-				                    std::string::npos;
+			             [needles](const cl::Device &device) {
+				             return std::any_of(needles.begin(), needles.end(), [&device](auto needle) {
+					             return device.getInfo<CL_DEVICE_NAME>().find(needle) !=
+					                    std::string::npos;
+				             });
 			             });
 		}
 		return matching;

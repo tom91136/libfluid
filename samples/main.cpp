@@ -249,25 +249,32 @@ void run() {
 
 	clutil::enumeratePlatformToCout();
 
-	const std::string signature = "Elles";
-	auto found = clutil::findDeviceWithSignature(signature);
+
+	const std::vector<std::string> signatures = {"Ellesmere", "980", "NEO", "Tesla"};
+	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
+	auto found = clutil::findDeviceWithSignature({signatures,});
+
 	if (found.empty()) {
-		throw std::runtime_error("No CL device found with signature:`" + signature + "`");
+		throw std::runtime_error("No CL device found with signature:`" + imploded + "`");
 	}
 
 	std::cout << "Matching devices(" << found.size() << "):" << std::endl;
 	for (const auto &d : found) std::cout << "\t" << d.getInfo<CL_DEVICE_NAME>() << std::endl;
 
 	if (found.size() > 1) {
-		std::cout << "Found more than one device signature:`" << signature
+		std::cout << "Found more than one device signature:`" << imploded
 		          << "`"  ", using the first one." << std::endl;
 	}
+
+	const auto device = found.front();
+
+
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
 	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(
 			0.1,
 			kernelPaths,
-			found.front()));
+			device));
 
 	using hrc = high_resolution_clock;
 
