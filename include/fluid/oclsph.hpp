@@ -392,7 +392,6 @@ namespace ocl {
 				const fluid::Particle<T, N> &p = xs[i];
 				const tvec3<N> velocity =
 						(p.mass * config.constantForce) * config.dt + p.velocity;
-				const tvec3<N> pStar = (velocity * config.dt) + (p.position / config.scale);
 				ClSphAtom &atom = atoms[i];
 				ClSphParticle &particle = atom.particle;
 				particle.id = p.id,
@@ -400,7 +399,8 @@ namespace ocl {
 				particle.mass = p.mass,
 				particle.position = clutil::vec3ToCl(p.position),
 				particle.velocity = clutil::vec3ToCl(velocity);
-				atom.pStar = clutil::vec3ToCl(pStar);
+				// XXX MSVC: extracting variables may cause threading issues; must be inlined
+				atom.pStar = clutil::vec3ToCl((velocity * config.dt) + (p.position / config.scale));
 			}
 			return atoms;
 		}

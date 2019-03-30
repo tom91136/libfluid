@@ -250,7 +250,7 @@ void run() {
 	clutil::enumeratePlatformToCout();
 
 
-	const std::vector<std::string> signatures = {"Ellesmere", "Qudro", "1050", "980", "NEO", "Tesla"};
+	const std::vector<std::string> signatures = {"Ellesmere", "Quadro", "1050", "980", "NEO", "Tesla"};
 	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
 	auto found = clutil::findDeviceWithSignature({signatures,});
 
