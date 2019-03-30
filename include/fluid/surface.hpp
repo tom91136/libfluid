@@ -1,7 +1,7 @@
 #ifndef LIBFLUID_SURFACE_H
 #define LIBFLUID_SURFACE_H
 
-#define GLM_ENABLE_EXPERIMENTAL
+// #define GLM_ENABLE_EXPERIMENTAL
 
 #include <ostream>
 #include <functional>

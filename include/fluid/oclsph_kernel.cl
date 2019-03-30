@@ -7,8 +7,8 @@
 #undef DEBUG
 
 
-#ifndef H
-#error H is not set
+#ifndef SPH_H
+#error SPH_H is not set
 #endif
 
 
@@ -18,16 +18,16 @@ const constant float RHO_RECIP = 1.f / RHO;
 
 const constant float EPSILON = 0.00000001f;
 const constant float CFM_EPSILON = 600.0f; // CFM propagation;
-const constant float CorrDeltaQ = 0.3f * H;
+const constant float CorrDeltaQ = 0.3f * SPH_H;
 
 const constant float C = 0.00001f;
 const constant float VORTICITY_EPSILON = 0.0005f;
 const constant float CorrK = 0.0001f;
 const constant float CorrN = 4.f;
 
-const constant float H2 = H * 2;
-const constant float HH = H * H;
-const constant float HHH = H * H * H;
+const constant float H2 = SPH_H * 2;
+const constant float HH = SPH_H * SPH_H;
+const constant float HHH = SPH_H * SPH_H * SPH_H;
 
 const constant uint3 NEIGHBOUR_OFFSETS[27] = {
 		(uint3) (-1, -1, -1), (uint3) (+0, -1, -1), (uint3) (+1, -1, -1),
@@ -46,8 +46,8 @@ const constant float Poly6Factor = 315.f / (64.f * M_PI_F * (HHH * HHH * HHH));
 const constant float SpikyKernelFactor = -(45.f / (M_PI_F * HHH * HHH));
 
 inline float poly6Kernel(const float r) {
-	return select(0.f, Poly6Factor * pown(HH - r * r, 3), r <= H);
-//	return r <= H ? Poly6Factor * pown(HH - r * r, 3) : 0.f;
+	return select(0.f, Poly6Factor * pown(HH - r * r, 3), r <= SPH_H);
+//	return r <= SPH_H ? Poly6Factor * pown(HH - r * r, 3) : 0.f;
 }
 
 
@@ -60,8 +60,8 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 //	min(max(r, EPSILON), H)
 
 
-	return (r >= EPSILON && r <= H) ?
-		   (x - y) * (SpikyKernelFactor * native_divide(pown(H - r, 2), r)) :
+	return (r >= EPSILON && r <= SPH_H) ?
+		   (x - y) * (SpikyKernelFactor * native_divide(pown(SPH_H - r, 2), r)) :
 		   (float3) (0.f);
 }
 
@@ -157,7 +157,6 @@ inline void sortArray27(size_t d[27]) {
         zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 1), \
         zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 1) \
     }; \
-    sortArray27(__offsets);  \
     for(size_t __i = 0; __i < 27; __i++) \
         FOR_SINGLE_GRID(__offsets[__i], b, atoms, gridTable, gridTableN, op);  \
 } \
@@ -324,7 +323,7 @@ kernel void sph_create_field(
 
 
 	const float3 pos = (float3) (x, y, z);
-	const float step = H / mcConfig.sampleResolution;
+	const float step = SPH_H / mcConfig.sampleResolution;
 	const float3 a = (min + (pos * step)) * config.scale;
 
 	const size_t zIndex = zCurveGridIndexAtCoord(
@@ -333,7 +332,7 @@ kernel void sph_create_field(
 			(size_t) (pos.z / mcConfig.sampleResolution));
 
 	const float sN = pown(mcConfig.particleSize, 2);
-	const float threshold = H * config.scale * 1;
+	const float threshold = SPH_H * config.scale * 1;
 	float v = 0.f;
 
 

@@ -26,11 +26,11 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
-#include <CL/cl2.hpp>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "cl2.hpp"
 #include "fluid.hpp"
 #include "oclsph_type.h"
 #include "zcurve.h"
@@ -231,17 +231,17 @@ namespace ocl {
 				h(h),
 				device(device),
 				context(cl::Context(device)),
-				queue(cl::CommandQueue(context, device, cl::QueueProperties::OutOfOrder)),
+				queue(cl::CommandQueue(context, device, cl::QueueProperties::None)), //TODO check capability 
 				clsph(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclsph_kernel.cl",
 						kernelPath,
-						"-DH=((float)" + std::to_string(h) + ")")),
+						"-DSPH_H=((float)" + std::to_string(h) + ")")),
 				clmc(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclmc_kernel.cl",
 						kernelPath,
-						"-DH=((float)" + std::to_string(h) + ")")) {
+						"-DSPH_H=((float)" + std::to_string(h) + ")")) {
 			checkSize();
 
 		}
@@ -264,6 +264,13 @@ namespace ocl {
 			}
 		}
 
+		static inline std::string to_string(tvec3<size_t> v){
+			return "(" + 
+				std::to_string(v.x) + "," + 
+				std::to_string(v.y) + "," + 
+				std::to_string(v.z) + 
+				")";
+		}
 
 		std::vector<surface::Triangle<N>> sampleLattice(
 				N isolevel, N scale,
@@ -545,7 +552,7 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << glm::to_string(extent)
+					  << " Extent = " << to_string(extent)
 					  << " GridTable = " << hostGridTable.size()
 					  << std::endl;
 #endif
@@ -711,7 +718,7 @@ namespace ocl {
 
 
 #ifdef DEBUG
-			std::cout << "MC lattice: " << mcLattice.size() << " Grid=" << glm::to_string(extent)
+			std::cout << "MC lattice: " << mcLattice.size() << " Grid=" << to_string(extent)
 					  << " res="
 					  << mcLattice.xSize() << "x"
 					  << mcLattice.ySize() << "x"

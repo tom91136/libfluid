@@ -245,12 +245,13 @@ void run() {
 
 
 	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
+	// const auto kernelPaths = "/Users/tom/libfluid/include/fluid/";
 //	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
 
 	clutil::enumeratePlatformToCout();
 
 
-	const std::vector<std::string> signatures = {"Ellesmere", "Quadro", "1050", "980", "NEO", "Tesla"};
+	const std::vector<std::string> signatures = {"Ellesmere", "Quadro", "ATI", "1050", "980", "NEO", "Tesla"};
 	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
 	auto found = clutil::findDeviceWithSignature({signatures,});
 

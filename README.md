@@ -21,7 +21,11 @@ Library dependencies:
  
 If you are using vcpkg, install the following dependencies:
 
-    vcpkg install glm mio opencl nlohmann-json catch2
+    vcpkg install glm mio nlohmann-json catch2
+
+On MacOS, first install OpenMP:
+
+    brew install libomp    
 
 # Compiling
 
@@ -32,6 +36,10 @@ On Windows:
 On Linux:
 
     cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=/home/<user>/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+
+On MacOS:
+
+    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=/User/<user>/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 Then compile:
 

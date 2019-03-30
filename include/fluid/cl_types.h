@@ -4,7 +4,13 @@
 #ifndef __OPENCL_C_VERSION__
 
 #include <cstddef>
+
+
+#if defined(__APPLE__) || defined(__MACOSX)
+#include <OpenCL/cl_platform.h>
+#else
 #include <CL/cl_platform.h>
+#endif  
 
 // non CL compiler
 typedef cl_float2 float2;
@@ -96,10 +102,10 @@ const static ClErrorType CL_ERROR_LUT[63] = {
 		NEW_ERROR_TYPE(CL_INVALID_COMPILER_OPTIONS),
 		NEW_ERROR_TYPE(CL_INVALID_LINKER_OPTIONS),
 		NEW_ERROR_TYPE(CL_INVALID_DEVICE_PARTITION_COUNT),
-		NEW_ERROR_TYPE(CL_INVALID_PIPE_SIZE),
-		NEW_ERROR_TYPE(CL_INVALID_DEVICE_QUEUE),
-		NEW_ERROR_TYPE(CL_INVALID_SPEC_ID),
-		NEW_ERROR_TYPE(CL_MAX_SIZE_RESTRICTION_EXCEEDED),
+		// NEW_ERROR_TYPE(CL_INVALID_PIPE_SIZE),
+		// NEW_ERROR_TYPE(CL_INVALID_DEVICE_QUEUE),
+		// NEW_ERROR_TYPE(CL_INVALID_SPEC_ID),
+		// NEW_ERROR_TYPE(CL_MAX_SIZE_RESTRICTION_EXCEEDED),
 };
 
 const char *clResolveError(const cl_int error) {
