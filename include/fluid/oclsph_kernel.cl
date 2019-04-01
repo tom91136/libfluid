@@ -157,6 +157,7 @@ inline void sortArray27(size_t d[27]) {
         zCurveGridIndexAtCoord(__x + 0, __y + 1, __z + 1), \
         zCurveGridIndexAtCoord(__x + 1, __y + 1, __z + 1) \
     }; \
+    sortArray27(__offsets);  \
     for(size_t __i = 0; __i < 27; __i++) \
         FOR_SINGLE_GRID(__offsets[__i], b, atoms, gridTable, gridTableN, op);  \
 } \
@@ -208,20 +209,80 @@ kernel void check_size(global size_t *sizes) {
 	sizes[get_global_id(0)] = _SIZES[get_global_id(0)];
 }
 
+kernel void sph_mkrange(const ClSphConfig config,
+						const global ClSphAtom *atoms, const uint atomN,
+						const global uint *gridTable, const uint gridTableN,
+						global uint2 *ranges
+) {
+
+	const size_t id = get_global_id(0);
+
+	const global ClSphAtom *a = &atoms[id];
+	const size_t zIndex = a->zIndex;
+	const size_t x = coordAtZCurveGridIndex0(zIndex);
+	const size_t y = coordAtZCurveGridIndex1(zIndex);
+	const size_t z = coordAtZCurveGridIndex2(zIndex);
+	size_t neighbours[27] = {
+			zCurveGridIndexAtCoord(x - 1, y - 1, z - 1),
+			zCurveGridIndexAtCoord(x + 0, y - 1, z - 1),
+			zCurveGridIndexAtCoord(x + 1, y - 1, z - 1),
+			zCurveGridIndexAtCoord(x - 1, y + 0, z - 1),
+			zCurveGridIndexAtCoord(x + 0, y + 0, z - 1),
+			zCurveGridIndexAtCoord(x + 1, y + 0, z - 1),
+			zCurveGridIndexAtCoord(x - 1, y + 1, z - 1),
+			zCurveGridIndexAtCoord(x + 0, y + 1, z - 1),
+			zCurveGridIndexAtCoord(x + 1, y + 1, z - 1),
+			zCurveGridIndexAtCoord(x - 1, y - 1, z + 0),
+			zCurveGridIndexAtCoord(x + 0, y - 1, z + 0),
+			zCurveGridIndexAtCoord(x + 1, y - 1, z + 0),
+			zCurveGridIndexAtCoord(x - 1, y + 0, z + 0),
+			zCurveGridIndexAtCoord(x + 0, y + 0, z + 0),
+			zCurveGridIndexAtCoord(x + 1, y + 0, z + 0),
+			zCurveGridIndexAtCoord(x - 1, y + 1, z + 0),
+			zCurveGridIndexAtCoord(x + 0, y + 1, z + 0),
+			zCurveGridIndexAtCoord(x + 1, y + 1, z + 0),
+			zCurveGridIndexAtCoord(x - 1, y - 1, z + 1),
+			zCurveGridIndexAtCoord(x + 0, y - 1, z + 1),
+			zCurveGridIndexAtCoord(x + 1, y - 1, z + 1),
+			zCurveGridIndexAtCoord(x - 1, y + 0, z + 1),
+			zCurveGridIndexAtCoord(x + 0, y + 0, z + 1),
+			zCurveGridIndexAtCoord(x + 1, y + 0, z + 1),
+			zCurveGridIndexAtCoord(x - 1, y + 1, z + 1),
+			zCurveGridIndexAtCoord(x + 0, y + 1, z + 1),
+			zCurveGridIndexAtCoord(x + 1, y + 1, z + 1)
+	};
+	sortArray27(neighbours);
+	for (size_t i = 0; i < 27; ++i) {
+		const size_t neighbour = neighbours[i];
+		const size_t start = gridTable[neighbour];
+		const size_t end = ((neighbour + 1) < gridTableN) ? gridTable[neighbour + 1] : start;
+		ranges[id * 27 + i] = start == end ? (uint2) (0) : (uint2) (start, end);
+	}
+}
+
 kernel void sph_lambda(
 		const ClSphConfig config,
 		global ClSphAtom *atoms, uint atomN,
-		const global uint *gridTable, uint gridTableN
+		global uint2 *ranges
 ) {
 	const size_t id = get_global_id(0);
 	global ClSphAtom *a = &atoms[id];
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
-	FOR_EACH_NEIGHBOUR(a->zIndex, b, atoms, atomN, gridTable, gridTableN, {
-		const float r = fast_distance(a->pStar, b->pStar);
-		norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), RHO_RECIP, norm2V);
-		rho = mad(b->particle.mass, poly6Kernel(r), rho);
-	});
+
+
+	const size_t offset = id * 27;
+	for (size_t i = 0; i < 27; ++i) {
+		const uint2 range = ranges[id * 27 + i];
+		for (size_t j = range.s0; j < range.s1; ++j) {
+			const global ClSphAtom *b = &atoms[j];
+			{
+				const float r = fast_distance(a->pStar, b->pStar);
+				norm2V = mad(spikyKernelGradient(a->pStar, b->pStar, r), RHO_RECIP, norm2V);
+				rho = mad(b->particle.mass, poly6Kernel(r), rho);
+			}
+		}
+	}
 
 
 	float norm2 = fast_length_sq(norm2V); // dot self = length2
@@ -233,7 +294,7 @@ kernel void sph_lambda(
 kernel void sph_delta(
 		const ClSphConfig config,
 		global ClSphAtom *atoms, const uint atomN,
-		const global uint *gridTable, const uint gridTableN,
+		global uint2 *ranges,
 		const global ClSphTraiangle *mesh, const uint meshN
 ) {
 	const size_t id = get_global_id(0);
@@ -245,12 +306,20 @@ kernel void sph_delta(
 	float3 deltaP = (float3) (0.f);
 
 
-	FOR_EACH_NEIGHBOUR(a->zIndex, b, atoms, atomN, gridTable, gridTableN, {
-		const float r = fast_distance(a->pStar, b->pStar);
-		const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
-		const float factor = (a->lambda + b->lambda + corr) / RHO;
-		deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
-	});
+	const size_t offset = id * 27;
+	for (size_t i = 0; i < 27; ++i) {
+		const uint2 range = ranges[id * 27 + i];
+		for (size_t j = range.s0; j < range.s1; ++j) {
+			const global ClSphAtom *b = &atoms[j];
+			{
+				const float r = fast_distance(a->pStar, b->pStar);
+				const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
+				const float factor = (a->lambda + b->lambda + corr) / RHO;
+				deltaP = mad(spikyKernelGradient(a->pStar, b->pStar, r), factor, deltaP);
+			}
+		}
+	}
+
 	a->deltaP = deltaP;
 
 	// collision

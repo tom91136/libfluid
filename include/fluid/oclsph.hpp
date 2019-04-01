@@ -231,7 +231,8 @@ namespace ocl {
 				h(h),
 				device(device),
 				context(cl::Context(device)),
-				queue(cl::CommandQueue(context, device, cl::QueueProperties::None)), //TODO check capability 
+				queue(cl::CommandQueue(context, device,
+									   cl::QueueProperties::None)), //TODO check capability
 				clsph(clutil::loadProgramFromFile(
 						context,
 						kernelPath + "oclsph_kernel.cl",
@@ -264,12 +265,12 @@ namespace ocl {
 			}
 		}
 
-		static inline std::string to_string(tvec3<size_t> v){
-			return "(" + 
-				std::to_string(v.x) + "," + 
-				std::to_string(v.y) + "," + 
-				std::to_string(v.z) + 
-				")";
+		static inline std::string to_string(tvec3<size_t> v) {
+			return "(" +
+				   std::to_string(v.x) + "," +
+				   std::to_string(v.y) + "," +
+				   std::to_string(v.z) +
+				   ")";
 		}
 
 		std::vector<surface::Triangle<N>> sampleLattice(
@@ -560,11 +561,17 @@ namespace ocl {
 			auto functors = watch.start("CPU functors");
 
 
+			auto rangeKernel = cl::KernelFunctor<
+					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint, cl::Buffer &
+			>(clsph, "sph_mkrange");
+
 			auto lambdaKernel = cl::KernelFunctor<
-					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint
+					ClSphConfig, cl::Buffer &, uint, cl::Buffer &
 			>(clsph, "sph_lambda");
+
+
 			auto deltaKernel = cl::KernelFunctor<
-					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
+					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &,
 					cl::Buffer &, uint
 			>(clsph, "sph_delta");
 			auto finaliseKernel = cl::KernelFunctor<
@@ -605,12 +612,32 @@ namespace ocl {
 				cl::Buffer deviceFields(context,
 										CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
 
+
+				cl::Buffer deviceRanges(context,
+										CL_MEM_READ_WRITE, sizeof(uint2) * atomsN * 27);
+
+
 #ifdef DEBUG
 				queue.finish();
 #endif
 				kernel_copy();
 
 
+
+				auto mkrange = watch.start("\t[GPU] sph-mkrange");
+
+				rangeKernel(
+						cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
+						clConfig,
+						deviceAtoms, static_cast<uint>(atomsN),
+						deviceGridTable, static_cast<uint>(gridTableN),
+						deviceRanges
+				);
+
+#ifdef DEBUG
+				queue.finish();
+#endif
+				mkrange();
 				auto lambda_delta = watch.start(
 						"\t[GPU] sph-lambda/delta*" + std::to_string(config.iteration));
 
@@ -620,12 +647,12 @@ namespace ocl {
 							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
-							deviceGridTable, static_cast<uint>(gridTableN));
+							deviceRanges);
 					deltaKernel(
 							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
 							clConfig,
 							deviceAtoms, static_cast<uint>(atomsN),
-							deviceGridTable, static_cast<uint>(gridTableN),
+							deviceRanges,
 							deviceColliderMesh, static_cast<uint>(hostColliderMesh.size())
 
 					);

@@ -24,6 +24,7 @@ typedef cl_uint uint;
 typedef cl_uint2 uint2;
 typedef cl_uint3 uint3;
 typedef cl_uint4 uint4;
+typedef cl_ushort2 ushort2;
 
 
 // OpenCL stubs
