@@ -56,9 +56,9 @@ namespace clutil {
 	template<typename T>
 	std::string mkString(const std::vector<T> &xs, const std::function<std::string(T)> &f) {
 		return std::accumulate(xs.begin(), xs.end(), std::string(),
-							   [&f](const std::string &acc, const T &x) {
-								   return acc + (acc.length() > 0 ? "," : "") + f(x);
-							   });
+		                       [&f](const std::string &acc, const T &x) {
+			                       return acc + (acc.length() > 0 ? "," : "") + f(x);
+		                       });
 	}
 
 	static std::vector<cl::Device>
@@ -72,18 +72,18 @@ namespace clutil {
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-						  << "` : "
-						  << e.what() << std::endl;
+				          << "` : "
+				          << e.what() << std::endl;
 			}
 			std::copy_if(devices.begin(), devices.end(), std::back_inserter(matching),
-						 [needles](const cl::Device &device) {
-							 return std::any_of(needles.begin(), needles.end(),
-												[&device](auto needle) {
-													return device.getInfo<CL_DEVICE_NAME>().find(
-															needle) !=
-														   std::string::npos;
-												});
-						 });
+			             [needles](const cl::Device &device) {
+				             return std::any_of(needles.begin(), needles.end(),
+				                                [&device](auto needle) {
+					                                return device.getInfo<CL_DEVICE_NAME>().find(
+							                                needle) !=
+					                                       std::string::npos;
+				                                });
+			             });
 		}
 		return matching;
 	}
@@ -98,14 +98,14 @@ namespace clutil {
 			try {
 
 				std::cout << "\t├─┬Platform"
-						  << (platform == p ? "(Default):" : ":")
-						  << p.getInfo<CL_PLATFORM_NAME>()
-						  << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
-						  << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
-						  << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
-						  << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
-						  << "\n\t│ └Devices"
-						  << std::endl;
+				          << (platform == p ? "(Default):" : ":")
+				          << p.getInfo<CL_PLATFORM_NAME>()
+				          << "\n\t│ ├Vendor     : " << p.getInfo<CL_PLATFORM_VENDOR>()
+				          << "\n\t│ ├Version    : " << p.getInfo<CL_PLATFORM_VERSION>()
+				          << "\n\t│ ├Profile    : " << p.getInfo<CL_PLATFORM_PROFILE>()
+				          << "\n\t│ ├Extensions : " << p.getInfo<CL_PLATFORM_EXTENSIONS>()
+				          << "\n\t│ └Devices"
+				          << std::endl;
 				std::vector<cl::Device> devices;
 				p.getDevices(CL_DEVICE_TYPE_ALL, &devices);
 				for (auto &d : devices) {
@@ -121,8 +121,8 @@ namespace clutil {
 				}
 			} catch (const std::exception &e) {
 				std::cerr << "Enumeration failed at `" << p.getInfo<CL_PLATFORM_NAME>()
-						  << "` : "
-						  << e.what() << std::endl;
+				          << "` : "
+				          << e.what() << std::endl;
 			}
 		}
 
@@ -154,11 +154,11 @@ namespace clutil {
 			}
 		};
 		const std::string clFlags = " -cl-std=CL1.2"
-									" -w"
-									" -cl-mad-enable"
-									" -cl-no-signed-zeros"
-									" -cl-unsafe-math-optimizations"
-									" -cl-finite-math-only";
+		                            " -w"
+		                            " -cl-mad-enable"
+		                            " -cl-no-signed-zeros"
+		                            " -cl-unsafe-math-optimizations"
+		                            " -cl-finite-math-only";
 		const std::string build = clFlags + " -I " + include + " " + flags;
 		std::cout << "Using args:`" << build << "`" << std::endl;
 		try {
@@ -232,10 +232,10 @@ namespace ocl {
 				device(device),
 				context(cl::Context(device)),
 				queue(cl::CommandQueue(context, device,
-									   cl::QueueProperties::None)), //TODO check capability
+				                       cl::QueueProperties::None)), //TODO check capability
 				clsph(clutil::loadProgramFromFile(
 						context,
-						kernelPath + "oclsph_kernel.cl",
+						kernelPath + "oclsph_kernel.h",
 						kernelPath,
 						"-DSPH_H=((float)" + std::to_string(h) + ")")),
 				clmc(clutil::loadProgramFromFile(
@@ -253,7 +253,7 @@ namespace ocl {
 			switch (t) {
 				case fluid::Type::Fluid: return ClSphType::Fluid;
 				case fluid::Type::Obstacle: return ClSphType::Obstacle;
-				default: throw std::logic_error("unhandled branch");
+				default: throw std::logic_error("unhandled branch (fluid::Type->ClSphType)");
 			}
 		}
 
@@ -261,16 +261,16 @@ namespace ocl {
 			switch (t) {
 				case ClSphType::Fluid: return fluid::Type::Fluid;
 				case ClSphType::Obstacle: return fluid::Type::Obstacle;
-				default: throw std::logic_error("unhandled branch");
+				default: throw std::logic_error("unhandled branch (fluid::Type<-ClSphType)");
 			}
 		}
 
 		static inline std::string to_string(tvec3<size_t> v) {
 			return "(" +
-				   std::to_string(v.x) + "," +
-				   std::to_string(v.y) + "," +
-				   std::to_string(v.z) +
-				   ")";
+			       std::to_string(v.x) + "," +
+			       std::to_string(v.y) + "," +
+			       std::to_string(v.z) +
+			       ")";
 		}
 
 		std::vector<surface::Triangle<N>> sampleLattice(
@@ -291,7 +291,7 @@ namespace ocl {
 						std::array<tvec3<N>, 8> vs{};
 						for (size_t j = 0; j < 8; ++j) {
 							tvec3<size_t> offset = tvec3<size_t>(x, y, z) +
-												   surface::CUBE_OFFSETS[j];
+							                       surface::CUBE_OFFSETS[j];
 							ns[j] = lattice(offset.x, offset.y, offset.z);
 
 							vs[j] = (tvec3<N>(offset) * step + min) * scale;
@@ -321,7 +321,7 @@ namespace ocl {
 				const time begin;
 				time end;
 				Entry(std::string name,
-					  const time &begin) : name(std::move(name)), begin(begin) {}
+				      const time &begin) : name(std::move(name)), begin(begin) {}
 			};
 
 			std::string name;
@@ -341,9 +341,9 @@ namespace ocl {
 				os << "Stopwatch[ " << stopwatch.name << "]:\n";
 
 				size_t maxLen = std::max_element(stopwatch.entries.begin(), stopwatch.entries.end(),
-												 [](const Entry &l, const Entry &r) {
-													 return l.name.size() < r.name.size();
-												 })->name.size() + 3;
+				                                 [](const Entry &l, const Entry &r) {
+					                                 return l.name.size() < r.name.size();
+				                                 })->name.size() + 3;
 
 				for (const Entry &e: stopwatch.entries) {
 					os << "    ->"
@@ -371,20 +371,20 @@ namespace ocl {
 				queue.finish();
 			} catch (cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
 
 #ifdef DEBUG
 			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-					  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-					  << std::endl;
+			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+			          << std::endl;
 
 
 			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-					  << clutil::mkString<size_t>(expected,
-												  [](auto x) { return std::to_string(x); })
-					  << std::endl;
+			          << clutil::mkString<size_t>(expected,
+			                                      [](auto x) { return std::to_string(x); })
+			          << std::endl;
 #endif
 
 
@@ -392,7 +392,7 @@ namespace ocl {
 		}
 
 		std::vector<ClSphAtom> advectAndCopy(const fluid::Config<N> &config,
-											 const std::vector<fluid::Particle<T, N>> &xs) {
+		                                     const std::vector<fluid::Particle<T, N>> &xs) {
 
 			std::vector<ClSphAtom> atoms(xs.size());
 #pragma omp parallel for
@@ -450,21 +450,23 @@ namespace ocl {
 			clConfig.minBound = clutil::vec3ToCl(config.minBound);
 			clConfig.maxBound = clutil::vec3ToCl(config.maxBound);
 			return std::make_tuple(clConfig, minExtent,
-								   glm::tvec3<size_t>((maxExtent - minExtent) / h));
+			                       glm::tvec3<size_t>((maxExtent - minExtent) / h));
 		}
 
 
 		void overwrite(std::vector<fluid::Particle<T, N>> &xs,
-					   const std::vector<ClSphParticle> &hostParticles) {
+		               const std::vector<ClSphAtom> &atom,
+		               const std::vector<float3> &position,
+		               const std::vector<float3> &velocity) {
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
-				const ClSphParticle &p = hostParticles[i];
+				const ClSphParticle &p = atom[i].particle;
 				fluid::Particle<T, N> &particle = xs[i];
 				particle.id = static_cast<T>(p.id);
 				particle.type = resolve(p.type);
 				particle.mass = static_cast<N>(p.mass);
-				particle.position = clutil::clToVec3<N>(p.position);
-				particle.velocity = clutil::clToVec3<N>(p.velocity);
+				particle.position = clutil::clToVec3<N>(position[i]);
+				particle.velocity = clutil::clToVec3<N>(velocity[i]);
 //				std::cout << "GPU >> "
 //				          << " t=" << particle.t
 //				          << " p=" << glm::to_string(particle.position)
@@ -472,10 +474,18 @@ namespace ocl {
 			}
 		}
 
+		template<typename A>
+		cl::Buffer makeBuffer(const std::vector<ClSphAtom> &atoms, const bool readOnly,
+		                      const std::function<A(const ClSphAtom &)> &f) {
+			std::vector<A> drain;
+			std::transform(atoms.begin(), atoms.end(), std::back_inserter(drain), f);
+			return cl::Buffer(queue, drain.begin(), drain.end(), readOnly);
+		}
+
 	public:
 		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
-												  std::vector<fluid::Particle<T, N>> &xs,
-												  const std::vector<fluid::MeshCollider<N>> &colliders) override {
+		                                          std::vector<fluid::Particle<T, N>> &xs,
+		                                          const std::vector<fluid::MeshCollider<N>> &colliders) override {
 
 
 			Stopwatch watch = Stopwatch("CPU advance");
@@ -505,9 +515,9 @@ namespace ocl {
 			auto sortz = watch.start("CPU sortz");
 
 			std::sort(hostAtoms.begin(), hostAtoms.end(),
-					  [](const ClSphAtom &l, const ClSphAtom &r) {
-						  return l.zIndex < r.zIndex;
-					  });
+			          [](const ClSphAtom &l, const ClSphAtom &r) {
+				          return l.zIndex < r.zIndex;
+			          });
 
 			// ska_sort(hostAtoms.begin(), hostAtoms.end(),
 			//  [](const ClSphAtom &a) { return a.zIndex; });
@@ -553,34 +563,53 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << to_string(extent)
-					  << " GridTable = " << hostGridTable.size()
-					  << std::endl;
+			          << " Extent = " << to_string(extent)
+			          << " GridTable = " << hostGridTable.size()
+			          << std::endl;
 #endif
 
 			auto functors = watch.start("CPU functors");
 
 
-			auto rangeKernel = cl::KernelFunctor<
-					ClSphConfig, cl::Buffer &, uint, cl::Buffer &, uint, cl::Buffer &
-			>(clsph, "sph_mkrange");
+
 
 			auto lambdaKernel = cl::KernelFunctor<
-					ClSphConfig, cl::Buffer &, uint, cl::Buffer &
+					ClSphConfig,
+					cl::Buffer &,
+					cl::Buffer &,
+					cl::Buffer &,
+
+					cl::Buffer &, cl::Buffer &, uint
+
+
 			>(clsph, "sph_lambda");
 
-
 			auto deltaKernel = cl::KernelFunctor<
-					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &,
-					cl::Buffer &, uint
+					ClSphConfig &,
+					cl::Buffer &, uint,
+
+					cl::Buffer &, //  pstar
+					cl::Buffer &, // lambda
+					cl::Buffer &, // pos
+					cl::Buffer &, // vel
+					cl::Buffer &,  // deltap
+
+					cl::Buffer &, cl::Buffer &, uint
+
+
 			>(clsph, "sph_delta");
 			auto finaliseKernel = cl::KernelFunctor<
-					ClSphConfig &, cl::Buffer &, cl::Buffer &
+					ClSphConfig &,
+					cl::Buffer &,
+					cl::Buffer &,
+					cl::Buffer &
 			>(clsph, "sph_finalise");
 
 
 			auto createFieldKernel = cl::KernelFunctor<
-					ClSphConfig &, cl::Buffer &, uint, cl::Buffer &, uint,
+					ClSphConfig &,
+					cl::Buffer &,
+					cl::Buffer &, uint,
 					float3, ClMcConfig,
 					cl::Buffer &, uint3, uint3
 			>(clsph, "sph_create_field");
@@ -593,28 +622,76 @@ namespace ocl {
 					glm::floor(tvec3<N>(extent) * mcConfig.sampleResolution)) + tvec3<size_t>(1);
 
 			auto mcLattice = surface::Lattice<N>(sampleSize.x, sampleSize.y, sampleSize.z, -1);
-			std::vector<ClSphParticle> hostParticles(atomsN);
+			std::vector<float3> hostPosition(atomsN);
+			std::vector<float3> hostVelocity(atomsN);
+
+//			std::vector<ClSphParticle> hostParticles(atomsN);
 
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
 
 			try {
 
 				auto kernel_copy = watch.start("\t[GPU] kernel_copy");
-				cl::Buffer deviceAtoms(
-						queue, hostAtoms.begin(), hostAtoms.end(), false);
+//				cl::Buffer deviceAtoms(
+//						queue, hostAtoms.begin(), hostAtoms.end(), false);
 				cl::Buffer deviceColliderMesh(
 						queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
 				cl::Buffer deviceGridTable(
 						queue, hostGridTable.begin(), hostGridTable.end(), true);
 
-				cl::Buffer deviceParticles(context,
-										   CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
+//				cl::Buffer deviceParticles(context,
+//				                           CL_MEM_WRITE_ONLY, sizeof(ClSphParticle) * atomsN);
+
+
 				cl::Buffer deviceFields(context,
-										CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
+				                        CL_MEM_WRITE_ONLY, sizeof(N) * mcLattice.size());
 
 
-				cl::Buffer deviceRanges(context,
-										CL_MEM_READ_WRITE, sizeof(uint2) * atomsN * 27);
+
+
+//				std::vector<uint>  _zIndex (atomsN);
+//				std::vector<float3>  _deltaP (atomsN);
+//				std::vector<float3>  _pStar (atomsN);
+//				std::vector<float>  _mass (atomsN);
+//				std::vector<float>  _lambda (atomsN);
+//				std::vector<float3>  _position (atomsN);
+//				std::vector<float3>  _velocity (atomsN);
+//
+//
+//				for (int i = 0; i < atomsN; ++i) {
+//					_zIndex[i] = hostAtoms[i].zIndex;
+//					_deltaP[i] = hostAtoms[i].deltaP;
+//					_pStar[i] = hostAtoms[i].pStar;
+//					_mass[i] = hostAtoms[i].particle.mass;
+//					_lambda[i] = hostAtoms[i].lambda;
+//					_position[i] = hostAtoms[i].particle.position;
+//					_velocity[i] = hostAtoms[i].particle.velocity;
+//				}
+//
+//				auto zIndex = cl::Buffer(queue, _zIndex.begin(), _zIndex.end(), false);
+//				auto deltaP = cl::Buffer(queue, _deltaP.begin(), _deltaP.end(), false);
+//				auto pStar = cl::Buffer(queue, _pStar.begin(), _pStar.end(), false);
+//				auto mass = cl::Buffer(queue, _mass.begin(), _mass.end(), false);
+//				auto lambda = cl::Buffer(queue, _lambda.begin(), _lambda.end(), false);
+//				auto position = cl::Buffer(queue, _position.begin(), _position.end(), false);
+//				auto velocity = cl::Buffer(queue, _velocity.begin(), _velocity.end(), false);
+//
+
+//
+				auto zIndex = makeBuffer<uint>(hostAtoms, false,
+				                               [](const ClSphAtom &a) { return a.zIndex; });
+				auto deltaP = makeBuffer<float3>(hostAtoms, false,
+				                                 [](const ClSphAtom &a) { return a.deltaP; });
+				auto pStar = makeBuffer<float3>(hostAtoms, false,
+				                                [](const ClSphAtom &a) { return a.pStar; });
+				auto mass = makeBuffer<float>(hostAtoms, false,
+				                              [](const ClSphAtom &a) { return a.particle.mass; });
+				auto lambda = makeBuffer<float>(hostAtoms, false,
+				                                [](const ClSphAtom &a) { return a.lambda; });
+				auto position = makeBuffer<float3>(hostAtoms, false,
+				                                   [](const ClSphAtom &a) { return a.particle.position; });
+				auto velocity = makeBuffer<float3>(hostAtoms, false,
+				                                   [](const ClSphAtom &a) { return a.particle.velocity; });
 
 
 #ifdef DEBUG
@@ -623,16 +700,15 @@ namespace ocl {
 				kernel_copy();
 
 
-
 				auto mkrange = watch.start("\t[GPU] sph-mkrange");
 
-				rangeKernel(
-						cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
-						clConfig,
-						deviceAtoms, static_cast<uint>(atomsN),
-						deviceGridTable, static_cast<uint>(gridTableN),
-						deviceRanges
-				);
+//				rangeKernel(
+//						cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
+//						clConfig,
+//						deviceGridTable, static_cast<uint>(gridTableN),
+//						deviceRanges,
+//						zIndex
+//				);
 
 #ifdef DEBUG
 				queue.finish();
@@ -641,19 +717,27 @@ namespace ocl {
 				auto lambda_delta = watch.start(
 						"\t[GPU] sph-lambda/delta*" + std::to_string(config.iteration));
 
+				const cl::NDRange &range = cl::NDRange( );
 
 				for (size_t itr = 0; itr < config.iteration; ++itr) {
 					lambdaKernel(
-							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
+							cl::EnqueueArgs(queue, cl::NDRange(atomsN), range),
 							clConfig,
-							deviceAtoms, static_cast<uint>(atomsN),
-							deviceRanges);
+							pStar,
+							mass,
+							lambda,
+							zIndex, 	deviceGridTable, static_cast<uint>(gridTableN)
+							);
 					deltaKernel(
-							cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
+							cl::EnqueueArgs(queue, cl::NDRange(atomsN), range),
 							clConfig,
-							deviceAtoms, static_cast<uint>(atomsN),
-							deviceRanges,
-							deviceColliderMesh, static_cast<uint>(hostColliderMesh.size())
+							deviceColliderMesh, static_cast<uint>(hostColliderMesh.size()),
+							pStar,
+							lambda,
+							position,
+							velocity,
+							deltaP,
+							zIndex, 	deviceGridTable, static_cast<uint>(gridTableN)
 
 					);
 				}
@@ -667,7 +751,11 @@ namespace ocl {
 
 
 				finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atomsN)),
-							   clConfig, deviceAtoms, deviceParticles);
+				               clConfig,
+				               pStar,
+				               position,
+				               velocity
+				);
 #ifdef DEBUG
 				queue.finish();
 #endif
@@ -679,7 +767,7 @@ namespace ocl {
 						cl::EnqueueArgs(queue, cl::NDRange(
 								sampleSize.x, sampleSize.y, sampleSize.z)),
 						clConfig,
-						deviceAtoms, static_cast<uint>(atomsN),
+						position,
 						deviceGridTable, static_cast<uint>(gridTableN),
 						clutil::vec3ToCl(minExtent), mcConfig,
 						deviceFields, clutil::uvec3ToCl(sampleSize), clutil::uvec3ToCl(extent));
@@ -694,7 +782,12 @@ namespace ocl {
 
 				auto kernel_return = watch.start("\t[GPU] kernel_return");
 				cl::copy(queue, deviceFields, mcLattice.begin(), mcLattice.end());
-				cl::copy(queue, deviceParticles, hostParticles.begin(), hostParticles.end());
+
+
+				cl::copy(queue, position, hostPosition.begin(), hostPosition.end());
+				cl::copy(queue, velocity, hostVelocity.begin(), hostVelocity.end());
+
+
 #ifdef DEBUG
 				queue.finish();
 #endif
@@ -702,14 +795,16 @@ namespace ocl {
 
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
+			} catch (const std::exception &e) {
+				throw e;
 			}
 			kernel_exec();
 
 
 			auto write_back = watch.start("write_back");
-			overwrite(xs, hostParticles);
+			overwrite(xs, hostAtoms, hostPosition, hostVelocity);
 			write_back();
 
 //			cl::copy(atoms, actualAtoms.begin(), actualAtoms.end());
@@ -722,7 +817,7 @@ namespace ocl {
 
 			std::vector<surface::Triangle<N>> triangles =
 					sampleLattice(100, config.scale,
-								  minExtent, h / mcConfig.sampleResolution, mcLattice);
+					              minExtent, h / mcConfig.sampleResolution, mcLattice);
 
 
 			march();
@@ -746,11 +841,11 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "MC lattice: " << mcLattice.size() << " Grid=" << to_string(extent)
-					  << " res="
-					  << mcLattice.xSize() << "x"
-					  << mcLattice.ySize() << "x"
-					  << mcLattice.zSize()
-					  << std::endl;
+			          << " res="
+			          << mcLattice.xSize() << "x"
+			          << mcLattice.ySize() << "x"
+			          << mcLattice.zSize()
+			          << std::endl;
 			std::cout << watch << std::endl;
 #endif
 

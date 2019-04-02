@@ -209,7 +209,7 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	omp_set_num_threads(6);
+	omp_set_num_threads(4);
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 5;
@@ -372,7 +372,7 @@ void run() {
 #ifdef DO_SURFACE
 		write_triangles(mmfTSink, triangles);
 #endif
-//		write_particles(mmfPSink, xs);
+		write_particles(mmfPSink, xs);
 		write_triangles(mmfTSink, triangles);
 		std::cout << "Trgs=" << triangles.size() << std::endl;
 

@@ -32,6 +32,7 @@ add_library(fluid INTERFACE)
 include_directories(third_party)
 target_include_directories(fluid INTERFACE
         include/fluid
+        include/fluid/oclsph_kernel.h
         third_party
         )
 
