@@ -44,13 +44,13 @@ namespace mmf {
 		}
 
 
-		template<typename W>
-		inline size_t read(const W &sink, Struct &s, const size_t offset) {
+		template<typename R>
+		inline size_t read(const R &source, Struct &s, const size_t offset) {
 			union {
 				Type d;
 				unsigned char bytes[size];
 			} u{};
-			for (size_t i = 0; i < size; i++) u.bytes[i] = sink[offset + i];
+			for (size_t i = 0; i < size; i++) u.bytes[i] = source[offset + i];
 			g(s, u.d);
 			return offset + size;
 		}
@@ -152,28 +152,28 @@ namespace mmf {
 
 
 	namespace reader {
-		template<typename W, class S, class T>
-		inline static size_t read(const W &w, S &s, const size_t offset, T &t) {
-			return t.read(w, s, offset);
+		template<typename R, class S, class T>
+		inline static size_t read(const R &r, S &s, const size_t offset, T &t) {
+			return t.read(r, s, offset);
 		}
 
-		template<typename W, class S, class T, class ...Rest>
-		inline static size_t read(const W &w, S &s, const size_t offset, T t, Rest...es) {
-			size_t next = read(w, s, offset, t);
-			return read(w, s, next, es...);
+		template<typename R, class S, class T, class ...Rest>
+		inline static size_t read(const R &r, S &s, const size_t offset, T t, Rest...es) {
+			size_t next = read(r, s, offset, t);
+			return read(r, s, next, es...);
 		}
 
-		template<typename W, class S, std::size_t... Is, class ...Rest>
-		inline static size_t readPacked_impl(const W &w, S &s, const size_t offset,
+		template<typename R, class S, std::size_t... Is, class ...Rest>
+		inline static size_t readPacked_impl(const R &r, S &s, const size_t offset,
 		                                     const std::tuple<Rest...> &xs,
 		                                     const std::index_sequence<Is...>) {
-			return read(w, s, offset, std::get<Is>(xs)...);
+			return read(r, s, offset, std::get<Is>(xs)...);
 		}
 
-		template<typename W, class S, class ...Rest>
+		template<typename R, class S, class ...Rest>
 		inline static size_t
-		readPacked(const W &w, S &s, const size_t offset, const Entries<Rest...> &e) {
-			return readPacked_impl(w, s, offset, e.args, std::index_sequence_for<Rest...>());
+		readPacked(const R &r, S &s, const size_t offset, const Entries<Rest...> &e) {
+			return readPacked_impl(r, s, offset, e.args, std::index_sequence_for<Rest...>());
 		}
 
 	}

@@ -404,8 +404,8 @@ namespace ocl {
 			clutil::Stopwatch watch = clutil::Stopwatch("CPU advance");
 
 			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 2.5f;
-			mcConfig.particleSize = 50.f;
+			mcConfig.sampleResolution = 3.2f;
+			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.8;
 
 
@@ -463,12 +463,14 @@ namespace ocl {
 				auto xs = colliders[i].triangles;
 				for (int j = 0; j < static_cast<int>(xs.size()); ++j) {
 					ClSphTraiangle trig;
-					trig.a = clutil::vec3ToCl(xs[i].v0);
-					trig.b = clutil::vec3ToCl(xs[i].v1);
-					trig.c = clutil::vec3ToCl(xs[i].v2);
+					trig.a = clutil::vec3ToCl(xs[j].v0);
+					trig.b = clutil::vec3ToCl(xs[j].v1);
+					trig.c = clutil::vec3ToCl(xs[j].v2);
 					hostColliderMesh.push_back(trig);
 				}
 			}
+
+			std::cout << "Collider trig: " << hostColliderMesh.size() << "\n";
 
 			collider_concat();
 

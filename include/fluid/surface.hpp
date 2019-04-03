@@ -341,6 +341,7 @@ namespace surface {
 		tvec3<N> v2;
 //		tvec3<N> normal;
 
+		Triangle() {}
 		explicit Triangle(
 				const tvec3<N> &v0,
 				const tvec3<N> &v1,

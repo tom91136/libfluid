@@ -4,7 +4,7 @@
 #include "cl_types.h"
 #include "oclsph_type.h"
 
-bool inTrig(ClSphTraiangle triangle, float3 P) {
+inline bool inTrig(ClSphTraiangle triangle, float3 P) {
 	float3 v0 = triangle.c - triangle.a;
 	float3 v1 = triangle.b - triangle.a;
 	float3 v2 = P - triangle.a;
@@ -15,7 +15,7 @@ bool inTrig(ClSphTraiangle triangle, float3 P) {
 	float dot11 = dot(v1, v1);
 	float dot12 = dot(v1, v2);
 // Compute barycentric coordinates
-	float invDenom = 1.0 / (dot00 * dot11 - dot01 * dot01);
+	float invDenom = native_recip(dot00 * dot11 - dot01 * dot01);
 	float u = (dot11 * dot02 - dot01 * dot12) * invDenom;
 	float v = (dot00 * dot12 - dot01 * dot02) * invDenom;
 	return (u >= 0) && (v >= 0) && (u + v < 1);
@@ -29,17 +29,20 @@ bool collideTriangle2(
 
 	float3 p = response->position;
 	float3 velocity = response->velocity;
+//		printf("Trig =[%d]\n", meshN);
 
 	for (size_t i = 0; i < meshN; i++) {
-		const  ClSphTraiangle triangle = mesh[i];
+		const ClSphTraiangle triangle = mesh[i];
+
+//		printf("Trig[%d] = %f %f %f\n", i, triangle.c.x, triangle.c.y, triangle.c.z);
 
 		const float3 n = cross((triangle.b - triangle.a), (triangle.c - triangle.a));
-		const float3 nn = normalize(n);
+		const float3 nn = fast_normalize(n);
 
 		float t = dot(nn, triangle.a) - dot(nn, p);
 		float3 p0 = p + (nn * t);
 
-		if (inTrig(triangle, p0) && fast_distance(p, p0) < 5.f) {
+		if (inTrig(triangle, p0) && fast_distance(p, p0) <10.f) {
 			float3 r = velocity - (nn * 2 * dot(velocity, nn));
 			response->position = prev;
 			response->velocity = r;

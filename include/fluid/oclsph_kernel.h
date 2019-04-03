@@ -309,7 +309,7 @@ kernel void sph_delta(
 	resp.position = (pStar[a] + deltaP[a]) * config.scale;
 	resp.velocity = velocity[a];
 
-//	collideTriangle2(mesh, meshN, particle[a].position, &resp);
+	collideTriangle2(mesh, meshN, position[a], &resp);
 
 	// clamp to extent
 	resp.position = min(config.maxBound, max(config.minBound, resp.position));
