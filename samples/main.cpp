@@ -211,7 +211,7 @@ void run() {
 	using hrc = high_resolution_clock;
 
 	size_t cores = std::max<size_t>(1, std::thread::hardware_concurrency() / 2);
-	omp_set_num_threads(4);
+	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
 	const size_t pcount = (64) * 1000;
