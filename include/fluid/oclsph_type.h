@@ -24,9 +24,6 @@ typedef struct ClSphParticle {
 	ALIGNED_(16) float3 velocity;
 } ClSphParticle;
 
-// zIndex pstar lambda deltaP mass
-// size_t float3 float float3 float
-// sph_lambda -> pStar[R] w
 
 
 typedef struct ClSphAtom {

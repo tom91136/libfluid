@@ -33,6 +33,7 @@ namespace fluid {
 		tvec3<N> velocity;
 //		std::unique_ptr<std::vector<uint32_t >> neighbours;
 
+		Particle() : type(Type::Fluid) {}
 		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
 		                  const tvec3<N> &velocity) :
 				id(t), type(type), mass(mass), position(position), velocity(velocity) {
@@ -96,7 +97,8 @@ namespace fluid {
 	struct MeshCollider {
 		const std::vector<surface::Triangle<N>> triangles;
 
-		explicit MeshCollider(const std::vector<surface::Triangle<N>> &triangles) : triangles(triangles) {}
+		explicit MeshCollider(const std::vector<surface::Triangle<N>> &triangles) : triangles(
+				triangles) {}
 	};
 
 	template<typename N>

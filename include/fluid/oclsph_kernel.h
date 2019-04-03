@@ -256,38 +256,22 @@ kernel void check_size(global size_t *sizes) {
 
 kernel void sph_lambda(
 		const ClSphConfig config,
+		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
 		const global float3 *pStar,
 		const global float *mass,
-		global float *lambda,
-		const global uint *zIndex, const global uint *gridTable, const uint gridTableN
-
+		global float *lambda
 ) {
 
 	const size_t a = get_global_id(0);
-	const float3 pstarA = pStar[a];
 
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
 
-
 	FOR_EACH_NEIGHBOUR__(zIndex[a], gridTable, gridTableN, {
-		const float3 pstarB = pStar[b];
-
-		const float r = fast_distance(pstarA, pstarB);
-		norm2V = mad(spikyKernelGradient(pstarA, pstarB, r), RHO_RECIP, norm2V);
+		const float r = fast_distance(pStar[a], pStar[b]);
+		norm2V = mad(spikyKernelGradient(pStar[a], pStar[b], r), RHO_RECIP, norm2V);
 		rho = mad(1, poly6Kernel(r), rho);
 	});
-//
-//	for (uint i = 0; i < 27; ++i) {
-//		const uint2 range = ranges[a * 27 + i];
-//		for (uint b = range.s0; b < range.s1; ++b) {
-//			const float3 pstarB = pStar[b];
-//
-//			const float r = fast_distance(pstarA, pstarB);
-//			norm2V = mad(spikyKernelGradient(pstarA, pstarB, r), RHO_RECIP, norm2V);
-//			rho = mad(1, poly6Kernel(r), rho);
-//		}
-//	}
 
 	float norm2 = fast_length_sq(norm2V); // dot self = length2
 	float C1 = (rho / RHO - 1.f);
@@ -297,13 +281,13 @@ kernel void sph_lambda(
 
 kernel void sph_delta(
 		const ClSphConfig config,
+		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
 		const global ClSphTraiangle *mesh, const uint meshN,
 		global float3 *pStar,
 		const global float *lambda,
 		const global float3 *position,
 		global float3 *velocity,
-		global float3 *deltaP,
-		const global uint *zIndex, const global uint *gridTable, const uint gridTableN
+		global float3 *deltaP
 
 ) {
 	const size_t a = get_global_id(0);
@@ -312,35 +296,17 @@ kernel void sph_delta(
 
 	float3 deltaPacc = (float3) (0.f);
 
-	const float3 pstarA = pStar[a];
-	const float lambdaA = lambda[a];
 	FOR_EACH_NEIGHBOUR__(zIndex[a], gridTable, gridTableN, {
-		const float3 pstarB = pStar[b];
-
-		const float r = fast_distance(pstarA, pstarB);
+		const float r = fast_distance(pStar[a], pStar[b]);
 		const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
-		const float factor = (lambdaA + lambda[b] + corr) / RHO;
-		deltaPacc = mad(spikyKernelGradient(pstarA, pstarB, r), factor, deltaPacc);
+		const float factor = (lambda[a] + lambda[b] + corr) / RHO;
+		deltaPacc = mad(spikyKernelGradient(pStar[a], pStar[b], r), factor, deltaPacc);
 	});
 
-//	for (uint i = 0; i < 27; ++i) {
-//		const uint2 range = ranges[a * 27 + i];
-//		for (uint b = range.s0; b < range.s1; ++b) {
-//
-//			const float3 pstarB = pStar[b];
-//
-//			const float r = fast_distance(pstarA, pstarB);
-//			const float corr = -CorrK * pow(poly6Kernel(r) / p6DeltaQ, CorrN);
-//			const float factor = (lambdaA + lambda[b] + corr) / RHO;
-//			deltaPacc = mad(spikyKernelGradient(pstarA, pstarB, r), factor, deltaPacc);
-//		}
-//	}
 	deltaP[a] = deltaPacc;
 
-	// collision
-
 	ClSphResponse resp;
-	resp.position = (pstarA + deltaP[a]) * config.scale;
+	resp.position = (pStar[a] + deltaP[a]) * config.scale;
 	resp.velocity = velocity[a];
 
 //	collideTriangle2(mesh, meshN, particle[a].position, &resp);
@@ -391,12 +357,12 @@ kernel void sph_finalise(
 	velocity[a] = mad(deltaX, (1.f / config.dt), velocity[a]) * VD;
 }
 
-kernel void sph_create_field(
-		const ClSphConfig config,
-		const global float3 *position,
+kernel void sph_evalLattice(
+		const ClSphConfig config, const ClMcConfig mcConfig,
 		const global uint *gridTable, uint gridTableN,
-		const float3 min, const ClMcConfig mcConfig,
-		global float *field, const uint3 sizes, const uint3 gridExtent) {
+		const float3 min, const uint3 sizes, const uint3 gridExtent,
+		const global float3 *position,
+		global float *lattice) {
 
 
 	const size_t x = get_global_id(0);
@@ -479,5 +445,5 @@ kernel void sph_create_field(
 		}
 	}
 
-	field[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
+	lattice[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
 }

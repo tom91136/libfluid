@@ -7,6 +7,7 @@
 #include <random>
 #include <iostream>
 #include <fstream>
+#include <thread>
 
 #include "fluid/fluid.hpp"
 #include "fluid/surface.hpp"
@@ -209,7 +210,10 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
+	size_t cores = std::max<size_t>(1, std::thread::hardware_concurrency() / 2);
 	omp_set_num_threads(4);
+	std::cout << "OMP nCores: " << cores << std::endl;
+
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 5;
@@ -217,18 +221,18 @@ void run() {
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
+//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
 	std::random_device dev;
 	std::mt19937 rng(dev());
 	std::uniform_int_distribution<std::mt19937::result_type> dist(1, 500);
 
-//	for (size_t i = 0; i < pcount; ++i) {
-//		xs.emplace_back(i, fluid::Fluid, 1.0,
-//		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
-//		                tvec3<num_t>(0));
-//	}
+	for (size_t i = 0; i < pcount; ++i) {
+		xs.emplace_back(i, fluid::Fluid, 1.0,
+		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
+		                tvec3<num_t>(0));
+	}
 
 
 	std::cout << "Mark" << std::endl;
@@ -244,14 +248,23 @@ void run() {
 //	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
 
 
+
+#ifdef _WIN32
+	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
+#elif __APPLE__
+	const auto kernelPaths = "/Users/tom/libfluid/include/fluid/";
+#elif defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
 	const auto kernelPaths = "/home/tom/libfluid/include/fluid/";
-	// const auto kernelPaths = "/Users/tom/libfluid/include/fluid/";
-//	const auto kernelPaths = "C:\\Users\\Tom\\libfluid\\include\\fluid\\";
+#else
+#   error "Unknown compiler"
+#endif
+
 
 	clutil::enumeratePlatformToCout();
 
 
-	const std::vector<std::string> signatures = {"Ellesmere", "Quadro", "ATI", "1050", "980", "NEO", "Tesla"};
+	const std::vector<std::string> signatures = {
+			"Ellesmere", "Quadro", "ATI", "1050", "980", "NEO", "Tesla"};
 	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
 	auto found = clutil::findDeviceWithSignature({signatures,});
 
@@ -272,7 +285,7 @@ void run() {
 
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
-	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver<size_t, num_t>(
+	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver(
 			0.1,
 			kernelPaths,
 			device));
