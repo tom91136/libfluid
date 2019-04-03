@@ -221,18 +221,18 @@ void run() {
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
-//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
-//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
 	std::random_device dev;
 	std::mt19937 rng(dev());
 	std::uniform_int_distribution<std::mt19937::result_type> dist(1, 500);
 
-	for (size_t i = 0; i < pcount; ++i) {
-		xs.emplace_back(i, fluid::Fluid, 1.0,
-		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
-		                tvec3<num_t>(0));
-	}
+//	for (size_t i = 0; i < pcount; ++i) {
+//		xs.emplace_back(i, fluid::Fluid, 1.0,
+//		                tvec3<num_t>(dist(rng), dist(rng), dist(rng)),
+//		                tvec3<num_t>(0));
+//	}
 
 
 	std::cout << "Mark" << std::endl;
