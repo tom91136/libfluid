@@ -119,7 +119,7 @@ inline void sortArray27(size_t d[27]) {
 	//@formatter:on
 }
 
-inline zCurveGridIndexAtCoordU3(const uint3 v){
+inline zCurveGridIndexAtCoordU3(const uint3 v) {
 	return zCurveGridIndexAtCoord(v.x, v.y, v.z);
 }
 
@@ -274,7 +274,7 @@ kernel void check_size(global size_t *sizes) {
 
 
 kernel void sph_lambda(
-		const ClSphConfig config,
+		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
 		const global float3 *pStar,
 		const global float *mass,
@@ -299,7 +299,7 @@ kernel void sph_lambda(
 
 
 kernel void sph_delta(
-		const ClSphConfig config,
+		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
 		const global ClSphTraiangle *mesh, const uint meshN,
 		global float3 *pStar,
@@ -325,16 +325,16 @@ kernel void sph_delta(
 	deltaP[a] = deltaPacc;
 
 	ClSphResponse resp;
-	resp.position = (pStar[a] + deltaP[a]) * config.scale;
+	resp.position = (pStar[a] + deltaP[a]) * config->scale;
 	resp.velocity = velocity[a];
 
 	collideTriangle2(mesh, meshN, position[a], &resp);
 
 	// clamp to extent
-	resp.position = min(config.maxBound, max(config.minBound, resp.position));
+	resp.position = min(config->maxBound, max(config->minBound, resp.position));
 
 
-	pStar[a] = resp.position / config.scale;
+	pStar[a] = resp.position / config->scale;
 	velocity[a] = resp.velocity;
 
 
@@ -348,7 +348,7 @@ kernel void sph_delta(
 
 
 //kernel void sph_initialise(
-//		const ClSphConfig config, float3 constForce,
+//		const constant ClSphConfig *config, float3 constForce,
 //		global ClSphAtom *atoms,
 //) {
 //	const size_t id = get_global_id(0);
@@ -365,19 +365,19 @@ kernel void sph_delta(
 
 
 kernel void sph_finalise(
-		const ClSphConfig config,
+		const constant ClSphConfig *config,
 		const global float3 *pStar,
 		global float3 *position,
 		global float3 *velocity
 ) {
 	const size_t a = get_global_id(0);
-	const float3 deltaX = pStar[a] - position[a] / config.scale;
-	position[a] = pStar[a] * config.scale;
-	velocity[a] = mad(deltaX, (1.f / config.dt), velocity[a]) * VD;
+	const float3 deltaX = pStar[a] - position[a] / config->scale;
+	position[a] = pStar[a] * config->scale;
+	velocity[a] = mad(deltaX, (1.f / config->dt), velocity[a]) * VD;
 }
 
 kernel void sph_evalLattice(
-		const ClSphConfig config, const ClMcConfig mcConfig,
+		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const global uint *gridTable, uint gridTableN,
 		const float3 min, const uint3 sizes, const uint3 gridExtent,
 		const global float3 *position,
@@ -390,16 +390,16 @@ kernel void sph_evalLattice(
 
 
 	const float3 pos = (float3) (x, y, z);
-	const float step = SPH_H / mcConfig.sampleResolution;
-	const float3 a = (min + (pos * step)) * config.scale;
+	const float step = SPH_H / mcConfig->sampleResolution;
+	const float3 a = (min + (pos * step)) * config->scale;
 
 	const size_t zIndex = zCurveGridIndexAtCoord(
-			(size_t) (pos.x / mcConfig.sampleResolution),
-			(size_t) (pos.y / mcConfig.sampleResolution),
-			(size_t) (pos.z / mcConfig.sampleResolution));
+			(size_t) (pos.x / mcConfig->sampleResolution),
+			(size_t) (pos.y / mcConfig->sampleResolution),
+			(size_t) (pos.z / mcConfig->sampleResolution));
 
-	const float sN = pown(mcConfig.particleSize, 2);
-	const float threshold = SPH_H * config.scale * 1;
+	const float sN = pown(mcConfig->particleSize, 2);
+	const float threshold = SPH_H * config->scale * 1;
 
 
 	const size_t __x = coordAtZCurveGridIndex0(zIndex);
@@ -459,7 +459,7 @@ kernel void sph_evalLattice(
 			if (fast_distance(position[b], a) < threshold) {
 				const float3 l = (position[b]) - a;
 				const float len = fast_length_sq(l);
-				v += (sN / pow(len, mcConfig.particleInfluence));
+				v += (sN / pow(len, mcConfig->particleInfluence));
 			}
 		}
 	}

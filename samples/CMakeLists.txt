@@ -37,7 +37,7 @@ else ()
             -Wpedantic
             -Werror=return-type
             )
-    set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native)
+    set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native -g)
     set(DEBUG_OPTIONS  -fno-omit-frame-pointer -fsanitize=address -march=native)
     target_link_libraries(main PUBLIC $<$<CONFIG:DEBUG>:-Wl,-lasan>)
 

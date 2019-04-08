@@ -158,7 +158,7 @@ mio::mmap_source openMmf(const std::string &path) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-		          << (double) source.size() / (1024 * 1024) << "MB" << std::endl;
+				  << (double) source.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return source;
 }
@@ -175,15 +175,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-                tvec3<N> origin,
-                std::vector<fluid::Particle<size_t, num_t >> &xs) {
+				tvec3<N> origin,
+				std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -264,8 +264,8 @@ void run() {
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(-500, -350, -250), xs);
-	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount, tvec3<num_t>(-500, -350, -250), xs);
+//	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
 	std::random_device dev;
 	std::mt19937 rng(dev());
@@ -320,7 +320,7 @@ void run() {
 
 	if (found.size() > 1) {
 		std::cout << "Found more than one device signature:`" << imploded
-		          << "`"  ", using the first one." << std::endl;
+				  << "`"  ", using the first one." << std::endl;
 	}
 
 	const auto device = found.front();
@@ -452,12 +452,12 @@ void run() {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-		          << "Solver:" << (solve / 1000000.0) << "ms "
-		          << "Surface:" << (param / 1000000.0) << "ms "
-		          << "IPC:" << (mmf / 1000000.0) << "ms "
-		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-		          << xs.size()
-		          << std::endl;
+				  << "Solver:" << (solve / 1000000.0) << "ms "
+				  << "Surface:" << (param / 1000000.0) << "ms "
+				  << "IPC:" << (mmf / 1000000.0) << "ms "
+				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+				  << xs.size()
+				  << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();
