@@ -161,7 +161,7 @@ mio::mmap_source openMmf(const std::string &path) {
 
 mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 	std::ofstream file(path, std::ios::out | std::ios::trunc);
-	std::string s(length, ' ');
+	std::string s(std::max<size_t>(1024 * 4, length), ' '); // XXX may fail if than 4k
 	file << s;
 
 	std::error_code error;
@@ -253,7 +253,7 @@ void run() {
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = (32) * 1000;
+	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 3;
 	const num_t scaling = 820; // less = less space between particle
@@ -275,7 +275,7 @@ void run() {
 
 
 	std::cout << "Mark" << std::endl;
-	auto mmfCSink = openMmf("colliders.mmf");
+//	auto mmfCSink = openMmf("colliders.mmf");
 	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
 	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10 * triangleType.first + headerType.first);
 
@@ -347,24 +347,24 @@ void run() {
 	float i = 0;
 
 
-	auto collider = readCollider<num_t>(mmfCSink);
+//	auto collider = readCollider<num_t>(mmfCSink);
 
 	const std::vector<fluid::MeshCollider<num_t>> colliders = {
-			collider
+//			collider
 
-//			fluid::MeshCollider<num_t>(
-//					{
-//						surface::Triangle<num_t>(
-// 							tvec3<num_t>(0, 0, -600),
-// 							tvec3<num_t>(0, 0, 600),
-// 							tvec3<num_t>(300, 1200, 0)),
-//
-//					 surface::Triangle<num_t>(
-//							 tvec3<num_t>(0, 0, -600),
-//							 tvec3<num_t>(0, 0, 600),
-//							 tvec3<num_t>(-300, 1200, 0))
-//
-//					})
+			fluid::MeshCollider<num_t>(
+					{
+							surface::Triangle<num_t>(
+									tvec3<num_t>(0, 0, -600),
+									tvec3<num_t>(0, 0, 600),
+									tvec3<num_t>(300, 1200, 0)),
+
+							surface::Triangle<num_t>(
+									tvec3<num_t>(0, 0, -600),
+									tvec3<num_t>(0, 0, 600),
+									tvec3<num_t>(-300, 1200, 0))
+
+					})
 	};
 
 	for (size_t j = 0; j < iter; ++j) {

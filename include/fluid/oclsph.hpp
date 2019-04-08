@@ -203,13 +203,19 @@ namespace ocl {
 
 			std::vector<surface::Triangle<float>> triangles;
 
+
+			// XXX ICC needs perfectly nested loops like this for omp collapse
+			const size_t latticeX = lattice.xSize() - 1;
+			const size_t latticeY = lattice.ySize() - 1;
+			const size_t latticeZ = lattice.zSize() - 1;
+
 #ifndef _MSC_VER
 #pragma omp declare reduction (merge : std::vector<surface::Triangle<float>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 #pragma omp parallel for collapse(3) reduction(merge: triangles)
 #endif
-			for (size_t x = 0; x < lattice.xSize() - 1; ++x) {
-				for (size_t y = 0; y < lattice.ySize() - 1; ++y) {
-					for (size_t z = 0; z < lattice.zSize() - 1; ++z) {
+			for (size_t x = 0; x < latticeX; ++x) {
+				for (size_t y = 0; y < latticeY; ++y) {
+					for (size_t z = 0; z < latticeZ; ++z) {
 						std::array<float, 8> ns{};
 						std::array<tvec3<float>, 8> vs{};
 						for (size_t j = 0; j < 8; ++j) {

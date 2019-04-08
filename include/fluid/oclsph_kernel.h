@@ -119,12 +119,29 @@ inline void sortArray27(size_t d[27]) {
 	//@formatter:on
 }
 
+inline zCurveGridIndexAtCoordU3(const uint3 v){
+	return zCurveGridIndexAtCoord(v.x, v.y, v.z);
+}
+
 #define SORTED
 
 #ifdef SORTED
 
-
 #define FOR_EACH_NEIGHBOUR__(zIndex, gridTable, gridTableN, op) \
+{ \
+    const uint3 __delta = (uint3)(coordAtZCurveGridIndex0((zIndex)) , coordAtZCurveGridIndex1((zIndex)), coordAtZCurveGridIndex2((zIndex))); \
+    for(size_t __i = 0; __i < 27; __i++) { \
+        const size_t __offset = zCurveGridIndexAtCoordU3(NEIGHBOUR_OFFSETS[__i] + __delta); \
+        const size_t __start = (gridTable)[__offset]; \
+        const size_t __end = ((__offset + 1) < (gridTableN)) ? (gridTable)[__offset + 1] : (__start); \
+        for (size_t b = __start; b < __end; ++b)  { \
+                op; \
+        } \
+    } \
+} \
+
+
+#define FOR_EACH_NEIGHBOUR__7(zIndex, gridTable, gridTableN, op) \
 { \
     const size_t __x = coordAtZCurveGridIndex0((zIndex)); \
     const size_t __y = coordAtZCurveGridIndex1((zIndex)); \
@@ -254,6 +271,7 @@ kernel void check_size(global size_t *sizes) {
 	sizes[get_global_id(0)] = _SIZES[get_global_id(0)];
 }
 
+
 kernel void sph_lambda(
 		const ClSphConfig config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
@@ -270,7 +288,7 @@ kernel void sph_lambda(
 	FOR_EACH_NEIGHBOUR__(zIndex[a], gridTable, gridTableN, {
 		const float r = fast_distance(pStar[a], pStar[b]);
 		norm2V = mad(spikyKernelGradient(pStar[a], pStar[b], r), RHO_RECIP, norm2V);
-		rho = mad(1, poly6Kernel(r), rho);
+		rho = mad(mass[a], poly6Kernel(r), rho);
 	});
 
 	float norm2 = fast_length_sq(norm2V); // dot self = length2

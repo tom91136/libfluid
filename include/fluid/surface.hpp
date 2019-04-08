@@ -538,13 +538,13 @@ namespace surface {
 			return data[i * d2 * d3 + j * d3 + k];
 		}
 
-		size_t xSize() const { return d1; }
+		inline size_t xSize() const { return d1; }
 
-		size_t ySize() const { return d2; }
+		inline size_t ySize() const { return d2; }
 
-		size_t zSize() const { return d3; }
+		inline size_t zSize() const { return d3; }
 
-		size_t size() const { return data.size(); }
+		inline size_t size() const { return data.size(); }
 
 		decltype(auto) begin() { return data.begin(); }
 
