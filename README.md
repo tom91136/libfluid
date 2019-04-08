@@ -21,7 +21,7 @@ Library dependencies:
  
 If you are using vcpkg, install the following dependencies:
 
-    vcpkg install glm mio nlohmann-json catch2
+    vcpkg install opencl glm mio nlohmann-json catch2
 
 On MacOS, first install OpenMP:
 
@@ -29,9 +29,9 @@ On MacOS, first install OpenMP:
 
 # Compiling
 
-On Windows:
+On Windows(PowerShell):
 
-    cmake -Bbuild -H. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+    cmake -Bbuild -H\. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
 
 On Linux:
 
@@ -45,6 +45,32 @@ Then compile:
 
     cmake --build build --target main --config Release
 
+
+
+To compile with Intel C++ Compiler(icc):
+
+First install Intel Parallel Studio XE 2018/2019, be sure to select the `Intel C++ Compiler` option.
+
+On Linux:
+
+    export CC=icc
+    export CXX=icc
+    
+Then run the usual cmake commands.
+
+
+On Windows(tested to work on XE 2018 only):
+
+First, ensure vcpkg has required x64 packages:
+
+    vcpkg install <required packages...> --triplet x64-windows
+
+Then:
+
+    cmake -Bbuild -H\. -DCMAKE_TOOLCHAIN_FILE=C:\Users\<user>\vcpkg\scripts\buildsystems\vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -G"Visual Studio 15 2017 Win64"  -T"Intel C++ Compiler 18.0"
+    
+    cmake --build build --target main --config Release
+    
 
 ## Licence
 

@@ -1,6 +1,10 @@
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
+#ifdef __INTEL_COMPILER
+#define GLM_FORCE_PURE
+#else
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#endif
 
 #include <memory>
 #include <chrono>

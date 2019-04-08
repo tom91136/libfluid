@@ -1,11 +1,7 @@
 #ifndef LIBFLUID_FLUID_HPP
 #define LIBFLUID_FLUID_HPP
 
-
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
-
 
 #include <algorithm>
 #include "glm/ext.hpp"

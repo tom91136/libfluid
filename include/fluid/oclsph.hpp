@@ -1,11 +1,3 @@
-#include <utility>
-
-#include <utility>
-
-#include <utility>
-#include <iomanip>
-
-
 #ifndef LIBFLUID_CLSPH_HPP
 #define LIBFLUID_CLSPH_HPP
 
@@ -14,12 +6,11 @@
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #define CL_HPP_ENABLE_EXCEPTIONS
 
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_FORCE_SIMD_AVX2
 #define GLM_ENABLE_EXPERIMENTAL
 
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <chrono>
@@ -371,10 +362,6 @@ namespace ocl {
 #endif
 			create_field();
 
-#ifdef DEBUG
-			queue.finish();
-#endif
-
 			auto kernel_return = watch.start("\t[GPU] kernel_return");
 			cl::copy(queue, lattice, hostLattice.begin(), hostLattice.end());
 			cl::copy(queue, position, hostPosition.begin(), hostPosition.end());
@@ -382,7 +369,6 @@ namespace ocl {
 #ifdef DEBUG
 			queue.finish();
 #endif
-
 			kernel_return();
 		}
 
@@ -480,7 +466,6 @@ namespace ocl {
 
 			collider_concat();
 
-
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
 			          << " Extent = " << to_string(extent)
@@ -488,7 +473,18 @@ namespace ocl {
 			          << std::endl;
 #endif
 
+			auto kernel_alloc = watch.start("CPU host alloc+copy");
+
+			const tvec3<size_t> sampleSize = tvec3<size_t>(
+					glm::floor(tvec3<float>(extent) * mcConfig.sampleResolution)) +
+			                                 tvec3<size_t>(1);
+
+			std::vector<float3> hostPosition(advection.size());
+			std::vector<float3> hostVelocity(advection.size());
+			surface::Lattice<float> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z, -1);
+
 			ClSphAtoms atoms(advection.size());
+#pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
 				atoms.zIndex[i] = advection[i].zIndex;
 				atoms.pStar[i] = advection[i].pStar;
@@ -497,16 +493,9 @@ namespace ocl {
 				atoms.velocity[i] = clutil::vec3ToCl(advection[i].particle.velocity);
 			}
 
+			kernel_alloc();
+
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
-
-			const tvec3<size_t> sampleSize = tvec3<size_t>(
-					glm::floor(tvec3<float>(extent) * mcConfig.sampleResolution)) +
-			                                 tvec3<size_t>(1);
-
-
-			std::vector<float3> hostPosition(advection.size());
-			std::vector<float3> hostVelocity(advection.size());
-			surface::Lattice<float> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z, -1);
 			try {
 				runKernel(watch, mcConfig, clConfig,
 				          hostGridTable,
