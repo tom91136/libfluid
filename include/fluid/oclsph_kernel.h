@@ -127,7 +127,8 @@ inline zCurveGridIndexAtCoordU3(const uint3 v){
 
 #ifdef SORTED
 
-#define FOR_EACH_NEIGHBOUR__(zIndex, gridTable, gridTableN, op) \
+// FIXME OOB?
+#define FOR_EACH_NEIGHBOUR__BAD(zIndex, gridTable, gridTableN, op) \
 { \
     const uint3 __delta = (uint3)(coordAtZCurveGridIndex0((zIndex)) , coordAtZCurveGridIndex1((zIndex)), coordAtZCurveGridIndex2((zIndex))); \
     for(size_t __i = 0; __i < 27; __i++) { \
@@ -141,7 +142,7 @@ inline zCurveGridIndexAtCoordU3(const uint3 v){
 } \
 
 
-#define FOR_EACH_NEIGHBOUR__7(zIndex, gridTable, gridTableN, op) \
+#define FOR_EACH_NEIGHBOUR__(zIndex, gridTable, gridTableN, op) \
 { \
     const size_t __x = coordAtZCurveGridIndex0((zIndex)); \
     const size_t __y = coordAtZCurveGridIndex1((zIndex)); \
