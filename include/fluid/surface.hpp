@@ -45,12 +45,18 @@ namespace surface {
 	};
 
 	template<typename N>
-	tvec3<N> lerp(N isolevel, tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
+	inline tvec3<N> lerp(N isolevel, tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
 		if (std::abs(isolevel - v1) < 0.00001) return p1;
 		if (std::abs(isolevel - v2) < 0.00001) return p2;
 		if (std::abs(v1 - v2) < 0.00001) return p1;
 		return p1 + (p2 - p1) * ((isolevel - v1) / (v2 - v1));
 	}
+
+//	template<typename N>
+//	inline tvec3<N> lerp(tvec3<N> p1, tvec3<N> p2, N v1, N v2) {
+//		return lerp()
+//		return glm::lerp(p1, p2, v1 / (v2 - v1));
+//	}
 
 	//http://paulbourke.net/geometry/polygonise/
 	template<typename N>
@@ -158,52 +164,83 @@ namespace surface {
 
 	template<typename N>
 	inline void marchSingle(const N isolevel,
-	                        const std::array<N, 8> &ns,
-	                        const std::array<tvec3<N>, 8> &vs,
-	                        std::vector<MeshTriangle<N>> &triangles) {
+							const std::array<N, 8> &vertices,
+							const std::array<tvec3<N>, 8> &normals,
+							const std::array<tvec3<N>, 8> &pos,
+							std::vector<MeshTriangle<N>> &triangles) {
 
 
 		size_t ci = 0;
-		if (ns[0] < isolevel) ci |= 1;
-		if (ns[1] < isolevel) ci |= 2;
-		if (ns[2] < isolevel) ci |= 4;
-		if (ns[3] < isolevel) ci |= 8;
-		if (ns[4] < isolevel) ci |= 16;
-		if (ns[5] < isolevel) ci |= 32;
-		if (ns[6] < isolevel) ci |= 64;
-		if (ns[7] < isolevel) ci |= 128;
+		ci = (vertices[0] < isolevel) ? ci | (1 << 0) : ci;
+		ci = (vertices[1] < isolevel) ? ci | (1 << 1) : ci;
+		ci = (vertices[2] < isolevel) ? ci | (1 << 2) : ci;
+		ci = (vertices[3] < isolevel) ? ci | (1 << 3) : ci;
+		ci = (vertices[4] < isolevel) ? ci | (1 << 4) : ci;
+		ci = (vertices[5] < isolevel) ? ci | (1 << 5) : ci;
+		ci = (vertices[6] < isolevel) ? ci | (1 << 6) : ci;
+		ci = (vertices[7] < isolevel) ? ci | (1 << 7) : ci;
 
 		/* Cube is entirely in/out of the surface */
 		if (EdgeTable[ci] == 0) return;
 
 		std::array<tvec3<N>, 12> ts;
+		std::array<tvec3<N>, 12> ns;
+
 		/* Find the vertices where the surface intersects the cube */
-		if (EdgeTable[ci] & 1 << 0) ts[0] = lerp(isolevel, vs[0], vs[1], ns[0], ns[1]);
-		if (EdgeTable[ci] & 1 << 1) ts[1] = lerp(isolevel, vs[1], vs[2], ns[1], ns[2]);
-		if (EdgeTable[ci] & 1 << 2) ts[2] = lerp(isolevel, vs[2], vs[3], ns[2], ns[3]);
-		if (EdgeTable[ci] & 1 << 3) ts[3] = lerp(isolevel, vs[3], vs[0], ns[3], ns[0]);
-		if (EdgeTable[ci] & 1 << 4) ts[4] = lerp(isolevel, vs[4], vs[5], ns[4], ns[5]);
-		if (EdgeTable[ci] & 1 << 5) ts[5] = lerp(isolevel, vs[5], vs[6], ns[5], ns[6]);
-		if (EdgeTable[ci] & 1 << 6) ts[6] = lerp(isolevel, vs[6], vs[7], ns[6], ns[7]);
-		if (EdgeTable[ci] & 1 << 7) ts[7] = lerp(isolevel, vs[7], vs[4], ns[7], ns[4]);
-		if (EdgeTable[ci] & 1 << 8) ts[8] = lerp(isolevel, vs[0], vs[4], ns[0], ns[4]);
-		if (EdgeTable[ci] & 1 << 9) ts[9] = lerp(isolevel, vs[1], vs[5], ns[1], ns[5]);
-		if (EdgeTable[ci] & 1 << 10) ts[10] = lerp(isolevel, vs[2], vs[6], ns[2], ns[6]);
-		if (EdgeTable[ci] & 1 << 11) ts[11] = lerp(isolevel, vs[3], vs[7], ns[3], ns[7]);
+		if (EdgeTable[ci] & 1 << 0) {
+			ts[0] = lerp(isolevel, pos[0], pos[1], vertices[0], vertices[1]);
+			ns[0] = lerp(isolevel, normals[0], normals[1], vertices[0], vertices[1]);
+		}
+		if (EdgeTable[ci] & 1 << 1) {
+			ts[1] = lerp(isolevel, pos[1], pos[2], vertices[1], vertices[2]);
+			ns[1] = lerp(isolevel, normals[1], normals[2], vertices[1], vertices[2]);
+		}
+		if (EdgeTable[ci] & 1 << 2) {
+			ts[2] = lerp(isolevel, pos[2], pos[3], vertices[2], vertices[3]);
+			ns[2] = lerp(isolevel, normals[2], normals[3], vertices[2], vertices[3]);
+		}
+		if (EdgeTable[ci] & 1 << 3) {
+			ts[3] = lerp(isolevel, pos[3], pos[0], vertices[3], vertices[0]);
+			ns[3] = lerp(isolevel, normals[3], normals[0], vertices[3], vertices[0]);
+		}
+		if (EdgeTable[ci] & 1 << 4) {
+			ts[4] = lerp(isolevel, pos[4], pos[5], vertices[4], vertices[5]);
+			ns[4] = lerp(isolevel, normals[4], normals[5], vertices[4], vertices[5]);
+		}
+		if (EdgeTable[ci] & 1 << 5) {
+			ts[5] = lerp(isolevel, pos[5], pos[6], vertices[5], vertices[6]);
+			ns[5] = lerp(isolevel, normals[5], normals[6], vertices[5], vertices[6]);
+		}
+		if (EdgeTable[ci] & 1 << 6) {
+			ts[6] = lerp(isolevel, pos[6], pos[7], vertices[6], vertices[7]);
+			ns[6] = lerp(isolevel, normals[6], normals[7], vertices[6], vertices[7]);
+		}
+		if (EdgeTable[ci] & 1 << 7) {
+			ts[7] = lerp(isolevel, pos[7], pos[4], vertices[7], vertices[4]);
+			ns[7] = lerp(isolevel, normals[7], normals[4], vertices[7], vertices[4]);
+		}
+		if (EdgeTable[ci] & 1 << 8) {
+			ts[8] = lerp(isolevel, pos[0], pos[4], vertices[0], vertices[4]);
+			ns[8] = lerp(isolevel, normals[0], normals[4], vertices[0], vertices[4]);
+		}
+		if (EdgeTable[ci] & 1 << 9) {
+			ts[9] = lerp(isolevel, pos[1], pos[5], vertices[1], vertices[5]);
+			ns[9] = lerp(isolevel, normals[1], normals[5], vertices[1], vertices[5]);
+		}
+		if (EdgeTable[ci] & 1 << 10) {
+			ts[10] = lerp(isolevel, pos[2], pos[6], vertices[2], vertices[6]);
+			ns[10] = lerp(isolevel, normals[2], normals[6], vertices[2], vertices[6]);
+		}
+		if (EdgeTable[ci] & 1 << 11) {
+			ts[11] = lerp(isolevel, pos[3], pos[7], vertices[3], vertices[7]);
+			ns[11] = lerp(isolevel, normals[3], normals[7], vertices[3], vertices[7]);
+		}
 
 		for (size_t i = 0; TriTable[ci][i] != -1; i += 3) {
-
-			auto v0 = ts[TriTable[ci][i]];
-			auto v1 = ts[TriTable[ci][i + 1]];
-			auto v2 = ts[TriTable[ci][i + 2]];
-
-			auto norm = glm::triangleNormal(v0, v1, v2);
-
-
-			triangles.emplace_back(
-					v0,
-					v1,
-					v2);
+			int x = TriTable[ci][i + 0];
+			int y = TriTable[ci][i + 1];
+			int z = TriTable[ci][i + 2];
+			triangles.emplace_back(ts[x], ts[y], ts[z], ns[x], ns[y], ns[z]);
 		}
 
 	}
@@ -211,8 +248,8 @@ namespace surface {
 
 	template<typename N>
 	std::vector<MeshTriangle<N>> parameterise(const N isolevel,
-	                                          MCLattice<N> lattice,
-	                                          const std::function<N(tvec3<N> &)> &f) {
+											  MCLattice<N> lattice,
+											  const std::function<N(tvec3<N> &)> &f) {
 
 		Lattice<N> field = Lattice<N>(lattice.xSize(), lattice.ySize(), lattice.zSize(), 0);
 

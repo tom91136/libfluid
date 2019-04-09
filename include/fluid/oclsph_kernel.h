@@ -61,8 +61,8 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 
 
 	return (r >= EPSILON && r <= SPH_H) ?
-	       (x - y) * (SpikyKernelFactor * native_divide(pown(SPH_H - r, 2), r)) :
-	       (float3) (0.f);
+		   (x - y) * (SpikyKernelFactor * native_divide(pown(SPH_H - r, 2), r)) :
+		   (float3) (0.f);
 }
 
 #define FOR_SINGLE_GRID(zIndex, b, atoms, gridTable, gridTableN, op) \
@@ -381,7 +381,7 @@ kernel void sph_evalLattice(
 		const global uint *gridTable, uint gridTableN,
 		const float3 min, const uint3 sizes, const uint3 gridExtent,
 		const global float3 *position,
-		global float *lattice) {
+		global float4 *lattice) {
 
 
 	const size_t x = get_global_id(0);
@@ -398,7 +398,6 @@ kernel void sph_evalLattice(
 			(size_t) (pos.y / mcConfig->sampleResolution),
 			(size_t) (pos.z / mcConfig->sampleResolution));
 
-	const float sN = pown(mcConfig->particleSize, 2);
 	const float threshold = SPH_H * config->scale * 1;
 
 
@@ -451,6 +450,7 @@ kernel void sph_evalLattice(
 //	sortArray27(offsets);
 
 	float v = 0.f;
+	float3 normal = (float3) (0);
 	for (size_t i = 0; i < 27; i++) {
 		const size_t offset = offsets[i];
 		const size_t start = gridTable[offset];
@@ -458,11 +458,20 @@ kernel void sph_evalLattice(
 		for (size_t b = start; b < end; ++b) {
 			if (fast_distance(position[b], a) < threshold) {
 				const float3 l = (position[b]) - a;
-				const float len = fast_length_sq(l);
-				v += (sN / pow(len, mcConfig->particleInfluence));
+				const float len = fast_length(l);
+				const float denominator = pow(len, mcConfig->particleInfluence);
+
+				normal += (-mcConfig->particleInfluence) *
+						  mcConfig->particleSize *
+						  (l / denominator);
+				v += (mcConfig->particleSize / denominator);
 			}
 		}
 	}
-
-	lattice[index3d(x, y, z, sizes.x, sizes.y, sizes.z)] = v;
+	normal = fast_normalize(normal);
+	global float4 *out = &lattice[index3d(x, y, z, sizes.x, sizes.y, sizes.z)];
+	out->s0 = v;
+	out->s1 = normal.s0;
+	out->s2 = normal.s1;
+	out->s3 = normal.s2;
 }

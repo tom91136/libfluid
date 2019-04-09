@@ -190,7 +190,7 @@ namespace ocl {
 		std::vector<surface::MeshTriangle<float>> sampleLattice(
 				float isolevel, float scale,
 				const tvec3<float> min, float step,
-				const surface::Lattice<float> &lattice) {
+				const surface::Lattice<float4> &lattice) {
 
 			std::vector<surface::MeshTriangle<float>> triangles;
 
@@ -207,16 +207,19 @@ namespace ocl {
 			for (size_t x = 0; x < latticeX; ++x) {
 				for (size_t y = 0; y < latticeY; ++y) {
 					for (size_t z = 0; z < latticeZ; ++z) {
-						std::array<float, 8> ns{};
-						std::array<tvec3<float>, 8> vs{};
+						std::array<float, 8> vertices{};
+						std::array<tvec3<float>, 8> normals{};
+						std::array<tvec3<float>, 8> pos{};
 						for (size_t j = 0; j < 8; ++j) {
-							tvec3<size_t> offset = tvec3<size_t>(x, y, z) +
-												   surface::CUBE_OFFSETS[j];
-							ns[j] = lattice(offset.x, offset.y, offset.z);
-							vs[j] = (tvec3<float>(offset) * step + min) * scale;
+							tvec3<size_t> offset =
+									tvec3<size_t>(x, y, z) + surface::CUBE_OFFSETS[j];
+							float4 v = lattice(offset.x, offset.y, offset.z);
+							vertices[j] = v.s0;
+							normals[j] = tvec3<float>(v.s1, v.s2, v.s3);
+							pos[j] = (tvec3<float>(offset) * step + min) * scale;
 
 						}
-						surface::marchSingle(isolevel, ns, vs, triangles);
+						surface::marchSingle(isolevel, vertices, normals, pos, triangles);
 					}
 				}
 			}
@@ -291,7 +294,7 @@ namespace ocl {
 					   const tvec3<float> minExtent, const tvec3<size_t> extent,
 					   std::vector<float3> &hostPosition,
 					   std::vector<float3> &hostVelocity,
-					   surface::Lattice<float> &hostLattice
+					   surface::Lattice<float4> &hostLattice
 		) {
 			auto kernel_copy = watch.start("\t[GPU] kernel_copy");
 
@@ -312,7 +315,7 @@ namespace ocl {
 
 			cl::Buffer deltaP(context, CL_MEM_READ_WRITE, sizeof(float3) * atoms.size);
 			cl::Buffer lambda(context, CL_MEM_READ_WRITE, sizeof(float) * atoms.size);
-			cl::Buffer lattice(context, CL_MEM_WRITE_ONLY, sizeof(float) * hostLattice.size());
+			cl::Buffer lattice(context, CL_MEM_WRITE_ONLY, sizeof(float4) * hostLattice.size());
 
 			cl::Buffer sphConfig_ = readOnlyStruct<ClSphConfig>(sphConfig);
 			cl::Buffer mcConfig_ = readOnlyStruct<ClMcConfig>(mcConfig);
@@ -398,8 +401,8 @@ namespace ocl {
 
 	public:
 		std::vector<surface::MeshTriangle<float>> advance(const fluid::Config<float> &config,
-													  std::vector<fluid::Particle<size_t, float>> &xs,
-													  const std::vector<fluid::MeshCollider<float>> &colliders) override {
+														  std::vector<fluid::Particle<size_t, float>> &xs,
+														  const std::vector<fluid::MeshCollider<float>> &colliders) override {
 
 
 			clutil::Stopwatch watch = clutil::Stopwatch("CPU advance");
@@ -408,7 +411,7 @@ namespace ocl {
 			ClMcConfig mcConfig;
 			mcConfig.sampleResolution = 2.f;
 			mcConfig.particleSize = 60.f;
-			mcConfig.particleInfluence = 0.8;
+			mcConfig.particleInfluence = 0.5;
 
 
 			auto advect = watch.start("CPU advect+copy");
@@ -491,7 +494,8 @@ namespace ocl {
 
 			std::vector<float3> hostPosition(advection.size());
 			std::vector<float3> hostVelocity(advection.size());
-			surface::Lattice<float> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z, -1);
+			surface::Lattice<float4> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z,
+												 clutil::float4(-1));
 
 			ClSphAtoms atoms(advection.size());
 #pragma omp parallel for
