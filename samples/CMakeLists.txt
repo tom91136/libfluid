@@ -3,6 +3,7 @@ project(samples)
 
 include(ExternalProject)
 
+find_package(Threads REQUIRED)
 
 ExternalProject_Add(
         bunny
@@ -15,7 +16,7 @@ ExternalProject_Add(
 )
 
 add_executable(main main.cpp)
-target_link_libraries(main PRIVATE fluid::fluid)
+target_link_libraries(main PRIVATE fluid::fluid Threads::Threads)
 
 if (MSVC)
     target_compile_options(main

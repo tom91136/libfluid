@@ -18,6 +18,9 @@
 #include "fluid/oclsph.hpp"
 #include "fluid/cpusph.hpp"
 #include "fluid/mmf.hpp"
+#include <condition_variable>
+#include <atomic>
+
 
 #include "omp.h"
 
@@ -289,12 +292,12 @@ void run() {
 
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
-	const size_t solverIter = 3;
+	const size_t solverIter = 5;
 	const num_t scaling = 620; // less = less space between particle
 
-	std::vector<fluid::Particle<size_t, num_t >> xs;
+	std::vector<fluid::Particle<size_t, num_t >> prepared;
 	size_t offset = 0;
-	offset = makeCube(offset, 28.f, pcount, tvec3<num_t>(-500, -350, -250), xs);
+	offset = makeCube(offset, 28.f, pcount, tvec3<num_t>(-500, -350, -250), prepared);
 //	offset = makeCube(offset, 28.f, pcount / 2, tvec3<num_t>(100, -350, -250), xs);
 
 	std::random_device dev;
@@ -365,8 +368,6 @@ void run() {
 
 	using hrc = high_resolution_clock;
 
-	hrc::time_point start = hrc::now();
-
 
 	auto min = tvec3<num_t>(-1000);
 	auto max = tvec3<num_t>(500, 1000, 1500);
@@ -401,103 +402,71 @@ void run() {
 					})
 	};
 
+	std::mutex m;
+	std::condition_variable flush;
+	std::atomic_bool ready(false);
+	std::atomic_bool terminate(false);
+
+	std::vector<fluid::Particle<size_t, num_t >> particles(prepared);
+	std::vector<geometry::MeshTriangle<num_t>> triangles;
+
+
+	std::thread mmfXferThread([&flush, &m, &ready, &terminate,
+			                          &mmfPSink, &mmfTSink, &particles, &triangles] {
+		std::cout << "Xfer thread init" << std::endl;
+		while (!terminate.load()) {
+
+			hrc::time_point waitStart = hrc::now();
+			std::unique_lock<std::mutex> lock(m);
+			flush.wait(lock, [&ready] { return ready.load(); });
+			ready = false;
+			hrc::time_point waitEnd = hrc::now();
+
+			hrc::time_point xferStart = hrc::now();
+			write_particles(mmfPSink, particles);
+			write_triangles(mmfTSink, triangles);
+			hrc::time_point xferEnd = hrc::now();
+
+			auto solve = duration_cast<nanoseconds>(xferEnd - xferStart).count();
+			auto wait = duration_cast<nanoseconds>(waitEnd - waitStart).count();
+			std::cout << "\tXfer: " << (solve / 1000000.0) << "ms" <<
+			          " (waited " << (wait / 1000000.0) << "ms)" <<
+			          " nTriangle:" << triangles.size() <<
+			          " nParticle:" << particles.size()
+			          << std::endl;
+			lock.unlock();
+			flush.notify_one();
+		}
+	});
+
+	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
 		auto xx = (std::sin(i) * 350) * 0;
 		auto zz = (std::cos(i) * 500) * 1;
 		config.minBound = min + tvec3<num_t>(xx, 1, zz);
 		config.maxBound = max + tvec3<num_t>(xx, 1, zz);
+		hrc::time_point solveStart = hrc::now();
+		triangles = solver->advance(config, particles, colliders);
+		hrc::time_point solveEnd = hrc::now();
+		ready = true;
+		flush.notify_one();
 
-		hrc::time_point t1 = hrc::now();
-		auto triangles = solver->advance(config, xs, colliders);
-		hrc::time_point t2 = hrc::now();
-
-
-		hrc::time_point s1 = hrc::now();
-
-
-#ifdef DO_SURFACE
-
-
-		num_t NR = 32.f;
-		const num_t MBC = 100.f;
-		const num_t MBCC = MBC * MBC;
-
-
-		using namespace nanoflann;
-		const ParticleCloud<size_t, num_t> cloud = ParticleCloud<size_t, num_t>(xs);
-		typedef KDTreeSingleIndexAdaptor<
-				L2_Simple_Adaptor<num_t, ParticleCloud<size_t, num_t> >,
-				ParticleCloud<size_t, num_t>, 3> kd_tree_t;
-
-		kd_tree_t index(3, cloud, KDTreeSingleIndexAdaptorParams(10));
-		index.buildIndex();
-
-
-		auto triangles = surface::parameterise<num_t>(100.f, lattice, [&index, &xs, MBCC, NR](
-				const tvec3<num_t> &a) -> num_t {
-			std::vector<std::pair<size_t, num_t> > results;
-
-			nanoflann::SearchParams params;
-			params.sorted = false;
-
-			index.radiusSearch(&a[0], (NR * NR), results, params);
-
-			num_t v = 0;
-			for (const std::pair<size_t, num_t> &p : results)
-				v += (MBCC /
-					  glm::length2(xs[p.first].position - a)) * 2;
-			return v;
-		});
-
-
-
-
-		std::cout <<
-				  "\tLattice   = " << lattice.size() <<
-				  "\n\tTriangles = " << triangles.size() <<
-				  "\n\tParticles = " << xs.size() <<
-				  std::endl;
-
-//		for (auto t : triangles) {
-//			std::cout << "[" << t << "]" << std::endl;
-//		}
-
-#endif
-		hrc::time_point s2 = hrc::now();
-
-
-		hrc::time_point mmt1 = hrc::now();
-#ifdef DO_SURFACE
-		write_triangles(mmfTSink, triangles);
-#endif
-		write_particles(mmfPSink, xs);
-		write_triangles(mmfTSink, triangles);
-		std::cout << "Trgs=" << triangles.size() << std::endl;
-
-		hrc::time_point mmt2 = hrc::now();
-
-
-		auto solve = duration_cast<nanoseconds>(t2 - t1).count();
-		auto param = duration_cast<nanoseconds>(s2 - s1).count();
-		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
-		std::cout << "Iter" << j << "@ "
-		          << "Solver:" << (solve / 1000000.0) << "ms "
-		          << "Surface:" << (param / 1000000.0) << "ms "
-		          << "IPC:" << (mmf / 1000000.0) << "ms "
-		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-		          << xs.size()
+		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
+		std::cout << "[" << j << "]" <<
+		          " Solver:" << (solve / 1000000.0) << "ms " <<
+		          " nTriangle:" << triangles.size() <<
+		          " nParticle:" << particles.size()
 		          << std::endl;
+
 	}
+
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();
-	std::cout << "Done: " << elapsed << "ms @ " << std::endl;
-
-//
-//	for (auto x : xs) {
-//		std::cout << "[" << x << "]" << std::endl;
-//	}
-
-	xs.clear();
-
+	std::cout << "Done: " << elapsed << "ms @ " << iter << std::endl;
+	terminate = true;
+	flush.notify_one();
+	mmfXferThread.join();
+	std::cout << "Xfer thread joined" << std::endl;
+	prepared.clear();
 }
