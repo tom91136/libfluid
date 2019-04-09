@@ -187,12 +187,12 @@ namespace ocl {
 		}
 
 
-		std::vector<surface::Triangle<float>> sampleLattice(
+		std::vector<surface::MeshTriangle<float>> sampleLattice(
 				float isolevel, float scale,
 				const tvec3<float> min, float step,
 				const surface::Lattice<float> &lattice) {
 
-			std::vector<surface::Triangle<float>> triangles;
+			std::vector<surface::MeshTriangle<float>> triangles;
 
 
 			// XXX ICC needs perfectly nested loops like this for omp collapse
@@ -201,7 +201,7 @@ namespace ocl {
 			const size_t latticeZ = lattice.zSize() - 1;
 
 #ifndef _MSC_VER
-#pragma omp declare reduction (merge : std::vector<surface::Triangle<float>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+#pragma omp declare reduction (merge : std::vector<geometry::MeshTriangle<float>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 #pragma omp parallel for collapse(3) reduction(merge: triangles)
 #endif
 			for (size_t x = 0; x < latticeX; ++x) {
@@ -397,7 +397,7 @@ namespace ocl {
 
 
 	public:
-		std::vector<surface::Triangle<float>> advance(const fluid::Config<float> &config,
+		std::vector<surface::MeshTriangle<float>> advance(const fluid::Config<float> &config,
 													  std::vector<fluid::Particle<size_t, float>> &xs,
 													  const std::vector<fluid::MeshCollider<float>> &colliders) override {
 
@@ -406,7 +406,7 @@ namespace ocl {
 			auto total = watch.start("Advance ===total===");
 
 			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 3.2f;
+			mcConfig.sampleResolution = 2.f;
 			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.8;
 
@@ -526,7 +526,7 @@ namespace ocl {
 
 			auto march = watch.start("CPU mc");
 
-			std::vector<surface::Triangle<float>> triangles =
+			std::vector<surface::MeshTriangle<float>> triangles =
 					sampleLattice(100, config.scale,
 								  minExtent, h / mcConfig.sampleResolution, hostLattice);
 

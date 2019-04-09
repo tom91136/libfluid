@@ -3,22 +3,19 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 
-#include <algorithm>
+//#include <algorithm>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
-#include "surface.hpp"
+#include "geometry.hpp"
 
 
 namespace fluid {
 
-
 	using glm::tvec3;
-
 
 	enum Type {
 		Fluid = 5, Obstacle = 6
 	};
-
 
 	template<typename T, typename N>
 	struct Particle {
@@ -27,15 +24,12 @@ namespace fluid {
 		N mass;
 		tvec3<N> position;
 		tvec3<N> velocity;
-//		std::unique_ptr<std::vector<uint32_t >> neighbours;
 
 		Particle() : type(Type::Fluid) {}
+
 		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
 		                  const tvec3<N> &velocity) :
-				id(t), type(type), mass(mass), position(position), velocity(velocity) {
-//			neighbours = std::make_unique<std::vector<uint32_t >>();
-
-		}
+				id(t), type(type), mass(mass), position(position), velocity(velocity) {}
 
 		friend std::ostream &operator<<(std::ostream &os, const Particle &particle) {
 			os << "t: " << particle.id
@@ -60,14 +54,10 @@ namespace fluid {
 
 	template<typename N>
 	struct Ray {
-
 		Ray(const tvec3<N> &prev, const tvec3<N> &origin, const tvec3<N> &velocity) :
 				prev(prev), origin(origin), velocity(velocity) {}
-
 		const tvec3<N> &getPrev() const { return prev; }
-
 		const tvec3<N> &getOrigin() const { return origin; }
-
 		const tvec3<N> &getVelocity() const { return velocity; }
 
 	private:
@@ -76,12 +66,9 @@ namespace fluid {
 
 	template<typename N>
 	struct Response {
-
 		Response(const tvec3<N> &position, const tvec3<N> &velocity) :
 				position(position), velocity(velocity) {}
-
 		const tvec3<N> &getPosition() const { return position; }
-
 		const tvec3<N> &getVelocity() const { return velocity; }
 
 	private:
@@ -91,9 +78,9 @@ namespace fluid {
 
 	template<typename N>
 	struct MeshCollider {
-		const std::vector<surface::Triangle<N>> triangles;
+		const std::vector<geometry::MeshTriangle<N>> triangles;
 
-		explicit MeshCollider(const std::vector<surface::Triangle<N>> &triangles) : triangles(
+		explicit MeshCollider(const std::vector<geometry::MeshTriangle<N>> &triangles) : triangles(
 				triangles) {}
 	};
 
@@ -104,9 +91,7 @@ namespace fluid {
 		N scale;
 		size_t iteration;
 		glm::tvec3<N> constantForce;
-
-		glm::tvec3<N> minBound;
-		glm::tvec3<N> maxBound;
+		glm::tvec3<N> minBound, maxBound;
 
 		explicit Config(N dt, N scale, size_t iteration,
 		                const glm::tvec3<N> &constantForce,
@@ -123,12 +108,11 @@ namespace fluid {
 
 		virtual ~SphSolver() = default;
 
-		virtual std::vector<surface::Triangle<N>> advance(
+		virtual std::vector<geometry::MeshTriangle<N>> advance(
 				const Config<N> &config,
 				std::vector<Particle<T, N>> &xs,
 				const std::vector<MeshCollider<N>> &colliders) = 0;
 	};
-
 
 }
 

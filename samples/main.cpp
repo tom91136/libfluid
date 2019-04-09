@@ -61,25 +61,53 @@ static const char v1_z_[] = "v1.z";
 static const char v2_x_[] = "v2.x";
 static const char v2_y_[] = "v2.y";
 static const char v2_z_[] = "v2.z";
-static const char normal_x_[] = "normal.x";
-static const char normal_y_[] = "normal.y";
-static const char normal_z_[] = "normal.z";
+static const char n0_x_[] = "n0.x";
+static const char n0_y_[] = "n0.y";
+static const char n0_z_[] = "n0.z";
+static const char n1_x_[] = "n1.x";
+static const char n1_y_[] = "n1.y";
+static const char n1_z_[] = "n1.z";
+static const char n2_x_[] = "n2.x";
+static const char n2_y_[] = "n2.y";
+static const char n2_z_[] = "n2.z";
+
 
 template<typename N>
 static inline auto triangleEntries() {
 	return mmf::makeEntries(
-			DECL_MEMBER(v0_x_, CLS(surface::Triangle<N>), v0.x),
-			DECL_MEMBER(v0_y_, CLS(surface::Triangle<N>), v0.y),
-			DECL_MEMBER(v0_z_, CLS(surface::Triangle<N>), v0.z),
-			DECL_MEMBER(v1_x_, CLS(surface::Triangle<N>), v1.x),
-			DECL_MEMBER(v1_y_, CLS(surface::Triangle<N>), v1.y),
-			DECL_MEMBER(v1_z_, CLS(surface::Triangle<N>), v1.z),
-			DECL_MEMBER(v2_x_, CLS(surface::Triangle<N>), v2.x),
-			DECL_MEMBER(v2_y_, CLS(surface::Triangle<N>), v2.y),
-			DECL_MEMBER(v2_z_, CLS(surface::Triangle<N>), v2.z)
-//			ENTRY(normal_x_, CLS(surface::Triangle<N>), normal.x),
-//			ENTRY(normal_y_, CLS(surface::Triangle<N>), normal.y),
-//			ENTRY(normal_z_, CLS(surface::Triangle<N>), normal.z)
+			DECL_MEMBER(v0_x_, CLS(geometry::Triangle<N>), v0.x),
+			DECL_MEMBER(v0_y_, CLS(geometry::Triangle<N>), v0.y),
+			DECL_MEMBER(v0_z_, CLS(geometry::Triangle<N>), v0.z),
+			DECL_MEMBER(v1_x_, CLS(geometry::Triangle<N>), v1.x),
+			DECL_MEMBER(v1_y_, CLS(geometry::Triangle<N>), v1.y),
+			DECL_MEMBER(v1_z_, CLS(geometry::Triangle<N>), v1.z),
+			DECL_MEMBER(v2_x_, CLS(geometry::Triangle<N>), v2.x),
+			DECL_MEMBER(v2_y_, CLS(geometry::Triangle<N>), v2.y),
+			DECL_MEMBER(v2_z_, CLS(geometry::Triangle<N>), v2.z)
+	);
+}
+
+template<typename N>
+static inline auto meshTriangleEntries() {
+	return mmf::makeEntries(
+			DECL_MEMBER(v0_x_, CLS(geometry::MeshTriangle<N>), v0.x),
+			DECL_MEMBER(v0_y_, CLS(geometry::MeshTriangle<N>), v0.y),
+			DECL_MEMBER(v0_z_, CLS(geometry::MeshTriangle<N>), v0.z),
+			DECL_MEMBER(v1_x_, CLS(geometry::MeshTriangle<N>), v1.x),
+			DECL_MEMBER(v1_y_, CLS(geometry::MeshTriangle<N>), v1.y),
+			DECL_MEMBER(v1_z_, CLS(geometry::MeshTriangle<N>), v1.z),
+			DECL_MEMBER(v2_x_, CLS(geometry::MeshTriangle<N>), v2.x),
+			DECL_MEMBER(v2_y_, CLS(geometry::MeshTriangle<N>), v2.y),
+			DECL_MEMBER(v2_z_, CLS(geometry::MeshTriangle<N>), v2.z),
+			DECL_MEMBER(n0_x_, CLS(geometry::MeshTriangle<N>), n0.x),
+			DECL_MEMBER(n0_y_, CLS(geometry::MeshTriangle<N>), n0.y),
+			DECL_MEMBER(n0_z_, CLS(geometry::MeshTriangle<N>), n0.z),
+			DECL_MEMBER(n1_x_, CLS(geometry::MeshTriangle<N>), n1.x),
+			DECL_MEMBER(n1_y_, CLS(geometry::MeshTriangle<N>), n1.y),
+			DECL_MEMBER(n1_z_, CLS(geometry::MeshTriangle<N>), n1.z),
+			DECL_MEMBER(n2_x_, CLS(geometry::MeshTriangle<N>), n2.x),
+			DECL_MEMBER(n2_y_, CLS(geometry::MeshTriangle<N>), n2.y),
+			DECL_MEMBER(n2_z_, CLS(geometry::MeshTriangle<N>), n2.z)
 	);
 }
 
@@ -121,11 +149,11 @@ void write_particles(mio::mmap_sink &sink, const std::vector<fluid::Particle<T, 
 }
 
 template<typename N>
-void write_triangles(mio::mmap_sink &sink, const std::vector<surface::Triangle<N>> &xs) {
+void write_triangles(mio::mmap_sink &sink, const std::vector<surface::MeshTriangle<N>> &xs) {
 	Header header = Header(xs.size());
 	size_t offset = mmf::writer::writePacked(sink, header, 0, headerEntries());
-	for (const surface::Triangle<N> &t :  xs) {
-		offset = mmf::writer::writePacked(sink, t, offset, triangleEntries<N>());
+	for (const surface::MeshTriangle<N> &t :  xs) {
+		offset = mmf::writer::writePacked(sink, t, offset, meshTriangleEntries<N>());
 	}
 }
 
@@ -134,9 +162,9 @@ fluid::MeshCollider<N> readCollider(mio::mmap_source &source) {
 	Header header;
 	size_t offset = mmf::reader::readPacked(source, header, 0, headerEntries());
 	std::cout << header << "\n";
-	std::vector<surface::Triangle<N>> ts(header.entries);
+	std::vector<surface::MeshTriangle<N>> ts(header.entries);
 	for (size_t i = 0; i < header.entries; ++i) {
-		surface::Triangle<N> t;
+		surface::MeshTriangle<N> t;
 		offset = mmf::reader::readPacked(source, t, offset, triangleEntries<N>());
 		ts[i] = t;
 	}
@@ -158,7 +186,7 @@ mio::mmap_source openMmf(const std::string &path) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-				  << (double) source.size() / (1024 * 1024) << "MB" << std::endl;
+		          << (double) source.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return source;
 }
@@ -175,15 +203,15 @@ mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
 		exit(1);
 	} else {
 		std::cout << "MMF(" << path << ") size: "
-				  << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
+		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
 	}
 	return sink;
 }
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
-				tvec3<N> origin,
-				std::vector<fluid::Particle<size_t, num_t >> &xs) {
+                tvec3<N> origin,
+                std::vector<fluid::Particle<size_t, num_t >> &xs) {
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
@@ -239,13 +267,15 @@ void run() {
 
 	auto particleType = mmf::meta::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
 	auto triangleType = mmf::meta::writeMetaPacked<decltype(triangleEntries<num_t>())>();
+	auto meshTriangleType = mmf::meta::writeMetaPacked<decltype(meshTriangleEntries<num_t>())>();
 	auto headerType = mmf::meta::writeMetaPacked<decltype(headerEntries())>();
 
 	writeFile("header.json", headerType.second.dump(1));
 	writeFile("particle.json", particleType.second.dump(1));
 	writeFile("triangle.json", triangleType.second.dump(1));
+	writeFile("mesh_triangle.json", meshTriangleType.second.dump(1));
 
-	for (const auto &t : {particleType, triangleType, headerType}) {
+	for (const auto &t : {headerType, particleType, triangleType, meshTriangleType}) {
 		std::cout << "size=" << t.first << std::endl;
 		std::cout << t.second.dump(3) << std::endl;
 	}
@@ -260,7 +290,7 @@ void run() {
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 3;
-	const num_t scaling = 820; // less = less space between particle
+	const num_t scaling = 620; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> xs;
 	size_t offset = 0;
@@ -320,7 +350,7 @@ void run() {
 
 	if (found.size() > 1) {
 		std::cout << "Found more than one device signature:`" << imploded
-				  << "`"  ", using the first one." << std::endl;
+		          << "`"  ", using the first one." << std::endl;
 	}
 
 	const auto device = found.front();
@@ -342,7 +372,7 @@ void run() {
 	auto max = tvec3<num_t>(500, 1000, 1500);
 
 	auto config = fluid::Config<num_t>(
-			static_cast<num_t>(0.0083 * 1.8),
+			static_cast<num_t>(0.0083 * 1.5),
 			scaling,
 			solverIter,
 			tvec3<num_t>(0, 9.8, 0),
@@ -358,12 +388,12 @@ void run() {
 
 			fluid::MeshCollider<num_t>(
 					{
-							surface::Triangle<num_t>(
+							surface::MeshTriangle<num_t>(
 									tvec3<num_t>(0, 0, -600),
 									tvec3<num_t>(0, 0, 600),
 									tvec3<num_t>(300, 1200, 0)),
 
-							surface::Triangle<num_t>(
+							surface::MeshTriangle<num_t>(
 									tvec3<num_t>(0, 0, -600),
 									tvec3<num_t>(0, 0, 600),
 									tvec3<num_t>(-300, 1200, 0))
@@ -452,12 +482,12 @@ void run() {
 		auto param = duration_cast<nanoseconds>(s2 - s1).count();
 		auto mmf = duration_cast<nanoseconds>(mmt2 - mmt1).count();
 		std::cout << "Iter" << j << "@ "
-				  << "Solver:" << (solve / 1000000.0) << "ms "
-				  << "Surface:" << (param / 1000000.0) << "ms "
-				  << "IPC:" << (mmf / 1000000.0) << "ms "
-				  << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
-				  << xs.size()
-				  << std::endl;
+		          << "Solver:" << (solve / 1000000.0) << "ms "
+		          << "Surface:" << (param / 1000000.0) << "ms "
+		          << "IPC:" << (mmf / 1000000.0) << "ms "
+		          << "Total= " << (solve + param + mmf) / 1000000.0 << "ms @"
+		          << xs.size()
+		          << std::endl;
 	}
 	hrc::time_point end = hrc::now();
 	auto elapsed = duration_cast<milliseconds>(end - start).count();

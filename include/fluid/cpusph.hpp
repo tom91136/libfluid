@@ -119,7 +119,7 @@ namespace cpu {
 				spikyKernelFactor(-(45.f / (glm::pi<N>() * std::pow(h, 6.f)))),
 				p6DeltaQ(poly6Kernel(CorrDeltaQ)) {}
 
-		std::vector<surface::Triangle<N>> advance(const fluid::Config<N> &config,
+		std::vector<surface::MeshTriangle<N>> advance(const fluid::Config<N> &config,
 		             std::vector<Particle<T, N>> &xs,
 		             const std::vector<fluid::MeshCollider<N>> &colliders) override {
 
