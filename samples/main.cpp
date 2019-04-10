@@ -165,9 +165,9 @@ fluid::MeshCollider<N> readCollider(mio::mmap_source &source) {
 	Header header;
 	size_t offset = mmf::reader::readPacked(source, header, 0, headerEntries());
 	std::cout << header << "\n";
-	std::vector<surface::MeshTriangle<N>> ts(header.entries);
+	std::vector<geometry::Triangle<N>> ts(header.entries);
 	for (size_t i = 0; i < header.entries; ++i) {
-		surface::MeshTriangle<N> t;
+		geometry::Triangle<N> t{};
 		offset = mmf::reader::readPacked(source, t, offset, triangleEntries<N>());
 		ts[i] = t;
 	}
@@ -293,7 +293,7 @@ void run() {
 	const size_t pcount = (64) * 1000;
 	const size_t iter = 5000;
 	const size_t solverIter = 5;
-	const num_t scaling = 620; // less = less space between particle
+	const num_t scaling = 1000; // less = less space between particle
 
 	std::vector<fluid::Particle<size_t, num_t >> prepared;
 	size_t offset = 0;
@@ -312,7 +312,7 @@ void run() {
 
 
 	std::cout << "Mark" << std::endl;
-//	auto mmfCSink = openMmf("colliders.mmf");
+	auto mmfCSink = openMmf("colliders.mmf");
 	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
 	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10 * triangleType.first + headerType.first);
 
@@ -370,7 +370,7 @@ void run() {
 
 
 	auto min = tvec3<num_t>(-1000);
-	auto max = tvec3<num_t>(500, 1000, 1500);
+	auto max = tvec3<num_t>(2000, 2000, 2000);
 
 	auto config = fluid::Config<num_t>(
 			static_cast<num_t>(0.0083 * 1.5),
@@ -382,25 +382,7 @@ void run() {
 	float i = 0;
 
 
-//	auto collider = readCollider<num_t>(mmfCSink);
 
-	const std::vector<fluid::MeshCollider<num_t>> colliders = {
-//			collider
-
-			fluid::MeshCollider<num_t>(
-					{
-							surface::MeshTriangle<num_t>(
-									tvec3<num_t>(0, 0, -600),
-									tvec3<num_t>(0, 0, 600),
-									tvec3<num_t>(300, 1200, 0)),
-
-							surface::MeshTriangle<num_t>(
-									tvec3<num_t>(0, 0, -600),
-									tvec3<num_t>(0, 0, 600),
-									tvec3<num_t>(-300, 1200, 0))
-
-					})
-	};
 
 	std::mutex m;
 	std::condition_variable flush;
@@ -442,10 +424,34 @@ void run() {
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
-		auto xx = (std::sin(i) * 350) * 0;
+		auto xx = (std::sin(i) * 350) * 1;
 		auto zz = (std::cos(i) * 500) * 1;
 		config.minBound = min + tvec3<num_t>(xx, 1, zz);
 		config.maxBound = max + tvec3<num_t>(xx, 1, zz);
+
+
+//		std::cout << "Read collider: start" << std::endl;
+//		auto collider = readCollider<num_t>(mmfCSink);
+//		std::cout << "Read collider: end" << std::endl;
+
+		const std::vector<fluid::MeshCollider<num_t>> colliders = {
+//				collider,
+
+//			fluid::MeshCollider<num_t>(
+//					{
+//							surface::MeshTriangle<num_t>(
+//									tvec3<num_t>(0, 0, -600),
+//									tvec3<num_t>(0, 0, 600),
+//									tvec3<num_t>(300, 1200, 0)),
+//
+//							surface::MeshTriangle<num_t>(
+//									tvec3<num_t>(0, 0, -600),
+//									tvec3<num_t>(0, 0, 600),
+//									tvec3<num_t>(-300, 1200, 0))
+//
+//					})
+		};
+
 		hrc::time_point solveStart = hrc::now();
 		triangles = solver->advance(config, particles, colliders);
 		hrc::time_point solveEnd = hrc::now();

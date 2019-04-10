@@ -303,7 +303,13 @@ namespace ocl {
 
 
 			const uint colliderMeshN = static_cast<uint>(hostColliderMesh.size());
-			cl::Buffer colliderMesh(queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
+
+
+			cl::Buffer colliderMesh = colliderMeshN == 0 ?
+					cl::Buffer(context, CL_MEM_READ_WRITE, 1):
+					cl::Buffer(queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
+
+
 			const uint gridTableN = static_cast<uint>(hostGridTable.size());
 			cl::Buffer gridTable(queue, hostGridTable.begin(), hostGridTable.end(), true);
 

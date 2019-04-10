@@ -78,9 +78,9 @@ namespace fluid {
 
 	template<typename N>
 	struct MeshCollider {
-		const std::vector<geometry::MeshTriangle<N>> triangles;
+		const std::vector<geometry::Triangle<N>> triangles;
 
-		explicit MeshCollider(const std::vector<geometry::MeshTriangle<N>> &triangles) : triangles(
+		explicit MeshCollider(const std::vector<geometry::Triangle<N>> &triangles) : triangles(
 				triangles) {}
 	};
 
