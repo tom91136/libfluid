@@ -436,7 +436,6 @@ void run() {
 
 		const std::vector<fluid::MeshCollider<num_t>> colliders = {
 //				collider,
-
 //			fluid::MeshCollider<num_t>(
 //					{
 //							surface::MeshTriangle<num_t>(

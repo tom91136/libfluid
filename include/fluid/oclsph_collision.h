@@ -42,9 +42,9 @@ bool collideTriangle2(
 		float t = dot(nn, triangle.a) - dot(nn, p);
 		float3 p0 = p + (nn * t);
 
-		if (inTrig(triangle, p0) && fast_distance(p, p0) <10.f) {
+		if (inTrig(triangle, p0) && fast_distance(p, p0) < 10.f) {
 			float3 r = velocity - (nn * 2 * dot(velocity, nn));
-			response->position = prev;
+			response->position = p0;
 			response->velocity = r;
 			return true;
 		}
