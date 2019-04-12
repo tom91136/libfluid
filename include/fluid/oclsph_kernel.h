@@ -1,6 +1,7 @@
 #include "oclsph_type.h"
 #include "oclsph_collision.h"
 #include "zcurve.h"
+#include "mc.h"
 
 
 #define DEBUG
@@ -474,4 +475,60 @@ kernel void sph_evalLattice(
 	out->s1 = normal.s0;
 	out->s2 = normal.s1;
 	out->s3 = normal.s2;
+}
+
+
+const constant uint3 CUBE_OFFSETS[8] = {
+		(uint3) (0, 0, 0),
+		(uint3) (1, 0, 0),
+		(uint3) (1, 1, 0),
+		(uint3) (0, 1, 0),
+		(uint3) (0, 0, 1),
+		(uint3) (1, 0, 1),
+		(uint3) (1, 1, 1),
+		(uint3) (0, 1, 1)
+};
+
+
+inline uint3 to3d(size_t index, size_t xMax, size_t yMax, size_t zMax) {
+	size_t x = index / (yMax * zMax);
+	size_t y = (index - x * yMax * zMax) / zMax;
+	size_t z = index - x * yMax * zMax - y * zMax;
+	return (uint3)(x, y, z);
+}
+
+
+kernel void computeVertSize(
+		const uint isolevel,
+		const uint3 sizes,
+		const global float4 *values,
+		local uint *localSums,
+		global uint partialSums
+) {
+
+
+	uint3 pos = to3d(get_global_id(0), sizes.x, sizes.y, sizes.z) + 1;
+
+	uint ci = 0;
+	for (int i = 0; i < 8; ++i) {
+		uint3 offset = CUBE_OFFSETS[i] + pos;
+		float v = values[index3d(offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)].s0;
+		ci = select(ci, ci | (1 << i), v < isolevel);
+	}
+
+	uchar nVert = EdgeTable[ci] == 0 ? 0 : NumVertsTable[ci];
+
+	const uint localId = get_local_id(0);
+	const uint groupSize = get_local_size(0);
+
+	localSums[localId] = nVert;
+
+	for (uint stride = groupSize / 2; stride > 0; stride >>= 1u) {
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (localId < stride) localSums[localId] += localSums[localId + stride];
+	}
+
+	if (localId == 0) partialSums[get_group_id(0)] = localSums[0];
+
+
 }

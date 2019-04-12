@@ -200,10 +200,14 @@ namespace ocl {
 			const size_t latticeY = lattice.ySize() - 1;
 			const size_t latticeZ = lattice.zSize() - 1;
 
-#ifndef _MSC_VER
-#pragma omp declare reduction (merge : std::vector<geometry::MeshTriangle<float>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
-#pragma omp parallel for collapse(3) reduction(merge: triangles)
-#endif
+
+
+//#ifndef _MSC_VER
+//#pragma omp declare reduction (merge : std::vector<geometry::MeshTriangle<float>> : omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+//#pragma omp parallel for collapse(3) reduction(merge: triangles)
+//#endif
+			int vSum = 0;
+
 			for (size_t x = 0; x < latticeX; ++x) {
 				for (size_t y = 0; y < latticeY; ++y) {
 					for (size_t z = 0; z < latticeZ; ++z) {
@@ -219,10 +223,16 @@ namespace ocl {
 							pos[j] = (tvec3<float>(offset) * step + min) * scale;
 
 						}
+
+						vSum += surface::marchSingleN(isolevel, vertices);
+
 						surface::marchSingle(isolevel, vertices, normals, pos, triangles);
 					}
 				}
 			}
+
+			std::cout << " Trig=" << triangles.size() << " vSum=" << (vSum/3) << "\n";
+
 			return triangles;
 		}
 

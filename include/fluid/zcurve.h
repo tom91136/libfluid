@@ -10,10 +10,12 @@
 
 
 inline size_t index3d(size_t x, size_t y, size_t z,
-                      size_t xMax, size_t yMax, size_t zMax
-		) {
+					  size_t xMax, size_t yMax, size_t zMax
+) {
 	return x * yMax * zMax + y * zMax + z;
 }
+
+
 
 inline size_t uninterleave(size_t value) {
 	size_t ret = 0x0;
