@@ -172,15 +172,15 @@ namespace ocl {
 			}
 
 #ifdef DEBUG
-			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-			          << std::endl;
+				std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
+						  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+						  << std::endl;
 
 
-			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-			          << clutil::mkString<size_t>(expected,
-			                                      [](auto x) { return std::to_string(x); })
-			          << std::endl;
+				std::cout << "Expected(" << _SIZES_LENGTH << ")="
+						  << clutil::mkString<size_t>(expected,
+													  [](auto x) { return std::to_string(x); })
+						  << std::endl;
 #endif
 
 			assert(expected == actual);
@@ -225,6 +225,7 @@ namespace ocl {
 			}
 			return triangles;
 		}
+
 
 		std::vector<PartiallyAdvected> advectAndCopy(const fluid::Config<float> &config,
 		                                             std::vector<fluid::Particle<size_t, float>> &xs) {
@@ -433,6 +434,38 @@ namespace ocl {
 			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.5;
 
+			auto sourceDrain = watch.start("CPU source+drain");
+
+
+			const float spacing = (h * config.scale / 2);
+			for (const fluid::Source<float> &source : config.sources) {
+				const float size = std::sqrt(source.rate);
+				const int width = std::floor(size);
+				const int depth = std::ceil(size);
+				const auto offset = source.centre - (tvec3<float>(width, 0, depth) / 2 * spacing);
+				for (int x = 0; x < width; ++x) {
+					for (int z = 0; z < depth; ++z) {
+						auto pos = tvec3<float>(x, 0, z) * spacing - offset;
+						xs.emplace_back(source.tag, fluid::Type::Fluid, 1, pos,
+						                config.constantForce);
+					}
+				}
+			}
+
+			xs.erase(std::remove_if(xs.begin(), xs.end(),
+			                        [&config](const fluid::Particle<size_t, float> &x) {
+
+				                        for (const fluid::Drain<float> &drain: config.drains) {
+					                        // FIXME needs to actually erase at surface, not shperically
+					                        if (glm::distance(drain.centre, x.position) < 100) {
+						                        return true;
+					                        }
+				                        }
+
+				                        return false;
+			                        }), xs.end());
+
+			sourceDrain();
 
 			auto advect = watch.start("CPU advect+copy");
 			std::vector<PartiallyAdvected> advection = advectAndCopy(config, xs);
@@ -501,9 +534,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-			          << " Extent = " << to_string(extent)
-			          << " GridTable = " << hostGridTable.size()
-			          << std::endl;
+					  << " Extent = " << to_string(extent)
+					  << " GridTable = " << hostGridTable.size()
+					  << std::endl;
 #endif
 
 			auto kernel_alloc = watch.start("CPU host alloc+copy");
@@ -576,11 +609,11 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "MC lattice: " << hostLattice.size() << " Grid=" << to_string(extent)
-			          << " res="
-			          << hostLattice.xSize() << "x"
-			          << hostLattice.ySize() << "x"
-			          << hostLattice.zSize()
-			          << std::endl;
+					  << " res="
+					  << hostLattice.xSize() << "x"
+					  << hostLattice.ySize() << "x"
+					  << hostLattice.zSize()
+					  << std::endl;
 			std::cout << watch << std::endl;
 #endif
 

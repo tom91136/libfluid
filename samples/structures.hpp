@@ -109,6 +109,24 @@ namespace strucures {
 		);
 	}
 
+
+	static const char drain_x_[] = "drain.x";
+	static const char drain_y_[] = "drain.y";
+	static const char drain_z_[] = "drain.z";
+	static const char drain_width_[] = "width";
+	static const char drain_depth_[] = "depth";
+
+	template<typename N>
+	static inline auto drainDef() {
+		return mmf::makeDef(
+				DECL_MEMBER(drain_x_, CLS(fluid::Drain<N>), centre.x),
+				DECL_MEMBER(drain_y_, CLS(fluid::Drain<N>), centre.y),
+				DECL_MEMBER(drain_z_, CLS(fluid::Drain<N>), centre.z),
+				DECL_MEMBER(drain_width_, CLS(fluid::Drain<N>), width),
+				DECL_MEMBER(drain_depth_, CLS(fluid::Drain<N>), depth)
+		);
+	}
+
 	static const char v0_x_[] = "v0.x";
 	static const char v0_y_[] = "v0.y";
 	static const char v0_z_[] = "v0.z";
@@ -245,16 +263,19 @@ namespace strucures {
 		SceneMeta<N> meta;
 		std::vector<fluid::Well<N>> wells;
 		std::vector<fluid::Source<N>> sources;
+		std::vector<fluid::Drain<N>> drains;
 		explicit Scene(const SceneMeta<N> &meta,
 		               const std::vector<fluid::Well<N>> &wells,
-		               const std::vector<fluid::Source<N>> &sources) :
-				meta(meta), wells(wells), sources(sources) {}
+		               const std::vector<fluid::Source<N>> &sources,
+		               const std::vector<fluid::Drain<N>> &drains) :
+				meta(meta), wells(wells), sources(sources), drains(drains) {}
 		friend std::ostream &operator<<(std::ostream &os, const Scene &scene) {
 			return os << "Scene{"
 			          << "\n" << scene.meta
 			          << "\n wells  : " << scene.wells.size()
-			          << "\n sources: " << scene.sources.size() <<
-			          "\n}";
+			          << "\n sources: " << scene.sources.size()
+			          << "\n drains: " << scene.drains.size()
+			          << "\n}";
 		}
 	};
 
@@ -319,7 +340,14 @@ namespace strucures {
 		for (size_t i = 0; i < header.entries; ++i) {
 			offset = mmf::reader::readPacked(source, sources[i], offset, sourceDef<N>());
 		}
-		return Scene<N>(meta, wells, sources);
+
+		offset = mmf::reader::readPacked(source, header, offset, headerDef());
+		std::vector<fluid::Drain<N>> drains(header.entries);
+		for (size_t i = 0; i < header.entries; ++i) {
+			offset = mmf::reader::readPacked(source, drains[i], offset, drainDef<N>());
+		}
+
+		return Scene<N>(meta, wells, sources, drains);
 	}
 
 

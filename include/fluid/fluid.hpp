@@ -105,6 +105,17 @@ namespace fluid {
 	};
 
 	template<typename N>
+	struct Drain {
+		tvec3<N> centre;
+		N width, depth;
+		friend std::ostream &operator<<(std::ostream &os, const Drain &drain) {
+			return os << "Drain(" << glm::to_string(drain.centre)
+			          << " @" << drain.width << "x" << drain.depth << ")";
+		}
+	};
+
+
+	template<typename N>
 	struct Config {
 
 		const N dt;
@@ -115,6 +126,7 @@ namespace fluid {
 		const tvec3<N> constantForce;
 		const std::vector<fluid::Well<N>> wells;
 		const std::vector<fluid::Source<N>> sources;
+		const std::vector<fluid::Drain<N>> drains;
 
 		const tvec3<N> minBound, maxBound;
 
@@ -122,11 +134,12 @@ namespace fluid {
 		                const tvec3<N> &constantForce,
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
+		                const std::vector<fluid::Drain<N>> &drains,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
 				  resolution(resolution), iteration(iteration),
 				  constantForce(constantForce),
-				  wells(wells), sources(sources),
+				  wells(wells), sources(sources), drains(drains),
 				  minBound(min), maxBound(max) {}
 		friend std::ostream &operator<<(std::ostream &os, const Config &config) {
 			os << "dt: " << config.dt << " scale: " << config.scale << " iteration: "

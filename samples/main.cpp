@@ -116,6 +116,7 @@ void run() {
 
 	auto wellType = writeMetaPacked<decltype(strucures::wellDef<num_t>())>();
 	auto sourceType = writeMetaPacked<decltype(strucures::sourceDef<num_t>())>();
+	auto drainType = writeMetaPacked<decltype(strucures::drainDef<num_t>())>();
 	auto sceneMetaType = writeMetaPacked<decltype(strucures::sceneMetaDef<num_t>())>();
 
 	auto particleType = writeMetaPacked<decltype(strucures::particleDef<size_t, num_t>())>();
@@ -128,6 +129,7 @@ void run() {
 
 			                       {"well",         wellType.second},
 			                       {"source",       sourceType.second},
+			                       {"drain",        drainType.second},
 			                       {"sceneMeta",    sceneMetaType.second},
 
 			                       {"particle",     particleType.second},
@@ -146,7 +148,7 @@ void run() {
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = (64) * 1000;
+	const size_t pcount = (16) * 1000;
 	const size_t iter = 50000;
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
@@ -174,7 +176,8 @@ void run() {
 	auto sceneSource = createSource("scene.mmf");
 	auto colliderSource = createSource("colliders.mmf");
 
-	auto particleSink = createSink("particles.mmf", pcount * particleType.first + headerType.first);
+	auto particleSink = createSink("particles.mmf",
+	                               pcount * 2 * particleType.first + headerType.first);
 	auto triangleSink = createSink("triangles.mmf",
 	                               500000 * 10 * triangleType.first + headerType.first);
 
@@ -216,7 +219,8 @@ void run() {
 	std::condition_variable flush;
 
 	strucures::Scene<num_t> scene(
-			strucures::SceneMeta<num_t>(false, false, solverIter, 1.5, scaling, 1.f, 9.8f), {}, {});
+			strucures::SceneMeta<num_t>(false, false, solverIter, 1.5, scaling, 1.f, 9.8f),
+			{}, {}, {});
 
 	std::atomic_bool ready(false);
 	std::atomic_bool copied(false);
@@ -254,6 +258,7 @@ void run() {
 //				std::cout << sceneBuffer << "\n";
 //				for (const auto &x : sceneBuffer.wells) std::cout << x << "\n";
 //				for (const auto &x : sceneBuffer.sources) std::cout << x << "\n";
+//				for (const auto &x : sceneBuffer.drains) std::cout << x << "\n";
 				while (sceneBuffer.meta.suspend) {
 					suspendTick++;
 					std::this_thread::sleep_for(std::chrono::microseconds(1));
@@ -287,8 +292,8 @@ void run() {
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 		i += glm::pi<num_t>() / 50;
-		auto xx = (std::sin(i) * 350) * 1;
-		auto zz = (std::cos(i) * 500) * 1;
+		auto xx = (std::sin(i) * 350) * 0;
+		auto zz = (std::cos(i) * 500) * 0;
 
 		auto config = fluid::Config<num_t>(
 				static_cast<num_t>(0.0083 * scene.meta.solverStep),
@@ -299,6 +304,7 @@ void run() {
 				// copy , gets modified in xfer thread
 				std::vector<fluid::Well<float>>(scene.wells),
 				std::vector<fluid::Source<float>>(scene.sources),
+				std::vector<fluid::Drain<float>>(scene.drains),
 				min + tvec3<num_t>(xx, 1, zz),
 				max + tvec3<num_t>(xx, 1, zz));
 		std::cout << config << "\n";
