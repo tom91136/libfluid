@@ -62,16 +62,16 @@ namespace mmf {
 	};
 
 	template<class... Args>
-	struct Entries {
+	struct Defs {
 		using entries = pack<Args...>;
 		const std::tuple<Args...> args;
 
-		inline explicit Entries(Args ...xs) : args(std::tuple<Args...>(xs...)) {}
+		inline explicit Defs(Args ...xs) : args(std::tuple<Args...>(xs...)) {}
 	};
 
 	template<class... Args>
-	inline static const Entries<Args...> makeEntries(Args &&...xs) {
-		return Entries<Args...>(xs...);
+	inline static const Defs<Args...> makeDef(Args &&...xs) {
+		return Defs<Args...>(xs...);
 	}
 
 
@@ -105,7 +105,8 @@ namespace mmf {
 		inline static std::pair<size_t, json> writeMeta() {
 			json j;
 			std::vector<Row> xs;
-			size_t total = writeMeta < Entry...>(xs);
+			size_t total = writeMeta<Entry...>(xs);
+			j["size"] = total;
 			j["fields"] = xs;
 			return std::pair<size_t, json>(total, j);
 		}
@@ -143,7 +144,7 @@ namespace mmf {
 
 		template<typename W, class S, class ...Rest>
 		inline static size_t
-		writePacked(W &w, const S &s, const size_t offset, const Entries<Rest...> &e) {
+		writePacked(W &w, const S &s, const size_t offset, const Defs<Rest...> &e) {
 			return writePacked_impl(w, s, offset, e.args, std::index_sequence_for<Rest...>());
 		}
 
@@ -172,7 +173,7 @@ namespace mmf {
 
 		template<typename R, class S, class ...Rest>
 		inline static size_t
-		readPacked(const R &r, S &s, const size_t offset, const Entries<Rest...> &e) {
+		readPacked(const R &r, S &s, const size_t offset, const Defs<Rest...> &e) {
 			return readPacked_impl(r, s, offset, e.args, std::index_sequence_for<Rest...>());
 		}
 

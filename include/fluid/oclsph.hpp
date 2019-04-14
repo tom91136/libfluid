@@ -80,7 +80,7 @@ namespace ocl {
 		std::vector<float3> velocity;
 
 		explicit ClSphAtoms(size_t size) : size(size), zIndex(size), mass(size),
-										   pStar(size), position(size), velocity(size) {}
+		                                   pStar(size), position(size), velocity(size) {}
 	};
 
 	struct PartiallyAdvected {
@@ -89,7 +89,7 @@ namespace ocl {
 		fluid::Particle<size_t, float> particle;
 		PartiallyAdvected() {}
 		explicit PartiallyAdvected(uint zIndex, float3 pStar,
-								   const fluid::Particle<size_t, float> &particle) :
+		                           const fluid::Particle<size_t, float> &particle) :
 				zIndex(zIndex), pStar(pStar), particle(particle) {}
 	};
 
@@ -148,10 +148,10 @@ namespace ocl {
 
 		static inline std::string to_string(tvec3<size_t> v) {
 			return "(" +
-				   std::to_string(v.x) + "," +
-				   std::to_string(v.y) + "," +
-				   std::to_string(v.z) +
-				   ")";
+			       std::to_string(v.x) + "," +
+			       std::to_string(v.y) + "," +
+			       std::to_string(v.z) +
+			       ")";
 		}
 
 		void checkSize() {
@@ -167,20 +167,20 @@ namespace ocl {
 				queue.finish();
 			} catch (cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw;
 			}
 
 #ifdef DEBUG
 			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-					  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-					  << std::endl;
+			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+			          << std::endl;
 
 
 			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-					  << clutil::mkString<size_t>(expected,
-												  [](auto x) { return std::to_string(x); })
-					  << std::endl;
+			          << clutil::mkString<size_t>(expected,
+			                                      [](auto x) { return std::to_string(x); })
+			          << std::endl;
 #endif
 
 			assert(expected == actual);
@@ -227,12 +227,25 @@ namespace ocl {
 		}
 
 		std::vector<PartiallyAdvected> advectAndCopy(const fluid::Config<float> &config,
-													 std::vector<fluid::Particle<size_t, float>> &xs) {
+		                                             std::vector<fluid::Particle<size_t, float>> &xs) {
 			std::vector<PartiallyAdvected> advected(xs.size());
+
+
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				fluid::Particle<size_t, float> &p = xs[i];
-				p.velocity = (p.mass * config.constantForce) * config.dt + p.velocity;
+
+				tvec3<float> combinedForce = p.mass * config.constantForce;
+				for (const fluid::Well<float> &well : config.wells) {
+					const float distSquared = glm::distance2(well.centre, p.position);
+					const tvec3<float> rHat = (p.position - well.centre) / std::sqrt(distSquared);
+					const tvec3<float> forceWell = glm::clamp(
+							(rHat * (well.force * p.mass)) / distSquared,
+							-10.f, 10.f);
+					combinedForce += forceWell;
+				}
+
+				p.velocity = combinedForce * config.dt + p.velocity;
 				advected[i].pStar = clutil::vec3ToCl(
 						(p.velocity * config.dt) + (p.position / config.scale));
 				advected[i].particle = p;
@@ -277,7 +290,7 @@ namespace ocl {
 			clConfig.minBound = clutil::vec3ToCl(config.minBound);
 			clConfig.maxBound = clutil::vec3ToCl(config.maxBound);
 			return std::make_tuple(clConfig, minExtent,
-								   glm::tvec3<size_t>((maxExtent - minExtent) / h));
+			                       glm::tvec3<size_t>((maxExtent - minExtent) / h));
 		}
 
 
@@ -287,14 +300,14 @@ namespace ocl {
 		}
 
 		void runKernel(clutil::Stopwatch &watch,
-					   ClMcConfig &mcConfig, ClSphConfig &sphConfig,
-					   std::vector<uint> &hostGridTable,
-					   std::vector<ClSphTraiangle> &hostColliderMesh,
-					   ClSphAtoms &atoms,
-					   const tvec3<float> minExtent, const tvec3<size_t> extent,
-					   std::vector<float3> &hostPosition,
-					   std::vector<float3> &hostVelocity,
-					   surface::Lattice<float4> &hostLattice
+		               ClMcConfig &mcConfig, ClSphConfig &sphConfig,
+		               std::vector<uint> &hostGridTable,
+		               std::vector<ClSphTraiangle> &hostColliderMesh,
+		               ClSphAtoms &atoms,
+		               const tvec3<float> minExtent, const tvec3<size_t> extent,
+		               std::vector<float3> &hostPosition,
+		               std::vector<float3> &hostVelocity,
+		               surface::Lattice<float4> &hostLattice
 		) {
 			auto kernel_copy = watch.start("\t[GPU] kernel_copy");
 
@@ -306,8 +319,9 @@ namespace ocl {
 
 
 			cl::Buffer colliderMesh = colliderMeshN == 0 ?
-					cl::Buffer(context, CL_MEM_READ_WRITE, 1):
-					cl::Buffer(queue, hostColliderMesh.begin(), hostColliderMesh.end(), true);
+			                          cl::Buffer(context, CL_MEM_READ_WRITE, 1) :
+			                          cl::Buffer(queue, hostColliderMesh.begin(),
+			                                     hostColliderMesh.end(), true);
 
 
 			const uint gridTableN = static_cast<uint>(hostGridTable.size());
@@ -338,13 +352,13 @@ namespace ocl {
 
 			for (size_t itr = 0; itr < sphConfig.iteration; ++itr) {
 				lambdaKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-							 sphConfig_, zIndex, gridTable, gridTableN,
-							 pStar, mass, lambda
+				             sphConfig_, zIndex, gridTable, gridTableN,
+				             pStar, mass, lambda
 				);
 				deltaKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-							sphConfig_, zIndex, gridTable, gridTableN,
-							colliderMesh, colliderMeshN,
-							pStar, lambda, position, velocity, deltaP
+				            sphConfig_, zIndex, gridTable, gridTableN,
+				            colliderMesh, colliderMeshN,
+				            pStar, lambda, position, velocity, deltaP
 				);
 			}
 #ifdef DEBUG
@@ -355,8 +369,8 @@ namespace ocl {
 			auto finalise = watch.start("\t[GPU] sph-finalise");
 
 			finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-						   sphConfig_,
-						   pStar, position, velocity
+			               sphConfig_,
+			               pStar, position, velocity
 			);
 #ifdef DEBUG
 			queue.finish();
@@ -367,7 +381,7 @@ namespace ocl {
 
 			evalLatticeKernel(
 					cl::EnqueueArgs(queue,
-									cl::NDRange(sampleSize.x, sampleSize.y, sampleSize.z)),
+					                cl::NDRange(sampleSize.x, sampleSize.y, sampleSize.z)),
 					sphConfig_, mcConfig_,
 					gridTable, gridTableN,
 					clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
@@ -391,9 +405,9 @@ namespace ocl {
 		}
 
 		void overwrite(std::vector<fluid::Particle<size_t, float>> &xs,
-					   const std::vector<PartiallyAdvected> &advected,
-					   const std::vector<float3> &position,
-					   const std::vector<float3> &velocity) {
+		               const std::vector<PartiallyAdvected> &advected,
+		               const std::vector<float3> &position,
+		               const std::vector<float3> &velocity) {
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				xs[i].id = advected[i].particle.id;
@@ -407,15 +421,15 @@ namespace ocl {
 
 	public:
 		std::vector<surface::MeshTriangle<float>> advance(const fluid::Config<float> &config,
-														  std::vector<fluid::Particle<size_t, float>> &xs,
-														  const std::vector<fluid::MeshCollider<float>> &colliders) override {
+		                                                  std::vector<fluid::Particle<size_t, float>> &xs,
+		                                                  const std::vector<fluid::MeshCollider<float>> &colliders) override {
 
 
 			clutil::Stopwatch watch = clutil::Stopwatch("CPU advance");
 			auto total = watch.start("Advance ===total===");
 
 			ClMcConfig mcConfig;
-			mcConfig.sampleResolution = 2.f;
+			mcConfig.sampleResolution = config.resolution;
 			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.5;
 
@@ -439,9 +453,9 @@ namespace ocl {
 			auto sortz = watch.start("CPU sortz");
 
 			std::sort(advection.begin(), advection.end(),
-					  [](const PartiallyAdvected &l, const PartiallyAdvected &r) {
-						  return l.zIndex < r.zIndex;
-					  });
+			          [](const PartiallyAdvected &l, const PartiallyAdvected &r) {
+				          return l.zIndex < r.zIndex;
+			          });
 
 			// ska_sort(hostAtoms.begin(), hostAtoms.end(),
 			//  [](const ClSphAtom &a) { return a.zIndex; });
@@ -487,21 +501,21 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << to_string(extent)
-					  << " GridTable = " << hostGridTable.size()
-					  << std::endl;
+			          << " Extent = " << to_string(extent)
+			          << " GridTable = " << hostGridTable.size()
+			          << std::endl;
 #endif
 
 			auto kernel_alloc = watch.start("CPU host alloc+copy");
 
 			const tvec3<size_t> sampleSize = tvec3<size_t>(
 					glm::floor(tvec3<float>(extent) * mcConfig.sampleResolution)) +
-											 tvec3<size_t>(1);
+			                                 tvec3<size_t>(1);
 
 			std::vector<float3> hostPosition(advection.size());
 			std::vector<float3> hostVelocity(advection.size());
 			surface::Lattice<float4> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z,
-												 clutil::float4(-1));
+			                                     clutil::float4(-1));
 
 			ClSphAtoms atoms(advection.size());
 #pragma omp parallel for
@@ -518,14 +532,14 @@ namespace ocl {
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
 			try {
 				runKernel(watch, mcConfig, clConfig,
-						  hostGridTable,
-						  hostColliderMesh,
-						  atoms,
-						  minExtent, extent,
-						  hostPosition, hostVelocity, hostLattice);
+				          hostGridTable,
+				          hostColliderMesh,
+				          atoms,
+				          minExtent, extent,
+				          hostPosition, hostVelocity, hostLattice);
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
-						  << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
+				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
 				throw exc;
 			}
 			kernel_exec();
@@ -538,7 +552,7 @@ namespace ocl {
 
 			std::vector<surface::MeshTriangle<float>> triangles =
 					sampleLattice(100, config.scale,
-								  minExtent, h / mcConfig.sampleResolution, hostLattice);
+					              minExtent, h / mcConfig.sampleResolution, hostLattice);
 
 			march();
 
@@ -562,11 +576,11 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "MC lattice: " << hostLattice.size() << " Grid=" << to_string(extent)
-					  << " res="
-					  << hostLattice.xSize() << "x"
-					  << hostLattice.ySize() << "x"
-					  << hostLattice.zSize()
-					  << std::endl;
+			          << " res="
+			          << hostLattice.xSize() << "x"
+			          << hostLattice.ySize() << "x"
+			          << hostLattice.zSize()
+			          << std::endl;
 			std::cout << watch << std::endl;
 #endif
 

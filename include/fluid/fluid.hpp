@@ -4,6 +4,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 //#include <algorithm>
+#include <ostream>
 #include "glm/ext.hpp"
 #include "glm/glm.hpp"
 #include "geometry.hpp"
@@ -85,21 +86,56 @@ namespace fluid {
 	};
 
 	template<typename N>
+	struct Well {
+		tvec3<N> centre;
+		N force;
+		friend std::ostream &operator<<(std::ostream &os, const Well &well) {
+			return os << "Well(" << glm::to_string(well.centre) << " @" << well.force << ")";
+		}
+	};
+
+	template<typename N>
+	struct Source {
+		tvec3<N> centre;
+		size_t rate, tag;
+		friend std::ostream &operator<<(std::ostream &os, const Source &source) {
+			return os << "Source[ " << source.tag << " ]("
+			          << glm::to_string(source.centre) << " @" << source.rate << "p)";
+		}
+	};
+
+	template<typename N>
 	struct Config {
 
-		N dt;
-		N scale;
-		size_t iteration;
-		glm::tvec3<N> constantForce;
-		glm::tvec3<N> minBound, maxBound;
+		const N dt;
+		const N scale;
+		const N resolution;
+		const size_t iteration;
 
-		explicit Config(N dt, N scale, size_t iteration,
-		                const glm::tvec3<N> &constantForce,
-		                const glm::tvec3<N> &min,
-		                const glm::tvec3<N> &max) : dt(dt), scale(scale),
-		                                            iteration(iteration),
-		                                            constantForce(constantForce),
-		                                            minBound(min), maxBound(max) {}
+		const tvec3<N> constantForce;
+		const std::vector<fluid::Well<N>> wells;
+		const std::vector<fluid::Source<N>> sources;
+
+		const tvec3<N> minBound, maxBound;
+
+		explicit Config(N dt, N scale, N resolution, size_t iteration,
+		                const tvec3<N> &constantForce,
+		                const std::vector<fluid::Well<N>> &wells,
+		                const std::vector<fluid::Source<N>> &sources,
+		                const tvec3<N> &min, const tvec3<N> &max)
+				: dt(dt), scale(scale),
+				  resolution(resolution), iteration(iteration),
+				  constantForce(constantForce),
+				  wells(wells), sources(sources),
+				  minBound(min), maxBound(max) {}
+		friend std::ostream &operator<<(std::ostream &os, const Config &config) {
+			os << "dt: " << config.dt << " scale: " << config.scale << " iteration: "
+			   << config.iteration << " constantForce: " << glm::to_string(config.constantForce)
+			   << " minBound: "
+			   << glm::to_string(config.minBound)
+			   << " maxBound: " << glm::to_string(config.maxBound);
+			return os;
+		}
 	};
 
 	template<typename T, typename N>

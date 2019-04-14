@@ -18,6 +18,9 @@
 #include "fluid/oclsph.hpp"
 #include "fluid/cpusph.hpp"
 #include "fluid/mmf.hpp"
+
+#include "structures.hpp"
+
 #include <condition_variable>
 #include <atomic>
 
@@ -29,187 +32,6 @@ using json = nlohmann::json;
 typedef float num_t;
 using glm::tvec3;
 
-
-static const char id_[] = "id";
-static const char type_[] = "type";
-static const char mass_[] = "mass";
-static const char position_x_[] = "position.x";
-static const char position_y_[] = "position.y";
-static const char position_z_[] = "position.z";
-static const char velocity_x_[] = "velocity.x";
-static const char velocity_y_[] = "velocity.y";
-static const char velocity_z_[] = "velocity.z";
-
-template<typename T, typename N>
-static inline auto particleEntries() {
-	return mmf::makeEntries(
-			DECL_MEMBER(id_, CLS(fluid::Particle<T, N>), id),
-			DECL_MEMBER(type_, CLS(fluid::Particle<T, N>), type),
-			DECL_MEMBER(mass_, CLS(fluid::Particle<T, N>), mass),
-			DECL_MEMBER(position_x_, CLS(fluid::Particle<T, N>), position.x),
-			DECL_MEMBER(position_y_, CLS(fluid::Particle<T, N>), position.y),
-			DECL_MEMBER(position_z_, CLS(fluid::Particle<T, N>), position.z),
-			DECL_MEMBER(velocity_x_, CLS(fluid::Particle<T, N>), velocity.x),
-			DECL_MEMBER(velocity_y_, CLS(fluid::Particle<T, N>), velocity.y),
-			DECL_MEMBER(velocity_z_, CLS(fluid::Particle<T, N>), velocity.z)
-	);
-}
-
-static const char v0_x_[] = "v0.x";
-static const char v0_y_[] = "v0.y";
-static const char v0_z_[] = "v0.z";
-static const char v1_x_[] = "v1.x";
-static const char v1_y_[] = "v1.y";
-static const char v1_z_[] = "v1.z";
-static const char v2_x_[] = "v2.x";
-static const char v2_y_[] = "v2.y";
-static const char v2_z_[] = "v2.z";
-static const char n0_x_[] = "n0.x";
-static const char n0_y_[] = "n0.y";
-static const char n0_z_[] = "n0.z";
-static const char n1_x_[] = "n1.x";
-static const char n1_y_[] = "n1.y";
-static const char n1_z_[] = "n1.z";
-static const char n2_x_[] = "n2.x";
-static const char n2_y_[] = "n2.y";
-static const char n2_z_[] = "n2.z";
-
-
-template<typename N>
-static inline auto triangleEntries() {
-	return mmf::makeEntries(
-			DECL_MEMBER(v0_x_, CLS(geometry::Triangle<N>), v0.x),
-			DECL_MEMBER(v0_y_, CLS(geometry::Triangle<N>), v0.y),
-			DECL_MEMBER(v0_z_, CLS(geometry::Triangle<N>), v0.z),
-			DECL_MEMBER(v1_x_, CLS(geometry::Triangle<N>), v1.x),
-			DECL_MEMBER(v1_y_, CLS(geometry::Triangle<N>), v1.y),
-			DECL_MEMBER(v1_z_, CLS(geometry::Triangle<N>), v1.z),
-			DECL_MEMBER(v2_x_, CLS(geometry::Triangle<N>), v2.x),
-			DECL_MEMBER(v2_y_, CLS(geometry::Triangle<N>), v2.y),
-			DECL_MEMBER(v2_z_, CLS(geometry::Triangle<N>), v2.z)
-	);
-}
-
-template<typename N>
-static inline auto meshTriangleEntries() {
-	return mmf::makeEntries(
-			DECL_MEMBER(v0_x_, CLS(geometry::MeshTriangle<N>), v0.x),
-			DECL_MEMBER(v0_y_, CLS(geometry::MeshTriangle<N>), v0.y),
-			DECL_MEMBER(v0_z_, CLS(geometry::MeshTriangle<N>), v0.z),
-			DECL_MEMBER(v1_x_, CLS(geometry::MeshTriangle<N>), v1.x),
-			DECL_MEMBER(v1_y_, CLS(geometry::MeshTriangle<N>), v1.y),
-			DECL_MEMBER(v1_z_, CLS(geometry::MeshTriangle<N>), v1.z),
-			DECL_MEMBER(v2_x_, CLS(geometry::MeshTriangle<N>), v2.x),
-			DECL_MEMBER(v2_y_, CLS(geometry::MeshTriangle<N>), v2.y),
-			DECL_MEMBER(v2_z_, CLS(geometry::MeshTriangle<N>), v2.z),
-			DECL_MEMBER(n0_x_, CLS(geometry::MeshTriangle<N>), n0.x),
-			DECL_MEMBER(n0_y_, CLS(geometry::MeshTriangle<N>), n0.y),
-			DECL_MEMBER(n0_z_, CLS(geometry::MeshTriangle<N>), n0.z),
-			DECL_MEMBER(n1_x_, CLS(geometry::MeshTriangle<N>), n1.x),
-			DECL_MEMBER(n1_y_, CLS(geometry::MeshTriangle<N>), n1.y),
-			DECL_MEMBER(n1_z_, CLS(geometry::MeshTriangle<N>), n1.z),
-			DECL_MEMBER(n2_x_, CLS(geometry::MeshTriangle<N>), n2.x),
-			DECL_MEMBER(n2_y_, CLS(geometry::MeshTriangle<N>), n2.y),
-			DECL_MEMBER(n2_z_, CLS(geometry::MeshTriangle<N>), n2.z)
-	);
-}
-
-
-static const char timestamp_[] = "timestamp";
-static const char entries_[] = "entries";
-
-struct Header {
-	long timestamp;
-	size_t entries;
-
-
-	Header() {}
-	explicit Header(size_t entries) : timestamp(
-			std::chrono::duration_cast<std::chrono::milliseconds>(
-					std::chrono::system_clock::now().time_since_epoch()).count()
-	), entries(entries) {}
-	friend std::ostream &operator<<(std::ostream &os, const Header &header) {
-		return os
-				<< "Header(timestamp=" << header.timestamp << ", entries=" << header.entries << ")";
-	}
-};
-
-static inline auto headerEntries() {
-	return mmf::makeEntries(
-			DECL_MEMBER(timestamp_, CLS(Header), timestamp),
-			DECL_MEMBER(entries_, CLS(Header), entries)
-	);
-}
-
-template<typename T, typename N>
-void write_particles(mio::mmap_sink &sink, const std::vector<fluid::Particle<T, N>> &xs) {
-
-	Header header = Header(xs.size());
-	size_t offset = mmf::writer::writePacked(sink, header, 0, headerEntries());
-	for (const fluid::Particle<T, N> &p :  xs) {
-		offset = mmf::writer::writePacked(sink, p, offset, particleEntries<T, N>());
-	}
-}
-
-template<typename N>
-void write_triangles(mio::mmap_sink &sink, const std::vector<surface::MeshTriangle<N>> &xs) {
-	Header header = Header(xs.size());
-	size_t offset = mmf::writer::writePacked(sink, header, 0, headerEntries());
-	for (const surface::MeshTriangle<N> &t :  xs) {
-		offset = mmf::writer::writePacked(sink, t, offset, meshTriangleEntries<N>());
-	}
-}
-
-template<typename N>
-fluid::MeshCollider<N> readCollider(mio::mmap_source &source) {
-	Header header;
-	size_t offset = mmf::reader::readPacked(source, header, 0, headerEntries());
-	std::cout << header << "\n";
-	std::vector<geometry::Triangle<N>> ts(header.entries);
-	for (size_t i = 0; i < header.entries; ++i) {
-		geometry::Triangle<N> t{};
-		offset = mmf::reader::readPacked(source, t, offset, triangleEntries<N>());
-		ts[i] = t;
-	}
-	return fluid::MeshCollider<N>(ts);
-}
-
-
-mio::mmap_source openMmf(const std::string &path) {
-
-	std::error_code error;
-
-//	mio::mmap_source source;
-//	source.map(path, error);
-
-
-	mio::mmap_source source = mio::make_mmap_source(path, error);
-	if (error) {
-		std::cout << "MMF(" << path << ") failed:" << error.message() << std::endl;
-		exit(1);
-	} else {
-		std::cout << "MMF(" << path << ") size: "
-		          << (double) source.size() / (1024 * 1024) << "MB" << std::endl;
-	}
-	return source;
-}
-
-mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
-	std::ofstream file(path, std::ios::out | std::ios::trunc);
-	std::string s(std::max<size_t>(1024 * 4, length), ' '); // XXX may fail if than 4k
-	file << s;
-
-	std::error_code error;
-	mio::mmap_sink sink = mio::make_mmap_sink(path, 0, mio::map_entire_file, error);
-	if (error) {
-		std::cout << "MMF(" << path << ") failed:" << error.message() << std::endl;
-		exit(1);
-	} else {
-		std::cout << "MMF(" << path << ") size: "
-		          << (double) sink.size() / (1024 * 1024) << "MB" << std::endl;
-	}
-	return sink;
-}
 
 template<typename N>
 size_t makeCube(size_t offset, N spacing, const size_t count,
@@ -266,22 +88,56 @@ int main(int argc, char *argv[]) {
 }
 
 
+cl::Device resolveDeviceVerbose(const std::vector<std::string> &signatures) {
+	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
+	auto found = clutil::findDeviceWithSignature({signatures,});
+
+	if (found.empty()) {
+		throw std::runtime_error("No CL device found with signature:`" + imploded + "`");
+	}
+
+	std::cout << "Matching devices(" << found.size() << "):" << std::endl;
+	for (const auto &d : found) std::cout << "\t" << d.getInfo<CL_DEVICE_NAME>() << std::endl;
+
+	if (found.size() > 1) {
+		std::cout << "Found more than one device signature:`" << imploded
+		          << "`"  ", using the first one." << std::endl;
+	}
+
+	return found.front();
+}
+
 void run() {
 
-	auto particleType = mmf::meta::writeMetaPacked<decltype(particleEntries<size_t, num_t>())>();
-	auto triangleType = mmf::meta::writeMetaPacked<decltype(triangleEntries<num_t>())>();
-	auto meshTriangleType = mmf::meta::writeMetaPacked<decltype(meshTriangleEntries<num_t>())>();
-	auto headerType = mmf::meta::writeMetaPacked<decltype(headerEntries())>();
+	using mmf::meta::writeMetaPacked;
 
-	writeFile("header.json", headerType.second.dump(1));
-	writeFile("particle.json", particleType.second.dump(1));
-	writeFile("triangle.json", triangleType.second.dump(1));
-	writeFile("mesh_triangle.json", meshTriangleType.second.dump(1));
 
-	for (const auto &t : {headerType, particleType, triangleType, meshTriangleType}) {
-		std::cout << "size=" << t.first << std::endl;
-		std::cout << t.second.dump(3) << std::endl;
-	}
+	auto headerType = writeMetaPacked<decltype(strucures::headerDef())>();
+
+	auto wellType = writeMetaPacked<decltype(strucures::wellDef<num_t>())>();
+	auto sourceType = writeMetaPacked<decltype(strucures::sourceDef<num_t>())>();
+	auto sceneMetaType = writeMetaPacked<decltype(strucures::sceneMetaDef<num_t>())>();
+
+	auto particleType = writeMetaPacked<decltype(strucures::particleDef<size_t, num_t>())>();
+	auto triangleType = writeMetaPacked<decltype(strucures::triangleDef<num_t>())>();
+	auto meshTriangleType = writeMetaPacked<decltype(strucures::meshTriangleDef<num_t>())>();
+
+
+	const auto defs = json({
+			                       {"header",       headerType.second},
+
+			                       {"well",         wellType.second},
+			                       {"source",       sourceType.second},
+			                       {"sceneMeta",    sceneMetaType.second},
+
+			                       {"particle",     particleType.second},
+			                       {"triangle",     triangleType.second},
+			                       {"meshTriangle", meshTriangleType.second}
+	                       });
+
+	writeFile("defs.json", defs.dump(1));
+
+	std::cout << defs.dump(3) << std::endl;
 
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
@@ -291,7 +147,7 @@ void run() {
 	std::cout << "OMP nCores: " << cores << std::endl;
 
 	const size_t pcount = (64) * 1000;
-	const size_t iter = 5000;
+	const size_t iter = 50000;
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
 
@@ -310,19 +166,19 @@ void run() {
 //		                tvec3<num_t>(0));
 //	}
 
+	using miommf::createSink;
+	using miommf::createSource;
 
-	std::cout << "Mark" << std::endl;
-	auto mmfCSink = openMmf("colliders.mmf");
-	auto mmfPSink = mkMmf("particles.mmf", pcount * particleType.first + headerType.first);
-	auto mmfTSink = mkMmf("triangles.mmf", 500000 * 10 * triangleType.first + headerType.first);
+	std::cout << "Creating mmf sink+source" << std::endl;
 
-	std::cout << "Go" << std::endl;
+	auto sceneSource = createSource("scene.mmf");
+	auto colliderSource = createSource("colliders.mmf");
 
-	float D = 15.f;
-	auto P = static_cast<size_t>(2000.f / D);
+	auto particleSink = createSink("particles.mmf", pcount * particleType.first + headerType.first);
+	auto triangleSink = createSink("triangles.mmf",
+	                               500000 * 10 * triangleType.first + headerType.first);
 
-//	const surface::MCLattice<num_t> &lattice = surface::createLattice<num_t>(P, P, P, -1000, D);
-
+	std::cout << "Go!" << std::endl;
 
 
 #ifdef _WIN32
@@ -335,30 +191,10 @@ void run() {
 #   error "Unknown compiler"
 #endif
 
-
-	clutil::enumeratePlatformToCout();
-
-
 	const std::vector<std::string> signatures = {
-			"Ellesmere", "Quadro", "ATI", "1050", "980", "NEO", "Tesla"};
-	const auto imploded = clutil::mkString<std::string>(signatures, [](auto x) { return x; });
-	auto found = clutil::findDeviceWithSignature({signatures,});
-
-	if (found.empty()) {
-		throw std::runtime_error("No CL device found with signature:`" + imploded + "`");
-	}
-
-	std::cout << "Matching devices(" << found.size() << "):" << std::endl;
-	for (const auto &d : found) std::cout << "\t" << d.getInfo<CL_DEVICE_NAME>() << std::endl;
-
-	if (found.size() > 1) {
-		std::cout << "Found more than one device signature:`" << imploded
-		          << "`"  ", using the first one." << std::endl;
-	}
-
-	const auto device = found.front();
-
-
+			"Ellesmere", "Quadro", "ATI", "1050", "1080", "980", "NEO", "Tesla"};
+	clutil::enumeratePlatformToCout();
+	const auto device = resolveDeviceVerbose(signatures);
 
 	// std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new cpu::SphSolver<size_t, num_t>(0.1));
 	std::unique_ptr<fluid::SphSolver<size_t, num_t>> solver(new ocl::SphSolver(
@@ -372,29 +208,27 @@ void run() {
 	auto min = tvec3<num_t>(-1000);
 	auto max = tvec3<num_t>(2000, 2000, 2000);
 
-	auto config = fluid::Config<num_t>(
-			static_cast<num_t>(0.0083 * 1.5),
-			scaling,
-			solverIter,
-			tvec3<num_t>(0, 9.8, 0),
-			min, max);
 
 	float i = 0;
 
 
-
-
 	std::mutex m;
 	std::condition_variable flush;
+
+	strucures::Scene<num_t> scene(
+			strucures::SceneMeta<num_t>(false, false, solverIter, 1.5, scaling, 1.f, 9.8f), {}, {});
+
 	std::atomic_bool ready(false);
+	std::atomic_bool copied(false);
 	std::atomic_bool terminate(false);
 
 	std::vector<fluid::Particle<size_t, num_t >> particles(prepared);
 	std::vector<geometry::MeshTriangle<num_t>> triangles;
 
 
-	std::thread mmfXferThread([&flush, &m, &ready, &terminate,
-			                          &mmfPSink, &mmfTSink, &particles, &triangles] {
+	std::thread mmfXferThread([&flush, &m, &ready, &copied, &terminate,
+			                          &sceneSource, &particleSink, &triangleSink,
+			                          &particles, &triangles, &scene] {
 		std::cout << "Xfer thread init" << std::endl;
 		while (!terminate.load()) {
 
@@ -402,22 +236,51 @@ void run() {
 			std::unique_lock<std::mutex> lock(m);
 			flush.wait(lock, [&ready] { return ready.load(); });
 			ready = false;
+			const std::vector<fluid::Particle<size_t, num_t >> particlesBuffer = particles;
+			const std::vector<geometry::MeshTriangle<num_t>> trianglesBuffer = triangles;
+
+			copied = true;
+			lock.unlock();
+			flush.notify_one();
+
+
 			hrc::time_point waitEnd = hrc::now();
 
+			hrc::time_point sceneStart = hrc::now();
+			int suspendTick = 0;
+
+			if (miommf::canRead(sceneSource)) {
+				strucures::Scene<num_t> sceneBuffer = strucures::readScene<num_t>(sceneSource);
+//				std::cout << sceneBuffer << "\n";
+//				for (const auto &x : sceneBuffer.wells) std::cout << x << "\n";
+//				for (const auto &x : sceneBuffer.sources) std::cout << x << "\n";
+				while (sceneBuffer.meta.suspend) {
+					suspendTick++;
+					std::this_thread::sleep_for(std::chrono::microseconds(1));
+					strucures::readSceneMeta<num_t>(sceneSource, sceneBuffer.meta);
+				}
+				if (sceneBuffer.meta.solverIter != 0) scene = sceneBuffer; // TODO check
+			}
+
+
+			hrc::time_point sceneEnd = hrc::now();
+
+
 			hrc::time_point xferStart = hrc::now();
-			write_particles(mmfPSink, particles);
-			write_triangles(mmfTSink, triangles);
+			strucures::writeParticles(particleSink, particlesBuffer);
+			strucures::writeTriangles(triangleSink, trianglesBuffer);
 			hrc::time_point xferEnd = hrc::now();
 
 			auto solve = duration_cast<nanoseconds>(xferEnd - xferStart).count();
 			auto wait = duration_cast<nanoseconds>(waitEnd - waitStart).count();
+			auto sceneRead = duration_cast<nanoseconds>(sceneEnd - sceneStart).count();
 			std::cout << "\tXfer: " << (solve / 1000000.0) << "ms" <<
 			          " (waited " << (wait / 1000000.0) << "ms)" <<
-			          " nTriangle:" << triangles.size() <<
-			          " nParticle:" << particles.size()
+			          " Scene read " << (sceneRead / 1000000.0) << "ms (" << suspendTick
+			          << " ticks)" <<
+			          " nTriangle:" << trianglesBuffer.size() <<
+			          " nParticle:" << particlesBuffer.size()
 			          << std::endl;
-			lock.unlock();
-			flush.notify_one();
 		}
 	});
 
@@ -426,12 +289,23 @@ void run() {
 		i += glm::pi<num_t>() / 50;
 		auto xx = (std::sin(i) * 350) * 1;
 		auto zz = (std::cos(i) * 500) * 1;
-		config.minBound = min + tvec3<num_t>(xx, 1, zz);
-		config.maxBound = max + tvec3<num_t>(xx, 1, zz);
+
+		auto config = fluid::Config<num_t>(
+				static_cast<num_t>(0.0083 * scene.meta.solverStep),
+				scene.meta.solverScale,
+				scene.meta.surfaceRes,
+				scene.meta.solverIter,
+				tvec3<num_t>(0, scene.meta.gravity, 0),
+				// copy , gets modified in xfer thread
+				std::vector<fluid::Well<float>>(scene.wells),
+				std::vector<fluid::Source<float>>(scene.sources),
+				min + tvec3<num_t>(xx, 1, zz),
+				max + tvec3<num_t>(xx, 1, zz));
+		std::cout << config << "\n";
 
 
 //		std::cout << "Read collider: start" << std::endl;
-//		auto collider = readCollider<num_t>(mmfCSink);
+//		auto collider = strucures::readCollider<num_t>(colliderSource);
 //		std::cout << "Read collider: end" << std::endl;
 
 		const std::vector<fluid::MeshCollider<num_t>> colliders = {
@@ -456,6 +330,11 @@ void run() {
 		hrc::time_point solveEnd = hrc::now();
 		ready = true;
 		flush.notify_one();
+
+
+		std::unique_lock<std::mutex> lock(m);
+		flush.wait(lock, [&copied] { return copied.load(); });
+		copied = false;
 
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
 		std::cout << "[" << j << "]" <<

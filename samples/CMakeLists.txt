@@ -15,7 +15,7 @@ ExternalProject_Add(
         INSTALL_COMMAND ""
 )
 
-add_executable(main main.cpp)
+add_executable(main structures.hpp main.cpp)
 target_link_libraries(main PRIVATE fluid::fluid Threads::Threads)
 
 if (MSVC)
@@ -39,8 +39,9 @@ else ()
             -Werror=return-type
             )
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native -g)
-    set(DEBUG_OPTIONS  -fno-omit-frame-pointer -fsanitize=address -march=native)
+    set(DEBUG_OPTIONS  -O2 -fno-omit-frame-pointer -fsanitize=address -march=native)
     target_link_libraries(main PUBLIC $<$<CONFIG:DEBUG>:-Wl,-lasan>)
+    target_link_libraries(main PUBLIC -latomic)
 
 endif ()
 

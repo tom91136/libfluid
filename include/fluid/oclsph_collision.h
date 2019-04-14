@@ -40,14 +40,19 @@ bool collideTriangle2(
 		const float3 nn = fast_normalize(n);
 
 		float t = dot(nn, triangle.a) - dot(nn, p);
-		float3 p0 = p + (nn * t);
 
-		if (inTrig(triangle, p0) && fast_distance(p, p0) < 10.f) {
-			float3 r = velocity - (nn * 2 * dot(velocity, nn));
-			response->position = p0;
-			response->velocity = r;
-			return true;
+		if( -40 <= t && t <= 40){
+			float3 p0 = p + (nn * t);
+			if (inTrig(triangle, p0)) {
+				float3 r = velocity - (nn * 2 * dot(velocity, nn));
+				response->position = p0;
+				response->velocity = r;
+				return true;
+			}
 		}
+
+
+
 	}
 	return false;
 }

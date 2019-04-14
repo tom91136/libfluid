@@ -15,7 +15,7 @@ typedef tvec3<num_t> v3n;
 typedef size_t p_t;
 
 
-mio::mmap_sink mkMmf(const std::string &path, const size_t length) {
+mio::mmap_sink createSink(const std::string &path, const size_t length) {
 	std::ofstream file(path, std::ios::out | std::ios::trunc);
 	std::string s(length, ' ');
 	file << s;
@@ -69,7 +69,7 @@ static const char _l[] = "_l";
 
 template<typename T>
 static inline auto fooEntries() {
-	return mmf::makeEntries(
+	return mmf::makeDef(
 			DECL_MEMBER(a, CLS(Foo<T>), a),
 			DECL_MEMBER(b, CLS(Foo<T>), b),
 			DECL_MEMBER(c, CLS(Foo<T>), c),
