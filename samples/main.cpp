@@ -177,7 +177,7 @@ void run() {
 	auto colliderSource = createSource("colliders.mmf");
 
 	auto particleSink = createSink("particles.mmf",
-	                               pcount * 2 * particleType.first + headerType.first);
+	                               pcount * 10 * particleType.first + headerType.first);
 	auto triangleSink = createSink("triangles.mmf",
 	                               500000 * 10 * triangleType.first + headerType.first);
 
@@ -307,8 +307,6 @@ void run() {
 				std::vector<fluid::Drain<float>>(scene.drains),
 				min + tvec3<num_t>(xx, 1, zz),
 				max + tvec3<num_t>(xx, 1, zz));
-		std::cout << config << "\n";
-
 
 //		std::cout << "Read collider: start" << std::endl;
 //		auto collider = strucures::readCollider<num_t>(colliderSource);

@@ -239,7 +239,7 @@ namespace ocl {
 				tvec3<float> combinedForce = p.mass * config.constantForce;
 				for (const fluid::Well<float> &well : config.wells) {
 					const float distSquared = glm::distance2(well.centre, p.position);
-					const tvec3<float> rHat = (p.position - well.centre) / std::sqrt(distSquared);
+					const tvec3<float> rHat = (well.centre + p.position) / std::sqrt(distSquared);
 					const tvec3<float> forceWell = glm::clamp(
 							(rHat * (well.force * p.mass)) / distSquared,
 							-10.f, 10.f);
