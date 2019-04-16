@@ -29,7 +29,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 
 namespace ocl {
@@ -500,6 +500,14 @@ namespace ocl {
 
 
 			const size_t gridTableN = zCurveGridIndexAtCoord(extent.x, extent.y, extent.z);
+
+#ifdef DEBUG
+			std::cout << "Atoms = " << atomsN
+					  << " Extent = " << to_string(minExtent) << " -> " << to_string(extent)
+					  << " GridTable = " << gridTableN
+					  << std::endl;
+#endif
+
 			std::vector<uint> hostGridTable(gridTableN);
 			uint gridIndex = 0;
 			for (size_t i = 0; i < gridTableN; ++i) {
@@ -532,12 +540,6 @@ namespace ocl {
 
 			collider_concat();
 
-#ifdef DEBUG
-			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << to_string(extent)
-					  << " GridTable = " << hostGridTable.size()
-					  << std::endl;
-#endif
 
 			auto kernel_alloc = watch.start("CPU host alloc+copy");
 

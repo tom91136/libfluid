@@ -225,6 +225,14 @@ namespace strucures {
 	static const char solverScale_[] = "solverScale";
 	static const char surfaceRes_[] = "surfaceRes";
 	static const char gravity_[] = "gravity";
+	static const char minBound_x_[] = "minBound.x";
+	static const char minBound_y_[] = "minBound.y";
+	static const char minBound_z_[] = "minBound.z";
+	static const char maxBound_x_[] = "maxBound.x";
+	static const char maxBound_y_[] = "maxBound.y";
+	static const char maxBound_z_[] = "maxBound.z";
+
+	using glm::tvec3;
 
 	template<typename N>
 	struct SceneMeta {
@@ -235,24 +243,30 @@ namespace strucures {
 		N solverScale;
 		N surfaceRes;
 		N gravity;
+		tvec3<N> minBound, maxBound;
 
 		SceneMeta() = default;
 		explicit SceneMeta(bool suspend, bool terminate,
-		                   int solverIter, N solverStep, N solverScale, N surfaceRes, N gravity) :
+		                   int solverIter, N solverStep, N solverScale, N surfaceRes, N gravity,
+		                   tvec3<N> minBound, tvec3<N> maxBound) :
 				suspend(suspend), terminate(terminate),
 				solverIter(solverIter), solverStep(solverStep),
 				solverScale(solverScale), surfaceRes(surfaceRes),
-				gravity(gravity) {}
+				gravity(gravity),
+				minBound(minBound), maxBound(maxBound) {}
 
 		friend std::ostream &operator<<(std::ostream &os, const SceneMeta &scene) {
 			os << std::boolalpha << "SceneMeta{"
-			   << "\n suspend:     " << scene.suspend
-			   << "\n terminate:   " << scene.terminate
-			   << "\n solverIter:  " << scene.solverIter
-			   << "\n solverStep:  " << scene.solverStep
-			   << "\n solverScale: " << scene.solverScale
-			   << "\n surfaceRes:  " << scene.surfaceRes
-			   << "\n gravity:     " << scene.gravity
+			   << "\n suspend:    " << scene.suspend
+			   << "\n terminate:  " << scene.terminate
+			   << "\n solverIter: " << scene.solverIter
+			   << "\n solverStep: " << scene.solverStep
+			   << "\n solverScale:" << scene.solverScale
+			   << "\n surfaceRes: " << scene.surfaceRes
+			   << "\n gravity:    " << scene.gravity
+			   << "\n bounds:     "
+			   << " min=" << glm::to_string(scene.minBound)
+			   << " max=" << glm::to_string(scene.maxBound)
 			   << "\n}";
 			return os;
 		}
@@ -288,7 +302,13 @@ namespace strucures {
 				DECL_MEMBER(solverStep_, CLS(SceneMeta<N>), solverStep),
 				DECL_MEMBER(solverScale_, CLS(SceneMeta<N>), solverScale),
 				DECL_MEMBER(surfaceRes_, CLS(SceneMeta<N>), surfaceRes),
-				DECL_MEMBER(gravity_, CLS(SceneMeta<N>), gravity)
+				DECL_MEMBER(gravity_, CLS(SceneMeta<N>), gravity),
+				DECL_MEMBER(minBound_x_, CLS(SceneMeta<N>), minBound.x),
+				DECL_MEMBER(minBound_y_, CLS(SceneMeta<N>), minBound.y),
+				DECL_MEMBER(minBound_z_, CLS(SceneMeta<N>), minBound.z),
+				DECL_MEMBER(maxBound_x_, CLS(SceneMeta<N>), maxBound.x),
+				DECL_MEMBER(maxBound_y_, CLS(SceneMeta<N>), maxBound.y),
+				DECL_MEMBER(maxBound_z_, CLS(SceneMeta<N>), maxBound.z)
 		);
 	}
 

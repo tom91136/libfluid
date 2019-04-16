@@ -148,7 +148,7 @@ void run() {
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = (16) * 1000;
+	const size_t pcount = 32 * 1000;
 	const size_t iter = 50000;
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
@@ -195,7 +195,7 @@ void run() {
 #endif
 
 	const std::vector<std::string> signatures = {
-			"Ellesmere", "Quadro", "ATI", "1050", "1080", "980", "NEO", "Tesla"};
+			"gfx906", "Ellesmere", "Quadro", "ATI", "1050", "1080", "980", "NEO", "Tesla"};
 	clutil::enumeratePlatformToCout();
 	const auto device = resolveDeviceVerbose(signatures);
 
@@ -219,7 +219,11 @@ void run() {
 	std::condition_variable flush;
 
 	strucures::Scene<num_t> scene(
-			strucures::SceneMeta<num_t>(false, false, solverIter, 1.5, scaling, 1.f, 9.8f),
+			strucures::SceneMeta<num_t>(
+					false, false,
+					solverIter, 1.5, scaling, 1.f, 9.8f,
+					tvec3<num_t>(0, 0, 0),
+					tvec3<num_t>(1000, 1000, 1000)),
 			{}, {}, {});
 
 	std::atomic_bool ready(false);
@@ -291,9 +295,11 @@ void run() {
 
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
-		i += glm::pi<num_t>() / 50;
-		auto xx = (std::sin(i) * 350) * 0;
-		auto zz = (std::cos(i) * 500) * 0;
+//		i += glm::pi<num_t>() / 50;
+//		auto xx = (std::sin(i) * 350) * 0;
+//		auto zz = (std::cos(i) * 500) * 0;
+//		min + tvec3<num_t>(xx, 1, zz);
+//		max + tvec3<num_t>(xx, 1, zz);
 
 		auto config = fluid::Config<num_t>(
 				static_cast<num_t>(0.0083 * scene.meta.solverStep),
@@ -305,8 +311,8 @@ void run() {
 				std::vector<fluid::Well<float>>(scene.wells),
 				std::vector<fluid::Source<float>>(scene.sources),
 				std::vector<fluid::Drain<float>>(scene.drains),
-				min + tvec3<num_t>(xx, 1, zz),
-				max + tvec3<num_t>(xx, 1, zz));
+				scene.meta.minBound, scene.meta.maxBound
+		);
 
 //		std::cout << "Read collider: start" << std::endl;
 //		auto collider = strucures::readCollider<num_t>(colliderSource);
