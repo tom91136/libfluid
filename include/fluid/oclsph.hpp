@@ -445,7 +445,7 @@ namespace ocl {
 				const auto offset = source.centre - (tvec3<float>(width, 0, depth) / 2 * spacing);
 				for (int x = 0; x < width; ++x) {
 					for (int z = 0; z < depth; ++z) {
-						auto pos = tvec3<float>(x, 0, z) * spacing - offset;
+						auto pos = offset + tvec3<float>(x, 0, z) * spacing;
 						xs.emplace_back(source.tag, fluid::Type::Fluid, 1, pos,
 						                config.constantForce);
 					}
