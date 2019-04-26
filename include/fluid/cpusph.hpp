@@ -19,7 +19,7 @@
 #include <memory>
 #include "oclsph.hpp"
 #include "fluid.hpp"
-#include "zcurve.h"
+#include "curves.h"
 
 
 namespace cpu {

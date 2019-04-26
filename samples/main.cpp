@@ -149,7 +149,7 @@ void run() {
 	std::cout << "OMP nCores: " << cores << std::endl;
 
 	const size_t pcount = 32 * 1000;
-	const size_t iter = 50000;
+	const size_t iter = 30000;
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
 

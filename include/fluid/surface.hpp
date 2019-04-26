@@ -162,6 +162,26 @@ namespace surface {
 	}
 
 
+	using mctable::NumVertsTable;
+	template<typename N>
+	inline unsigned char marchSingleN(const N isolevel,
+	                                  const std::array<N, 8> &vertices) {
+
+		size_t ci = 0;
+		ci = (vertices[0] < isolevel) ? ci | (1 << 0) : ci;
+		ci = (vertices[1] < isolevel) ? ci | (1 << 1) : ci;
+		ci = (vertices[2] < isolevel) ? ci | (1 << 2) : ci;
+		ci = (vertices[3] < isolevel) ? ci | (1 << 3) : ci;
+		ci = (vertices[4] < isolevel) ? ci | (1 << 4) : ci;
+		ci = (vertices[5] < isolevel) ? ci | (1 << 5) : ci;
+		ci = (vertices[6] < isolevel) ? ci | (1 << 6) : ci;
+		ci = (vertices[7] < isolevel) ? ci | (1 << 7) : ci;
+
+		if (EdgeTable[ci] == 0) return 0;
+		return NumVertsTable[ci];
+	}
+
+
 	template<typename N>
 	inline void marchSingle(const N isolevel,
 							const std::array<N, 8> &vertices,

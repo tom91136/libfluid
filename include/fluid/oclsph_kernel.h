@@ -1,6 +1,11 @@
+
+#define CURVE_UINT3_TYPE uint3
+#define CURVE_UINT3_CTOR(x, y, z) ((uint3)((x), (y), (z)))
+
 #include "oclsph_type.h"
 #include "oclsph_collision.h"
-#include "zcurve.h"
+#include "curves.h"
+#include "mc.h"
 
 
 #define DEBUG
@@ -61,8 +66,8 @@ inline float3 spikyKernelGradient(const float3 x, const float3 y, const float r)
 
 
 	return (r >= EPSILON && r <= SPH_H) ?
-		   (x - y) * (SpikyKernelFactor * native_divide(pown(SPH_H - r, 2), r)) :
-		   (float3) (0.f);
+	       (x - y) * (SpikyKernelFactor * native_divide(pown(SPH_H - r, 2), r)) :
+	       (float3) (0.f);
 }
 
 #define FOR_SINGLE_GRID(zIndex, b, atoms, gridTable, gridTableN, op) \
@@ -119,7 +124,7 @@ inline void sortArray27(size_t d[27]) {
 	//@formatter:on
 }
 
-inline zCurveGridIndexAtCoordU3(const uint3 v) {
+inline size_t zCurveGridIndexAtCoordU3(const uint3 v) {
 	return zCurveGridIndexAtCoord(v.x, v.y, v.z);
 }
 
@@ -376,6 +381,9 @@ kernel void sph_finalise(
 	velocity[a] = mad(deltaX, (1.f / config->dt), velocity[a]) * VD;
 }
 
+// mcCube -> TrigSumN
+//
+
 kernel void sph_evalLattice(
 		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const global uint *gridTable, uint gridTableN,
@@ -462,8 +470,8 @@ kernel void sph_evalLattice(
 				const float denominator = pow(len, mcConfig->particleInfluence);
 
 				normal += (-mcConfig->particleInfluence) *
-						  mcConfig->particleSize *
-						  (l / denominator);
+				          mcConfig->particleSize *
+				          (l / denominator);
 				v += (mcConfig->particleSize / denominator);
 			}
 		}
@@ -475,3 +483,189 @@ kernel void sph_evalLattice(
 	out->s2 = normal.s1;
 	out->s3 = normal.s2;
 }
+
+
+const constant uint3 CUBE_OFFSETS[8] = {
+		(uint3) (0, 0, 0),
+		(uint3) (1, 0, 0),
+		(uint3) (1, 1, 0),
+		(uint3) (0, 1, 0),
+		(uint3) (0, 0, 1),
+		(uint3) (1, 0, 1),
+		(uint3) (1, 1, 1),
+		(uint3) (0, 1, 1)
+};
+
+
+kernel void mc_size(
+		const constant ClMcConfig *mcConfig,
+		const uint3 sizes,
+		const global float4 *values,
+		local uint *localSums,
+		global uint *partialSums
+) {
+
+
+	const uint3 pos = to3d(get_global_id(0), sizes.x - 1, sizes.y - 1, sizes.z - 1);
+	const float isolevel = mcConfig->isolevel;
+
+
+	uint ci = 0;
+	for (int i = 0; i < 8; ++i) {
+		const uint3 offset = CUBE_OFFSETS[i] + pos;
+		const float v = values[index3d(
+				offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)].s0;
+		ci = select(ci, ci | (1 << i), v < isolevel);
+	}
+
+
+	const uint nVert = select((uint) NumVertsTable[ci] / 3, 0u, EdgeTable[ci] == 0);
+
+	const uint localId = get_local_id(0);
+	const uint groupSize = get_local_size(0);
+
+	// zero out local memory first, this is needed because workgroup size might not divide
+	// group size perfectly; we need to zero out trailing cells
+	if (localId == 0) {
+		for (size_t i = 0; i < get_local_size(0); ++i) localSums[i] = 0;
+	}
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	localSums[localId] = nVert;
+
+	for (uint stride = groupSize / 2; stride > 0; stride >>= 1u) {
+		barrier(CLK_LOCAL_MEM_FENCE);
+		if (localId < stride) localSums[localId] += localSums[localId + stride];
+	}
+
+
+	if (localId == 0) {
+		partialSums[get_group_id(0)] = localSums[0];
+	}
+
+}
+
+inline float3 lerp(const float isolevel,
+                   const float3 p1, const float3 p2,
+                   const float v1, const float v2) {
+	if (fabs(isolevel - v1) < 0.00001f) return p1;
+	if (fabs(isolevel - v2) < 0.00001f) return p2;
+	if (fabs(v1 - v2) < 0.00001f) return p1;
+	return p1 + (p2 - p1) * ((isolevel - v1) / (v2 - v1));
+}
+
+kernel void mc_eval(
+		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
+		const float3 min, const uint3 sizes,
+		const global float4 *values,
+		volatile global uint *trigCounter,
+
+		const uint acc,
+
+		global float3 *outVxs,
+		global float3 *outVys,
+		global float3 *outVzs,
+
+		global float3 *outNxs,
+		global float3 *outNys,
+		global float3 *outNzs
+) {
+
+
+	const uint3 pos = to3d(get_global_id(0), sizes.x - 1, sizes.y - 1, sizes.z - 1);
+	const float isolevel = mcConfig->isolevel;
+	const float step = SPH_H / mcConfig->sampleResolution;
+
+	float vertices[8];
+	float3 normals[8];
+	float3 offsets[8];
+
+	uint ci = 0;
+	for (int i = 0; i < 8; ++i) {
+		const uint3 offset = CUBE_OFFSETS[i] + pos;
+		const float4 point = values[index3d(
+				offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)];
+
+		vertices[i] = point.s0;
+		normals[i] = (float3) (point.s1, point.s2, point.s3);
+		offsets[i] = (min + (convert_float3(offset) * step)) * config->scale;
+
+		ci = select(ci, ci | (1 << i), vertices[i] < isolevel);
+	}
+
+	float3 ts[12];
+	float3 ns[12];
+
+	const uint edge = EdgeTable[ci];
+
+	if (edge & 1 << 0) {
+		ts[0] = lerp(isolevel, offsets[0], offsets[1], vertices[0], vertices[1]);
+		ns[0] = lerp(isolevel, normals[0], normals[1], vertices[0], vertices[1]);
+	}
+	if (edge & 1 << 1) {
+		ts[1] = lerp(isolevel, offsets[1], offsets[2], vertices[1], vertices[2]);
+		ns[1] = lerp(isolevel, normals[1], normals[2], vertices[1], vertices[2]);
+	}
+	if (edge & 1 << 2) {
+		ts[2] = lerp(isolevel, offsets[2], offsets[3], vertices[2], vertices[3]);
+		ns[2] = lerp(isolevel, normals[2], normals[3], vertices[2], vertices[3]);
+	}
+	if (edge & 1 << 3) {
+		ts[3] = lerp(isolevel, offsets[3], offsets[0], vertices[3], vertices[0]);
+		ns[3] = lerp(isolevel, normals[3], normals[0], vertices[3], vertices[0]);
+	}
+	if (edge & 1 << 4) {
+		ts[4] = lerp(isolevel, offsets[4], offsets[5], vertices[4], vertices[5]);
+		ns[4] = lerp(isolevel, normals[4], normals[5], vertices[4], vertices[5]);
+	}
+	if (edge & 1 << 5) {
+		ts[5] = lerp(isolevel, offsets[5], offsets[6], vertices[5], vertices[6]);
+		ns[5] = lerp(isolevel, normals[5], normals[6], vertices[5], vertices[6]);
+	}
+	if (edge & 1 << 6) {
+		ts[6] = lerp(isolevel, offsets[6], offsets[7], vertices[6], vertices[7]);
+		ns[6] = lerp(isolevel, normals[6], normals[7], vertices[6], vertices[7]);
+	}
+	if (edge & 1 << 7) {
+		ts[7] = lerp(isolevel, offsets[7], offsets[4], vertices[7], vertices[4]);
+		ns[7] = lerp(isolevel, normals[7], normals[4], vertices[7], vertices[4]);
+	}
+	if (edge & 1 << 8) {
+		ts[8] = lerp(isolevel, offsets[0], offsets[4], vertices[0], vertices[4]);
+		ns[8] = lerp(isolevel, normals[0], normals[4], vertices[0], vertices[4]);
+	}
+	if (edge & 1 << 9) {
+		ts[9] = lerp(isolevel, offsets[1], offsets[5], vertices[1], vertices[5]);
+		ns[9] = lerp(isolevel, normals[1], normals[5], vertices[1], vertices[5]);
+	}
+	if (edge & 1 << 10) {
+		ts[10] = lerp(isolevel, offsets[2], offsets[6], vertices[2], vertices[6]);
+		ns[10] = lerp(isolevel, normals[2], normals[6], vertices[2], vertices[6]);
+	}
+	if (edge & 1 << 11) {
+		ts[11] = lerp(isolevel, offsets[3], offsets[7], vertices[3], vertices[7]);
+		ns[11] = lerp(isolevel, normals[3], normals[7], vertices[3], vertices[7]);
+	}
+
+
+	for (size_t i = 0; TriTable[ci][i] != 255; i += 3) {
+		const uint trigIndex = atomic_inc(trigCounter);
+		const int x = TriTable[ci][i + 0];
+		const int y = TriTable[ci][i + 1];
+		const int z = TriTable[ci][i + 2];
+		outVxs[trigIndex] = ts[x];
+		outVys[trigIndex] = ts[y];
+		outVzs[trigIndex] = ts[z];
+		outNxs[trigIndex] = ns[x];
+		outNys[trigIndex] = ns[y];
+		outNzs[trigIndex] = ns[z];
+	}
+//	printf("trigIdx: %d -> %d", (*trigCounter), trigIndex);
+
+
+
+
+}
+
+
+

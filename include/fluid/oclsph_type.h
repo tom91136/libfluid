@@ -40,6 +40,7 @@ typedef struct ClMcConfig {
 	ALIGNED_(4) float sampleResolution;
 	ALIGNED_(4) float particleSize;
 	ALIGNED_(4) float particleInfluence;
+	ALIGNED_(4) float isolevel;
 } ClMcConfig;
 
 

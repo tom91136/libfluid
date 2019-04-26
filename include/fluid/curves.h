@@ -1,5 +1,5 @@
-#ifndef LIBFLUID_ZCURVE_H
-#define LIBFLUID_ZCURVE_H
+#ifndef LIBFLUID_CURVES_H
+#define LIBFLUID_CURVES_H
 
 
 #ifndef __OPENCL_C_VERSION__
@@ -9,10 +9,21 @@
 #endif
 
 
+#if !defined(CURVE_UINT3_TYPE) || !defined(CURVE_UINT3_CTOR)
+#error type/ctor of 3 component vector not defined
+#endif
+
+
 inline size_t index3d(size_t x, size_t y, size_t z,
-                      size_t xMax, size_t yMax, size_t zMax
-		) {
+                      size_t xMax, size_t yMax, size_t zMax) {
 	return x * yMax * zMax + y * zMax + z;
+}
+
+inline CURVE_UINT3_TYPE to3d(size_t index, size_t xMax, size_t yMax, size_t zMax) {
+	size_t x = index / (yMax * zMax);
+	size_t y = (index - x * yMax * zMax) / zMax;
+	size_t z = index - x * yMax * zMax - y * zMax;
+	return CURVE_UINT3_CTOR(x, y, z);
 }
 
 inline size_t uninterleave(size_t value) {
@@ -60,4 +71,4 @@ inline size_t zCurveGridIndexAtCoord(size_t x, size_t y, size_t z) {
 	return x | y << 1 | z << 2;
 }
 
-#endif //LIBFLUID_ZCURVE_H
+#endif //LIBFLUID_CURVES_H

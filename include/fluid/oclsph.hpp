@@ -8,6 +8,8 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 
+#define CURVE_UINT3_TYPE glm::tvec3<size_t>
+#define CURVE_UINT3_CTOR(x, y, z) (glm::tvec3<size_t>((x), (y), (z)))
 
 #include <iostream>
 #include <iomanip>
@@ -25,27 +27,32 @@
 #include "clutils.hpp"
 #include "fluid.hpp"
 #include "oclsph_type.h"
-#include "zcurve.h"
+#include "curves.h"
 #include "mc.h"
 #include "ska_sort.hpp"
 
-//#define DEBUG
+#define DEBUG
 
 
 namespace ocl {
 
 	using glm::tvec3;
 
+	typedef cl::Buffer ClSphConfigStruct;
+	typedef cl::Buffer ClMcConfigStruct;
+
 	typedef cl::KernelFunctor<
-			cl::Buffer, cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
+			ClSphConfigStruct &,
+			cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
 
 			cl::Buffer &, // pstar
 			cl::Buffer &, // mass
 			cl::Buffer & // lambda
-	> LambdaKernel;
+	> SphLambdaKernel;
 
 	typedef cl::KernelFunctor<
-			cl::Buffer, cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
+			ClSphConfigStruct &,
+			cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
 			cl::Buffer &, uint, // mesh + N
 
 			cl::Buffer &, // pstar
@@ -53,22 +60,40 @@ namespace ocl {
 			cl::Buffer &, // pos
 			cl::Buffer &, // vel
 			cl::Buffer &  // deltap
-	> DeltaKernel;
+	> SphDeltaKernel;
 
 	typedef cl::KernelFunctor<
-			cl::Buffer,
+			ClSphConfigStruct &,
 
 			cl::Buffer &, // pstar
 			cl::Buffer &, // pos
 			cl::Buffer &  // vel
-	> FinaliseKernel;
+	> SphFinaliseKernel;
 
 	typedef cl::KernelFunctor<
-			cl::Buffer, cl::Buffer,
+			ClSphConfigStruct &, ClMcConfigStruct &,
 			cl::Buffer &, uint,
 			float3, uint3, uint3,
 			cl::Buffer &, cl::Buffer &
-	> EvalLatticeKernel;
+	> SphEvalLatticeKernel;
+
+	typedef cl::KernelFunctor<
+			ClMcConfigStruct &,
+			uint3,
+			cl::Buffer &,
+			cl::LocalSpaceArg,
+			cl::Buffer &
+	> McSizeKernel;
+
+	typedef cl::KernelFunctor<
+			ClSphConfigStruct &, ClMcConfigStruct &,
+			float3, uint3,
+			cl::Buffer &,
+			cl::Buffer &,
+			uint,
+			cl::Buffer &, cl::Buffer &, cl::Buffer &,
+			cl::Buffer &, cl::Buffer &, cl::Buffer &
+	> McEvalKernel;
 
 
 	struct ClSphAtoms {
@@ -104,10 +129,12 @@ namespace ocl {
 
 		cl::CommandQueue queue;
 
-		LambdaKernel lambdaKernel;
-		DeltaKernel deltaKernel;
-		FinaliseKernel finaliseKernel;
-		EvalLatticeKernel evalLatticeKernel;
+		SphLambdaKernel lambdaKernel;
+		SphDeltaKernel deltaKernel;
+		SphFinaliseKernel finaliseKernel;
+		SphEvalLatticeKernel evalLatticeKernel;
+		McSizeKernel mcSizeKernel;
+		McEvalKernel mcEvalKernel;
 
 	public:
 		explicit SphSolver(float h, const std::string &kernelPath, const cl::Device &device) :
@@ -124,7 +151,9 @@ namespace ocl {
 				lambdaKernel(clsph, "sph_lambda"),
 				deltaKernel(clsph, "sph_delta"),
 				finaliseKernel(clsph, "sph_finalise"),
-				evalLatticeKernel(clsph, "sph_evalLattice") {
+				evalLatticeKernel(clsph, "sph_evalLattice"),
+				mcSizeKernel(clsph, "mc_size"),
+				mcEvalKernel(clsph, "mc_eval") {
 			checkSize();
 		}
 
@@ -172,15 +201,15 @@ namespace ocl {
 			}
 
 #ifdef DEBUG
-				std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-						  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-						  << std::endl;
+			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
+			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+			          << std::endl;
 
 
-				std::cout << "Expected(" << _SIZES_LENGTH << ")="
-						  << clutil::mkString<size_t>(expected,
-													  [](auto x) { return std::to_string(x); })
-						  << std::endl;
+			std::cout << "Expected(" << _SIZES_LENGTH << ")="
+			          << clutil::mkString<size_t>(expected,
+			                                      [](auto x) { return std::to_string(x); })
+			          << std::endl;
 #endif
 
 			assert(expected == actual);
@@ -223,6 +252,9 @@ namespace ocl {
 					}
 				}
 			}
+
+			std::cout << "Acc2=" << 0 << "Lattice:" << lattice.size()
+			          << std::endl;
 			return triangles;
 		}
 
@@ -300,15 +332,17 @@ namespace ocl {
 			return cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T), &t);
 		}
 
-		void runKernel(clutil::Stopwatch &watch,
-		               ClMcConfig &mcConfig, ClSphConfig &sphConfig,
-		               std::vector<uint> &hostGridTable,
-		               std::vector<ClSphTraiangle> &hostColliderMesh,
-		               ClSphAtoms &atoms,
-		               const tvec3<float> minExtent, const tvec3<size_t> extent,
-		               std::vector<float3> &hostPosition,
-		               std::vector<float3> &hostVelocity,
-		               surface::Lattice<float4> &hostLattice
+		std::vector<geometry::MeshTriangle<float>> runKernel(clutil::Stopwatch &watch,
+		                                                     ClMcConfig &mcConfig,
+		                                                     ClSphConfig &sphConfig,
+		                                                     std::vector<uint> &hostGridTable,
+		                                                     std::vector<ClSphTraiangle> &hostColliderMesh,
+		                                                     ClSphAtoms &atoms,
+		                                                     const tvec3<float> minExtent,
+		                                                     const tvec3<size_t> extent,
+		                                                     std::vector<float3> &hostPosition,
+		                                                     std::vector<float3> &hostVelocity,
+		                                                     surface::Lattice<float4> &hostLattice
 		) {
 			auto kernel_copy = watch.start("\t[GPU] kernel_copy");
 
@@ -336,7 +370,7 @@ namespace ocl {
 
 			cl::Buffer deltaP(context, CL_MEM_READ_WRITE, sizeof(float3) * atoms.size);
 			cl::Buffer lambda(context, CL_MEM_READ_WRITE, sizeof(float) * atoms.size);
-			cl::Buffer lattice(context, CL_MEM_WRITE_ONLY, sizeof(float4) * hostLattice.size());
+			cl::Buffer lattice(context, CL_MEM_READ_WRITE, sizeof(float4) * hostLattice.size());
 
 			cl::Buffer sphConfig_ = readOnlyStruct<ClSphConfig>(sphConfig);
 			cl::Buffer mcConfig_ = readOnlyStruct<ClMcConfig>(mcConfig);
@@ -395,14 +429,144 @@ namespace ocl {
 #endif
 			create_field();
 
+
+//			typedef cl::KernelFunctor<
+//					ReadOnlyStruct &,
+//					uint3,
+//					cl::Buffer &,
+//					cl::LocalSpaceArg &,
+//					cl::Buffer &
+
+
+
+
+
+			size_t kernelWorkGroupSize = mcSizeKernel
+					.getKernel()
+					.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(device);
+
+
+			const auto maxCube = sampleSize - tvec3<size_t>(1);
+			const auto latticeRange = maxCube.x * maxCube.y * maxCube.z;
+
+
+			size_t workGroupSize = kernelWorkGroupSize;
+			size_t nWorkGroup = std::ceil(static_cast<float>(latticeRange) / workGroupSize);
+
+
+			std::cout << "Samples:" << glm::to_string(maxCube) << " L=" << latticeRange << " HL:"
+			          << hostLattice.size() << " WG:" << kernelWorkGroupSize << " nWG:"
+			          << nWorkGroup << " Fl:" << (((float) latticeRange) / workGroupSize) << "\n";
+//
+			const auto localRange = cl::NDRange(workGroupSize);
+			const auto localSum = cl::Local(sizeof(uint) * workGroupSize);
+
+			std::vector<uint> hostPsum(nWorkGroup, 0);
+
+			cl::Buffer pSum(context, CL_MEM_WRITE_ONLY, nWorkGroup * sizeof(uint));
+
+
+			auto p_sum = watch.start("\t[GPU] mc_psum");
+
+			mcSizeKernel(
+					cl::EnqueueArgs(queue,
+					                cl::NDRange(latticeRange),
+					                localRange),
+					mcConfig_,
+					clutil::uvec3ToCl(sampleSize),
+					lattice,
+					localSum,
+					pSum
+			);
+
+
+			cl::copy(queue, pSum, hostPsum.begin(), hostPsum.end());
+			uint acc = 0;
+			for (int j = 0; j < nWorkGroup; ++j) acc += hostPsum[j];
+
+			std::cout << "Acc=" << acc << std::endl;
+#ifdef DEBUG
+			queue.finish();
+#endif
+			p_sum();
+
+			auto gpu_mc = watch.start("\t[GPU] gpu_mc");
+
+
+			std::vector<uint> zero{0};
+
+			cl::Buffer trigCounter(context, zero.begin(), zero.end(), false);
+
+			cl::Buffer outVxs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+			cl::Buffer outVys(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+			cl::Buffer outVzs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+
+			cl::Buffer outNxs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+			cl::Buffer outNys(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+			cl::Buffer outNzs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+
+
+			mcEvalKernel(
+					cl::EnqueueArgs(queue,
+					                cl::NDRange(latticeRange)),
+					sphConfig_, mcConfig_,
+					clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
+					lattice,
+					trigCounter,
+					acc,
+					outVxs, outVys, outVzs,
+					outNxs, outNys, outNzs
+			);
+
+#ifdef DEBUG
+			queue.finish();
+#endif
+
+			gpu_mc();
+
+			std::vector<float3> hostOutVxs(acc);
+			std::vector<float3> hostOutVys(acc);
+			std::vector<float3> hostOutVzs(acc);
+
+			std::vector<float3> hostOutNxs(acc);
+			std::vector<float3> hostOutNys(acc);
+			std::vector<float3> hostOutNzs(acc);
+
+			cl::copy(queue, outVxs, hostOutVxs.begin(), hostOutVxs.end());
+			cl::copy(queue, outVys, hostOutVys.begin(), hostOutVys.end());
+			cl::copy(queue, outVzs, hostOutVzs.begin(), hostOutVzs.end());
+
+			cl::copy(queue, outNxs, hostOutNxs.begin(), hostOutNxs.end());
+			cl::copy(queue, outNys, hostOutNys.begin(), hostOutNys.end());
+			cl::copy(queue, outNzs, hostOutNzs.begin(), hostOutNzs.end());
+
+			std::vector<surface::MeshTriangle<float>> triangles(acc);
+#pragma  omp parallel for
+			for (int i = 0; i < acc; ++i) {
+				triangles[i].v0 = clutil::clToVec3<float>(hostOutVxs[i]);
+				triangles[i].v1 = clutil::clToVec3<float>(hostOutVys[i]);
+				triangles[i].v2 = clutil::clToVec3<float>(hostOutVzs[i]);
+				triangles[i].n0 = clutil::clToVec3<float>(hostOutNxs[i]);
+				triangles[i].n1 = clutil::clToVec3<float>(hostOutNys[i]);
+				triangles[i].n2 = clutil::clToVec3<float>(hostOutNzs[i]);
+			}
+
+
+			std::cout
+					<< "LatticeDataN:" << (float) (sizeof(float4) * hostLattice.size()) / 1000000.0
+					<< "MB MCGPuN:" << (float) (sizeof(float3) * acc * 6) / 1000000.0 << "MB \n";
+
+
 			auto kernel_return = watch.start("\t[GPU] kernel_return");
-			cl::copy(queue, lattice, hostLattice.begin(), hostLattice.end());
+//			cl::copy(queue, lattice, hostLattice.begin(), hostLattice.end());
 			cl::copy(queue, position, hostPosition.begin(), hostPosition.end());
 			cl::copy(queue, velocity, hostVelocity.begin(), hostVelocity.end());
 #ifdef DEBUG
 			queue.finish();
 #endif
 			kernel_return();
+
+			return triangles;
 		}
 
 		void overwrite(std::vector<fluid::Particle<size_t, float>> &xs,
@@ -430,6 +594,7 @@ namespace ocl {
 			auto total = watch.start("Advance ===total===");
 
 			ClMcConfig mcConfig;
+			mcConfig.isolevel = 100;
 			mcConfig.sampleResolution = config.resolution;
 			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.5;
@@ -503,9 +668,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << to_string(minExtent) << " -> " << to_string(extent)
-					  << " GridTable = " << gridTableN
-					  << std::endl;
+			          << " Extent = " << to_string(minExtent) << " -> " << to_string(extent)
+			          << " GridTable = " << gridTableN
+			          << std::endl;
 #endif
 
 			std::vector<uint> hostGridTable(gridTableN);
@@ -563,15 +728,15 @@ namespace ocl {
 			}
 
 			kernel_alloc();
-
+			std::vector<surface::MeshTriangle<float>> triangles;
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
 			try {
-				runKernel(watch, mcConfig, clConfig,
-				          hostGridTable,
-				          hostColliderMesh,
-				          atoms,
-				          minExtent, extent,
-				          hostPosition, hostVelocity, hostLattice);
+				triangles = runKernel(watch, mcConfig, clConfig,
+				                      hostGridTable,
+				                      hostColliderMesh,
+				                      atoms,
+				                      minExtent, extent,
+				                      hostPosition, hostVelocity, hostLattice);
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
 				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
@@ -582,14 +747,14 @@ namespace ocl {
 			auto write_back = watch.start("write_back");
 			overwrite(xs, advection, hostPosition, hostVelocity);
 			write_back();
-
-			auto march = watch.start("CPU mc");
-
-			std::vector<surface::MeshTriangle<float>> triangles =
-					sampleLattice(100, config.scale,
-					              minExtent, h / mcConfig.sampleResolution, hostLattice);
-
-			march();
+//
+//			auto march = watch.start("CPU mc");
+//
+//			std::vector<surface::MeshTriangle<float>> triangles =
+//					sampleLattice(100, config.scale,
+//					              minExtent, h / mcConfig.sampleResolution, hostLattice);
+//
+//			march();
 
 
 //			std::vector<unsigned short> outIdx;
@@ -611,11 +776,11 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "MC lattice: " << hostLattice.size() << " Grid=" << to_string(extent)
-					  << " res="
-					  << hostLattice.xSize() << "x"
-					  << hostLattice.ySize() << "x"
-					  << hostLattice.zSize()
-					  << std::endl;
+			          << " res="
+			          << hostLattice.xSize() << "x"
+			          << hostLattice.ySize() << "x"
+			          << hostLattice.zSize()
+			          << std::endl;
 			std::cout << watch << std::endl;
 #endif
 
