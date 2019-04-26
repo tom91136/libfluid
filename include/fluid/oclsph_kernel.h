@@ -506,7 +506,11 @@ kernel void mc_size(
 ) {
 
 
-	const uint3 pos = to3d(get_global_id(0), sizes.x - 1, sizes.y - 1, sizes.z - 1);
+	const uint3 marchRange = sizes - 1;
+	// because global size needs to be divisible by local group size (CL1.2), we discard paddings
+	if (get_global_id(0) >= (marchRange.x * marchRange.y * marchRange.z)) return;
+
+	const uint3 pos = to3d(get_global_id(0), marchRange.x, marchRange.y, marchRange.z);
 	const float isolevel = mcConfig->isolevel;
 
 
@@ -570,7 +574,6 @@ kernel void mc_eval(
 		global float3 *outNys,
 		global float3 *outNzs
 ) {
-
 
 	const uint3 pos = to3d(get_global_id(0), sizes.x - 1, sizes.y - 1, sizes.z - 1);
 	const float isolevel = mcConfig->isolevel;

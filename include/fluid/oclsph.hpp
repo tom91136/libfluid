@@ -430,16 +430,6 @@ namespace ocl {
 			create_field();
 
 
-//			typedef cl::KernelFunctor<
-//					ReadOnlyStruct &,
-//					uint3,
-//					cl::Buffer &,
-//					cl::LocalSpaceArg &,
-//					cl::Buffer &
-
-
-
-
 
 			size_t kernelWorkGroupSize = mcSizeKernel
 					.getKernel()
@@ -454,11 +444,13 @@ namespace ocl {
 			size_t nWorkGroup = std::ceil(static_cast<float>(latticeRange) / workGroupSize);
 
 
-			std::cout << "Samples:" << glm::to_string(maxCube) << " L=" << latticeRange << " HL:"
-			          << hostLattice.size() << " WG:" << kernelWorkGroupSize << " nWG:"
-			          << nWorkGroup << " Fl:" << (((float) latticeRange) / workGroupSize) << "\n";
+			std::cout << "Samples:" << glm::to_string(maxCube)
+			<< " L=" << latticeRange
+			<< " HL:" << hostLattice.size()
+			<< " WG:" << kernelWorkGroupSize <<
+			" nWG:"<< nWorkGroup << " Fl:" << (((float) latticeRange) / workGroupSize)
+			<< "\n";
 //
-			const auto localRange = cl::NDRange(workGroupSize);
 			const auto localSum = cl::Local(sizeof(uint) * workGroupSize);
 
 			std::vector<uint> hostPsum(nWorkGroup, 0);
@@ -468,10 +460,13 @@ namespace ocl {
 
 			auto p_sum = watch.start("\t[GPU] mc_psum");
 
+
+
+
+
 			mcSizeKernel(
 					cl::EnqueueArgs(queue,
-					                cl::NDRange(latticeRange),
-					                localRange),
+					            cl::NDRange(nWorkGroup * workGroupSize), cl::NDRange(workGroupSize)),
 					mcConfig_,
 					clutil::uvec3ToCl(sampleSize),
 					lattice,
@@ -541,7 +536,7 @@ namespace ocl {
 			cl::copy(queue, outNzs, hostOutNzs.begin(), hostOutNzs.end());
 
 			std::vector<surface::MeshTriangle<float>> triangles(acc);
-#pragma  omp parallel for
+#pragma omp parallel for
 			for (int i = 0; i < acc; ++i) {
 				triangles[i].v0 = clutil::clToVec3<float>(hostOutVxs[i]);
 				triangles[i].v1 = clutil::clToVec3<float>(hostOutVys[i]);
