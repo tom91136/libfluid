@@ -553,12 +553,10 @@ kernel void mc_size(
 inline float3 lerp(const float isolevel,
                    const float3 p1, const float3 p2,
                    const float v1, const float v2) {
-	if (fabs(isolevel - v1) < 0.00001f) return p1;
-	if (fabs(isolevel - v2) < 0.00001f) return p2;
-	if (fabs(v1 - v2) < 0.00001f) return p1;
-	return p1 + (p2 - p1) * ((isolevel - v1) / (v2 - v1));
+	return mix(p1, p2, ((isolevel - v1) / (v2 - v1)));
 }
 
+// FIXME nvidia GPUs output broken triangles for some reason, Intel and AMD works fine
 kernel void mc_eval(
 		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const float3 min, const uint3 sizes,
