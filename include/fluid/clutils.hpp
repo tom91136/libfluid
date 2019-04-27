@@ -227,11 +227,14 @@ namespace clutil {
 		cl::Buffer actual;
 		const size_t length;
 
+	private:
+		TypedBuffer(const cl::Context &context, T &t) : actual(
+				cl::Buffer(context, B | CL_MEM_COPY_HOST_PTR, sizeof(T), &t)), length(1) {}
+
+	public:
 		TypedBuffer(const cl::Context &context, size_t count) : actual(
 				cl::Buffer(context, B, sizeof(T) * count)), length(count) {}
 
-		TypedBuffer(const cl::Context &context, T &t) : actual(
-				cl::Buffer(context, B | CL_MEM_COPY_HOST_PTR, sizeof(T), &t)), length(1) {}
 
 		template<typename Iterable>
 		TypedBuffer(
@@ -242,6 +245,11 @@ namespace clutil {
 				length(xs.size()) {
 			static_assert(B != BufferType::WO, "BufferType must be RW or RO");
 		}
+
+		static TypedBuffer<T, B> ofStruct(const cl::Context &context, T &t) {
+			return TypedBuffer<T, B>(context, t);
+		}
+
 
 //		template<typename IteratorType>
 //		void drainTo(const cl::CommandQueue &queue,

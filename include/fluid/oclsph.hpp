@@ -31,8 +31,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-//#define DEBUG
-
+#define DEBUG
 
 namespace ocl {
 
@@ -204,13 +203,13 @@ namespace ocl {
 			}
 
 #ifdef DEBUG
-				std::cout << "Expected(" << _SIZES_LENGTH << ")="
-						  << clutil::mkString<size_t>(expected,
-													  [](auto x) { return std::to_string(x); })
-						  << std::endl;
-				std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-						  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-						  << std::endl;
+			std::cout << "Expected(" << _SIZES_LENGTH << ")="
+			          << clutil::mkString<size_t>(expected,
+			                                      [](auto x) { return std::to_string(x); })
+			          << std::endl;
+			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
+			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+			          << std::endl;
 #endif
 			assert(expected == actual);
 		}
@@ -368,9 +367,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "[<>]Samples:" << glm::to_string(marchRange)
-					  << " MarchVol=" << marchVolume
-					  << " WG:" << kernelWorkGroupSize
-					  << " nWG:" << numWorkGroup << "\n";
+			          << " MarchVol=" << marchVolume
+			          << " WG:" << kernelWorkGroupSize
+			          << " nWG:" << numWorkGroup << "\n";
 
 #endif
 			auto create_field = watch.start("\t[GPU] mc-field");
@@ -647,9 +646,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-					  << " Extent = " << glm::to_string(minExtent) << " -> " << to_string(extent)
-					  << " GridTable = " << gridTableN
-					  << std::endl;
+			          << " Extent = " << glm::to_string(minExtent) << " -> " << to_string(extent)
+			          << " GridTable = " << gridTableN
+			          << std::endl;
 #endif
 
 			std::vector<uint> hostGridTable(gridTableN);
@@ -710,8 +709,8 @@ namespace ocl {
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
 			try {
 
-				TypedBuffer<ClSphConfig, RO> sphConfig_(ctx, sphConfig);
-				TypedBuffer<ClMcConfig, RO> mcConfig_(ctx, mcConfig);
+				auto sphConfig_ = TypedBuffer<ClSphConfig, RO>::ofStruct(ctx, sphConfig);
+				auto mcConfig_ = TypedBuffer<ClMcConfig, RO>::ofStruct(ctx, mcConfig);
 
 				TypedBuffer<uint, RO> gridTable(queue, hostGridTable);
 				TypedBuffer<uint, RO> zIndex(queue, atoms.zIndex);
