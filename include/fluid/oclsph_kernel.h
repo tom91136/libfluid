@@ -516,14 +516,13 @@ kernel void mc_size(
 	const float isolevel = mcConfig->isolevel;
 
 
-	uint ci = 0;
+	uint ci = 0u;
 	for (int i = 0; i < 8; ++i) {
 		const uint3 offset = CUBE_OFFSETS[i] + pos;
 		const float v = values[index3d(
 				offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)].s0;
 		ci = select(ci, ci | (1 << i), v < isolevel);
 	}
-
 
 	const uint nVert = select((uint) NumVertsTable[ci] / 3, 0u, EdgeTable[ci] == 0);
 

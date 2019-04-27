@@ -1,4 +1,5 @@
 #include "cl_types.h"
+#include <type_traits>
 
 #ifndef LIBFLUID_CLUTILS_H
 #define LIBFLUID_CLUTILS_HPP
@@ -213,6 +214,71 @@ namespace clutil {
 		return gen_type3<uint, uint3>(v.x, v.y, v.z);
 	}
 
+	enum BufferType {
+		RW = CL_MEM_READ_WRITE,
+		RO = CL_MEM_READ_ONLY,
+		WO = CL_MEM_WRITE_ONLY,
+	};
+
+
+	template<typename T, BufferType B>
+	struct TypedBuffer {
+
+		cl::Buffer actual;
+		const size_t length;
+
+		TypedBuffer(const cl::Context &context, size_t count) : actual(
+				cl::Buffer(context, B, sizeof(T) * count)), length(count) {}
+
+		TypedBuffer(const cl::Context &context, T &t) : actual(
+				cl::Buffer(context, B | CL_MEM_COPY_HOST_PTR, sizeof(T), &t)), length(1) {}
+
+		template<typename Iterable>
+		TypedBuffer(
+				const cl::CommandQueue &queue,
+				Iterable &xs,
+				bool useHostPtr = false):
+				actual(cl::Buffer(queue, xs.begin(), xs.end(), B == BufferType::RO, useHostPtr)),
+				length(xs.size()) {
+			static_assert(B != BufferType::WO, "BufferType must be RW or RO");
+		}
+
+//		template<typename IteratorType>
+//		void drainTo(const cl::CommandQueue &queue,
+//		             IteratorType startIterator, IteratorType endIterator) {
+//			cl::copy(queue, actual, startIterator, endIterator);
+//		}
+
+//		template<typename Iterable, typename = typename std::enable_if<
+//				std::is_same<
+//						typename std::iterator_traits<Iterable>::value_type,
+//						T>::value
+//		>>
+//		void drainTo(const cl::CommandQueue &queue, Iterable xs) {
+//			cl::copy(queue, actual, xs.begin(), xs.end());
+//		}
+
+		template<typename Iterable>
+		inline void drainTo(const cl::CommandQueue &queue, Iterable &xs) {
+			cl::copy(queue, actual, xs.begin(), xs.end());
+		}
+
+
+	};
+
+
 }
+
+//namespace cl {
+//	namespace detail {
+//
+//		template<typename T>
+//		struct ::cl::detail::KernelArgumentHandler<T,
+//				typename std::enable_if<std::is_base_of<clutil::TypedBuffer<T, clutil::BufferType::RO>, T>::value>::type> {
+//			static size_type size(const T &) { return sizeof(T); }
+//			static const T *ptr(const T &value) { return &value; }
+//		};
+//	}
+//}
 
 #endif //LIBFLUID_CLUTILS_H

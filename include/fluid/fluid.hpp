@@ -121,6 +121,7 @@ namespace fluid {
 		const N dt;
 		const N scale;
 		const N resolution;
+		const N isolevel;
 		const size_t iteration;
 
 		const tvec3<N> constantForce;
@@ -130,14 +131,14 @@ namespace fluid {
 
 		const tvec3<N> minBound, maxBound;
 
-		explicit Config(N dt, N scale, N resolution, size_t iteration,
+		explicit Config(N dt, N scale, N resolution, N isolevel,  size_t iteration,
 		                const tvec3<N> &constantForce,
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
 		                const std::vector<fluid::Drain<N>> &drains,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
-				  resolution(resolution), iteration(iteration),
+				  resolution(resolution), isolevel(isolevel),  iteration(iteration),
 				  constantForce(constantForce),
 				  wells(wells), sources(sources), drains(drains),
 				  minBound(min), maxBound(max) {}

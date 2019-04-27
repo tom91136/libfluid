@@ -31,12 +31,16 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 
 namespace ocl {
 
 	using glm::tvec3;
+	using clutil::TypedBuffer;
+	using clutil::BufferType::RW;
+	using clutil::BufferType::RO;
+	using clutil::BufferType::WO;
 
 	typedef cl::Buffer ClSphConfigStruct;
 	typedef cl::Buffer ClMcConfigStruct;
@@ -124,7 +128,7 @@ namespace ocl {
 
 		const float h;
 		const cl::Device device;
-		const cl::Context context;
+		const cl::Context ctx;
 		const cl::Program clsph;
 
 		cl::CommandQueue queue;
@@ -140,14 +144,14 @@ namespace ocl {
 		explicit SphSolver(float h, const std::string &kernelPath, const cl::Device &device) :
 				h(h),
 				device(device),
-				context(cl::Context(device)),
+				ctx(cl::Context(device)),
 				clsph(clutil::loadProgramFromFile(
-						context,
+						ctx,
 						kernelPath + "oclsph_kernel.h",
 						kernelPath,
 						"-DSPH_H=((float)" + std::to_string(h) + ")")),
 				//TODO check capability
-				queue(cl::CommandQueue(context, device, cl::QueueProperties::OutOfOrder)),
+				queue(cl::CommandQueue(ctx, device, cl::QueueProperties::None)),
 				lambdaKernel(clsph, "sph_lambda"),
 				deltaKernel(clsph, "sph_delta"),
 				finaliseKernel(clsph, "sph_finalise"),
@@ -184,15 +188,14 @@ namespace ocl {
 		}
 
 		void checkSize() {
-
 			std::vector<size_t> expected(_SIZES, _SIZES + _SIZES_LENGTH);
 			std::vector<size_t> actual(_SIZES_LENGTH, 0);
 
 			try {
-				cl::Buffer buffer(context, CL_MEM_WRITE_ONLY, sizeof(_SIZES));
+				TypedBuffer<size_t, WO> buffer(ctx, _SIZES_LENGTH);
 				cl::KernelFunctor<cl::Buffer &>(clsph, "check_size")
-						(cl::EnqueueArgs(queue, cl::NDRange(_SIZES_LENGTH)), buffer);
-				cl::copy(queue, buffer, actual.begin(), actual.end());
+						(cl::EnqueueArgs(queue, cl::NDRange(_SIZES_LENGTH)), buffer.actual);
+				buffer.drainTo(queue, actual);
 				queue.finish();
 			} catch (cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
@@ -201,17 +204,14 @@ namespace ocl {
 			}
 
 #ifdef DEBUG
-			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-			          << std::endl;
-
-
-			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-			          << clutil::mkString<size_t>(expected,
-			                                      [](auto x) { return std::to_string(x); })
-			          << std::endl;
+				std::cout << "Expected(" << _SIZES_LENGTH << ")="
+						  << clutil::mkString<size_t>(expected,
+													  [](auto x) { return std::to_string(x); })
+						  << std::endl;
+				std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
+						  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+						  << std::endl;
 #endif
-
 			assert(expected == actual);
 		}
 
@@ -329,239 +329,223 @@ namespace ocl {
 
 		template<typename T>
 		cl::Buffer readOnlyStruct(T &t) {
-			return cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T), &t);
+			return cl::Buffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T), &t);
 		}
 
-		std::vector<geometry::MeshTriangle<float>> runKernel(clutil::Stopwatch &watch,
-		                                                     ClMcConfig &mcConfig,
-		                                                     ClSphConfig &sphConfig,
-		                                                     std::vector<uint> &hostGridTable,
-		                                                     std::vector<ClSphTraiangle> &hostColliderMesh,
-		                                                     ClSphAtoms &atoms,
-		                                                     const tvec3<float> minExtent,
-		                                                     const tvec3<size_t> extent,
-		                                                     std::vector<float3> &hostPosition,
-		                                                     std::vector<float3> &hostVelocity,
-		                                                     surface::Lattice<float4> &hostLattice
+
+		inline void finishQueue() {
+#ifdef DEBUG
+			queue.finish();
+#endif
+		}
+
+
+		std::vector<geometry::MeshTriangle<float>> runMcKernels(
+				clutil::Stopwatch &watch,
+				const tvec3<size_t> sampleSize,
+				TypedBuffer<ClSphConfig, RO> &sphConfig,
+				TypedBuffer<ClMcConfig, RO> &mcConfig,
+				TypedBuffer<uint, RO> &gridTable,
+				TypedBuffer<float3, RW> &position,
+				const tvec3<float> minExtent,
+				const tvec3<size_t> extent
 		) {
-			auto kernel_copy = watch.start("\t[GPU] kernel_copy");
 
-			const tvec3<size_t> sampleSize(
-					hostLattice.xSize(), hostLattice.ySize(), hostLattice.zSize());
+			const uint gridTableN = static_cast<uint>(gridTable.length);
 
-
-			const uint colliderMeshN = static_cast<uint>(hostColliderMesh.size());
+			TypedBuffer<float4, WO> lattice(ctx, sampleSize.x * sampleSize.y * sampleSize.z);
 
 
-			cl::Buffer colliderMesh = colliderMeshN == 0 ?
-			                          cl::Buffer(context, CL_MEM_READ_WRITE, 1) :
-			                          cl::Buffer(queue, hostColliderMesh.begin(),
-			                                     hostColliderMesh.end(), true);
+			const size_t kernelWorkGroupSize = mcSizeKernel
+					.getKernel()
+					.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(device);
 
+			const tvec3<size_t> marchRange = sampleSize - tvec3<size_t>(1);
+			const size_t marchVolume = marchRange.x * marchRange.y * marchRange.z;
 
-			const uint gridTableN = static_cast<uint>(hostGridTable.size());
-			cl::Buffer gridTable(queue, hostGridTable.begin(), hostGridTable.end(), true);
-
-			cl::Buffer zIndex(queue, atoms.zIndex.begin(), atoms.zIndex.end(), true);
-			cl::Buffer mass(queue, atoms.mass.begin(), atoms.mass.end(), true);
-			cl::Buffer pStar(queue, atoms.pStar.begin(), atoms.pStar.end(), false);
-			cl::Buffer position(queue, atoms.position.begin(), atoms.position.end(), false);
-			cl::Buffer velocity(queue, atoms.velocity.begin(), atoms.velocity.end(), false);
-
-			cl::Buffer deltaP(context, CL_MEM_READ_WRITE, sizeof(float3) * atoms.size);
-			cl::Buffer lambda(context, CL_MEM_READ_WRITE, sizeof(float) * atoms.size);
-			cl::Buffer lattice(context, CL_MEM_READ_WRITE, sizeof(float4) * hostLattice.size());
-
-			cl::Buffer sphConfig_ = readOnlyStruct<ClSphConfig>(sphConfig);
-			cl::Buffer mcConfig_ = readOnlyStruct<ClMcConfig>(mcConfig);
+			size_t workGroupSize = kernelWorkGroupSize;
+			size_t numWorkGroup = std::ceil(static_cast<float>(marchVolume) / workGroupSize);
 
 #ifdef DEBUG
-			queue.finish();
+			std::cout << "[<>]Samples:" << glm::to_string(marchRange)
+					  << " MarchVol=" << marchVolume
+					  << " WG:" << kernelWorkGroupSize
+					  << " nWG:" << numWorkGroup << "\n";
+
 #endif
-			kernel_copy();
-
-			auto lambda_delta = watch.start(
-					"\t[GPU] sph-lambda/delta*" + std::to_string(sphConfig.iteration));
-
-			const cl::NDRange &range = cl::NDRange();
-
-			for (size_t itr = 0; itr < sphConfig.iteration; ++itr) {
-				lambdaKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-				             sphConfig_, zIndex, gridTable, gridTableN,
-				             pStar, mass, lambda
-				);
-				deltaKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-				            sphConfig_, zIndex, gridTable, gridTableN,
-				            colliderMesh, colliderMeshN,
-				            pStar, lambda, position, velocity, deltaP
-				);
-			}
-#ifdef DEBUG
-			queue.finish();
-#endif
-			lambda_delta();
-
-			auto finalise = watch.start("\t[GPU] sph-finalise");
-
-			finaliseKernel(cl::EnqueueArgs(queue, cl::NDRange(atoms.size), range),
-			               sphConfig_,
-			               pStar, position, velocity
-			);
-#ifdef DEBUG
-			queue.finish();
-#endif
-			finalise();
-
 			auto create_field = watch.start("\t[GPU] mc-field");
+
 
 			evalLatticeKernel(
 					cl::EnqueueArgs(queue,
 					                cl::NDRange(sampleSize.x, sampleSize.y, sampleSize.z)),
-					sphConfig_, mcConfig_,
-					gridTable, gridTableN,
+					sphConfig.actual, mcConfig.actual,
+					gridTable.actual, gridTableN,
 					clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
 					clutil::uvec3ToCl(extent),
-					position,
-					lattice
+					position.actual,
+					lattice.actual
 			);
-#ifdef DEBUG
-			queue.finish();
-#endif
+			finishQueue();
 			create_field();
 
 
+			auto partial_trig_sum = watch.start("\t[GPU] mc_psum");
 
-			size_t kernelWorkGroupSize = mcSizeKernel
-					.getKernel()
-					.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(device);
-
-
-			const auto maxCube = sampleSize - tvec3<size_t>(1);
-			const auto latticeRange = maxCube.x * maxCube.y * maxCube.z;
-
-
-			size_t workGroupSize = kernelWorkGroupSize;
-			size_t nWorkGroup = std::ceil(static_cast<float>(latticeRange) / workGroupSize);
-
-
-			std::cout << "Samples:" << glm::to_string(maxCube)
-			<< " L=" << latticeRange
-			<< " HL:" << hostLattice.size()
-			<< " WG:" << kernelWorkGroupSize <<
-			" nWG:"<< nWorkGroup << " Fl:" << (((float) latticeRange) / workGroupSize)
-			<< "\n";
-//
-			const auto localSum = cl::Local(sizeof(uint) * workGroupSize);
-
-			std::vector<uint> hostPsum(nWorkGroup, 0);
-
-			cl::Buffer pSum(context, CL_MEM_WRITE_ONLY, nWorkGroup * sizeof(uint));
-
-
-			auto p_sum = watch.start("\t[GPU] mc_psum");
-
-
-
-
-
+			TypedBuffer<uint, WO> partialTrigSum(ctx, numWorkGroup);
 			mcSizeKernel(
 					cl::EnqueueArgs(queue,
-					            cl::NDRange(nWorkGroup * workGroupSize), cl::NDRange(workGroupSize)),
-					mcConfig_,
+					                cl::NDRange(numWorkGroup * workGroupSize),
+					                cl::NDRange(workGroupSize)),
+					mcConfig.actual,
 					clutil::uvec3ToCl(sampleSize),
-					lattice,
-					localSum,
-					pSum
+					lattice.actual,
+					cl::Local(sizeof(uint) * workGroupSize),
+					partialTrigSum.actual
 			);
+			std::vector<uint> hostPartialTrigSum(numWorkGroup, 0);
+			partialTrigSum.drainTo(queue, hostPartialTrigSum);
 
+			uint numTrigs = 0;
+			for (uint j = 0; j < numWorkGroup; ++j) numTrigs += hostPartialTrigSum[j];
 
-			cl::copy(queue, pSum, hostPsum.begin(), hostPsum.end());
-			uint acc = 0;
-			for (int j = 0; j < nWorkGroup; ++j) acc += hostPsum[j];
-
-			std::cout << "Acc=" << acc << std::endl;
+			finishQueue();
+			partial_trig_sum();
 #ifdef DEBUG
-			queue.finish();
+			std::cout << "[<>]Acc=" << numTrigs << std::endl;
 #endif
-			p_sum();
-
 			auto gpu_mc = watch.start("\t[GPU] gpu_mc");
+			std::vector<surface::MeshTriangle<float>> triangles(numTrigs);
 
+			if (numTrigs != 0) {
 
-			std::vector<uint> zero{0};
+				std::vector<uint> zero{0};
+				TypedBuffer<uint, RW> trigCounter(queue, zero);
 
-			cl::Buffer trigCounter(context, zero.begin(), zero.end(), false);
+				TypedBuffer<float3, WO> outVxs(ctx, numTrigs);
+				TypedBuffer<float3, WO> outVys(ctx, numTrigs);
+				TypedBuffer<float3, WO> outVzs(ctx, numTrigs);
 
-			cl::Buffer outVxs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
-			cl::Buffer outVys(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
-			cl::Buffer outVzs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+				TypedBuffer<float3, WO> outNxs(ctx, numTrigs);
+				TypedBuffer<float3, WO> outNys(ctx, numTrigs);
+				TypedBuffer<float3, WO> outNzs(ctx, numTrigs);
 
-			cl::Buffer outNxs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
-			cl::Buffer outNys(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
-			cl::Buffer outNzs(context, CL_MEM_WRITE_ONLY, sizeof(float3) * acc);
+				mcEvalKernel(
+						cl::EnqueueArgs(queue,
+						                cl::NDRange(marchVolume)),
+						sphConfig.actual, mcConfig.actual,
+						clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
+						lattice.actual,
+						trigCounter.actual,
+						numTrigs,
+						outVxs.actual, outVys.actual, outVzs.actual,
+						outNxs.actual, outNys.actual, outNzs.actual
+				);
 
+				finishQueue();
+				gpu_mc();
 
-			mcEvalKernel(
-					cl::EnqueueArgs(queue,
-					                cl::NDRange(latticeRange)),
-					sphConfig_, mcConfig_,
-					clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
-					lattice,
-					trigCounter,
-					acc,
-					outVxs, outVys, outVzs,
-					outNxs, outNys, outNzs
-			);
+				auto gpu_mc_drain = watch.start("\t[GPU] gpu_mc drain");
 
-#ifdef DEBUG
-			queue.finish();
-#endif
+				std::vector<float3> hostOutVxs(numTrigs);
+				std::vector<float3> hostOutVys(numTrigs);
+				std::vector<float3> hostOutVzs(numTrigs);
 
-			gpu_mc();
+				std::vector<float3> hostOutNxs(numTrigs);
+				std::vector<float3> hostOutNys(numTrigs);
+				std::vector<float3> hostOutNzs(numTrigs);
 
-			std::vector<float3> hostOutVxs(acc);
-			std::vector<float3> hostOutVys(acc);
-			std::vector<float3> hostOutVzs(acc);
+				outVxs.drainTo(queue, hostOutVxs);
+				outVys.drainTo(queue, hostOutVys);
+				outVzs.drainTo(queue, hostOutVzs);
 
-			std::vector<float3> hostOutNxs(acc);
-			std::vector<float3> hostOutNys(acc);
-			std::vector<float3> hostOutNzs(acc);
+				outNxs.drainTo(queue, hostOutNxs);
+				outNys.drainTo(queue, hostOutNys);
+				outNzs.drainTo(queue, hostOutNzs);
+				finishQueue();
+				gpu_mc_drain();
+				auto gpu_mc_assem = watch.start("\t[GPU] gpu_mc assem");
 
-			cl::copy(queue, outVxs, hostOutVxs.begin(), hostOutVxs.end());
-			cl::copy(queue, outVys, hostOutVys.begin(), hostOutVys.end());
-			cl::copy(queue, outVzs, hostOutVzs.begin(), hostOutVzs.end());
-
-			cl::copy(queue, outNxs, hostOutNxs.begin(), hostOutNxs.end());
-			cl::copy(queue, outNys, hostOutNys.begin(), hostOutNys.end());
-			cl::copy(queue, outNzs, hostOutNzs.begin(), hostOutNzs.end());
-
-			std::vector<surface::MeshTriangle<float>> triangles(acc);
 #pragma omp parallel for
-			for (int i = 0; i < acc; ++i) {
-				triangles[i].v0 = clutil::clToVec3<float>(hostOutVxs[i]);
-				triangles[i].v1 = clutil::clToVec3<float>(hostOutVys[i]);
-				triangles[i].v2 = clutil::clToVec3<float>(hostOutVzs[i]);
-				triangles[i].n0 = clutil::clToVec3<float>(hostOutNxs[i]);
-				triangles[i].n1 = clutil::clToVec3<float>(hostOutNys[i]);
-				triangles[i].n2 = clutil::clToVec3<float>(hostOutNzs[i]);
-			}
-
-
-			std::cout
-					<< "LatticeDataN:" << (float) (sizeof(float4) * hostLattice.size()) / 1000000.0
-					<< "MB MCGPuN:" << (float) (sizeof(float3) * acc * 6) / 1000000.0 << "MB \n";
-
-
-			auto kernel_return = watch.start("\t[GPU] kernel_return");
-//			cl::copy(queue, lattice, hostLattice.begin(), hostLattice.end());
-			cl::copy(queue, position, hostPosition.begin(), hostPosition.end());
-			cl::copy(queue, velocity, hostVelocity.begin(), hostVelocity.end());
+				for (int i = 0; i < static_cast<int>(numTrigs); ++i) {
+					triangles[i].v0 = clutil::clToVec3<float>(hostOutVxs[i]);
+					triangles[i].v1 = clutil::clToVec3<float>(hostOutVys[i]);
+					triangles[i].v2 = clutil::clToVec3<float>(hostOutVzs[i]);
+					triangles[i].n0 = clutil::clToVec3<float>(hostOutNxs[i]);
+					triangles[i].n1 = clutil::clToVec3<float>(hostOutNys[i]);
+					triangles[i].n2 = clutil::clToVec3<float>(hostOutNzs[i]);
+				}
+				gpu_mc_assem();
 #ifdef DEBUG
-			queue.finish();
+				std::cout
+						<< "[<>] LatticeDataN:"
+						<< (float) (sizeof(float4) * marchVolume) / 1000000.0 << "MB"
+						<< " MCGPuN:" << (float) (sizeof(float3) * numTrigs * 6) / 1000000.0
+						<< "MB \n";
 #endif
-			kernel_return();
-
+			}
 			return triangles;
+		}
+
+
+		void runSphKernel(clutil::Stopwatch &watch,
+		                  size_t iterations,
+		                  TypedBuffer<ClSphConfig, RO> &sphConfig,
+		                  TypedBuffer<uint, RO> &gridTable,
+		                  TypedBuffer<uint, RO> &zIndex,
+		                  TypedBuffer<float, RO> &mass,
+
+		                  TypedBuffer<float3, RW> &pStar,
+		                  TypedBuffer<float3, RW> &deltaP,
+		                  TypedBuffer<float, RW> &lambda,
+		                  TypedBuffer<float3, RW> &position,
+		                  TypedBuffer<float3, RW> &velocity,
+
+		                  std::vector<ClSphTraiangle> &hostColliderMesh
+		) {
+			auto kernel_copy = watch.start("\t[GPU] kernel_copy");
+
+
+			const uint colliderMeshN = static_cast<uint>(hostColliderMesh.size());
+
+			cl::Buffer colliderMesh = colliderMeshN == 0 ?
+			                          cl::Buffer(ctx, CL_MEM_READ_WRITE, 1) :
+			                          cl::Buffer(queue, hostColliderMesh.begin(),
+			                                     hostColliderMesh.end(), true);
+
+			const uint gridTableN = static_cast<uint>(gridTable.length);
+
+			finishQueue();
+			kernel_copy();
+
+			const auto localRange = cl::NDRange();
+			const auto globalRange = cl::NDRange(position.length);
+
+			auto lambda_delta = watch.start("\t[GPU] sph-lambda/delta*" +
+			                                std::to_string(iterations));
+
+			for (size_t itr = 0; itr < iterations; ++itr) {
+				lambdaKernel(cl::EnqueueArgs(queue, globalRange, localRange),
+				             sphConfig.actual, zIndex.actual, gridTable.actual, gridTableN,
+				             pStar.actual, mass.actual, lambda.actual
+				);
+				deltaKernel(cl::EnqueueArgs(queue, globalRange, localRange),
+				            sphConfig.actual, zIndex.actual, gridTable.actual, gridTableN,
+				            colliderMesh, colliderMeshN,
+				            pStar.actual, lambda.actual, position.actual, velocity.actual,
+				            deltaP.actual
+				);
+			}
+			finishQueue();
+			lambda_delta();
+
+			auto finalise = watch.start("\t[GPU] sph-finalise");
+			finaliseKernel(cl::EnqueueArgs(queue, globalRange, localRange),
+			               sphConfig.actual,
+			               pStar.actual, position.actual, velocity.actual
+			);
+			finishQueue();
+			finalise();
 		}
 
 		void overwrite(std::vector<fluid::Particle<size_t, float>> &xs,
@@ -589,7 +573,7 @@ namespace ocl {
 			auto total = watch.start("Advance ===total===");
 
 			ClMcConfig mcConfig;
-			mcConfig.isolevel = 100;
+			mcConfig.isolevel = config.isolevel;
 			mcConfig.sampleResolution = config.resolution;
 			mcConfig.particleSize = 60.f;
 			mcConfig.particleInfluence = 0.5;
@@ -635,11 +619,11 @@ namespace ocl {
 
 			auto bound = watch.start("CPU bound+zindex");
 
-			ClSphConfig clConfig;
+			ClSphConfig sphConfig;
 			tvec3<float> minExtent;
 			tvec3<size_t> extent;
 
-			std::tie(clConfig, minExtent, extent) = computeBoundAndZindex(config, advection);
+			std::tie(sphConfig, minExtent, extent) = computeBoundAndZindex(config, advection);
 
 			bound();
 
@@ -663,9 +647,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-			          << " Extent = " << to_string(minExtent) << " -> " << to_string(extent)
-			          << " GridTable = " << gridTableN
-			          << std::endl;
+					  << " Extent = " << glm::to_string(minExtent) << " -> " << to_string(extent)
+					  << " GridTable = " << gridTableN
+					  << std::endl;
 #endif
 
 			std::vector<uint> hostGridTable(gridTableN);
@@ -696,21 +680,21 @@ namespace ocl {
 				}
 			}
 
+#ifdef DEBUG
 			std::cout << "Collider trig: " << hostColliderMesh.size() << "\n";
-
+#endif
 			collider_concat();
 
 
 			auto kernel_alloc = watch.start("CPU host alloc+copy");
 
 			const tvec3<size_t> sampleSize = tvec3<size_t>(
-					glm::floor(tvec3<float>(extent) * mcConfig.sampleResolution)) +
-			                                 tvec3<size_t>(1);
+					glm::floor(tvec3<float>(extent) *
+					           mcConfig.sampleResolution)) + tvec3<size_t>(1);
 
 			std::vector<float3> hostPosition(advection.size());
 			std::vector<float3> hostVelocity(advection.size());
-			surface::Lattice<float4> hostLattice(sampleSize.x, sampleSize.y, sampleSize.z,
-			                                     clutil::float4(-1));
+
 
 			ClSphAtoms atoms(advection.size());
 #pragma omp parallel for
@@ -722,16 +706,35 @@ namespace ocl {
 				atoms.velocity[i] = clutil::vec3ToCl(advection[i].particle.velocity);
 			}
 
-			kernel_alloc();
 			std::vector<surface::MeshTriangle<float>> triangles;
 			auto kernel_exec = watch.start("\t[GPU] ===total===");
 			try {
-				triangles = runKernel(watch, mcConfig, clConfig,
-				                      hostGridTable,
-				                      hostColliderMesh,
-				                      atoms,
-				                      minExtent, extent,
-				                      hostPosition, hostVelocity, hostLattice);
+
+				TypedBuffer<ClSphConfig, RO> sphConfig_(ctx, sphConfig);
+				TypedBuffer<ClMcConfig, RO> mcConfig_(ctx, mcConfig);
+
+				TypedBuffer<uint, RO> gridTable(queue, hostGridTable);
+				TypedBuffer<uint, RO> zIndex(queue, atoms.zIndex);
+				TypedBuffer<float, RO> mass(queue, atoms.mass);
+
+				TypedBuffer<float3, RW> pStar(queue, atoms.pStar);
+				TypedBuffer<float3, RW> deltaP(ctx, atoms.size);
+				TypedBuffer<float, RW> lambda(ctx, atoms.size);
+				TypedBuffer<float3, RW> position(queue, atoms.position);
+				TypedBuffer<float3, RW> velocity(queue, atoms.velocity);
+				kernel_alloc();
+
+				runSphKernel(watch, sphConfig.iteration, sphConfig_,
+				             gridTable, zIndex, mass, pStar, deltaP, lambda, position, velocity,
+				             hostColliderMesh);
+
+				triangles = runMcKernels(watch, sampleSize, sphConfig_, mcConfig_,
+				                         gridTable, position, minExtent, extent);
+
+				position.drainTo(queue, hostPosition);
+				velocity.drainTo(queue, hostVelocity);
+
+
 			} catch (const cl::Error &exc) {
 				std::cerr << "Kernel failed to execute: " << exc.what() << " -> "
 				          << clResolveError(exc.err()) << "(" << exc.err() << ")" << std::endl;
@@ -752,6 +755,12 @@ namespace ocl {
 //			march();
 
 
+			total();
+#ifdef DEBUG
+			std::cout << watch << "\n";
+#endif
+
+
 //			std::vector<unsigned short> outIdx;
 //			std::vector<tvec3<float>> outVert;
 //			hrc::time_point vbiStart = hrc::now();
@@ -770,15 +779,8 @@ namespace ocl {
 			total();
 
 #ifdef DEBUG
-			std::cout << "MC lattice: " << hostLattice.size() << " Grid=" << to_string(extent)
-			          << " res="
-			          << hostLattice.xSize() << "x"
-			          << hostLattice.ySize() << "x"
-			          << hostLattice.zSize()
-			          << std::endl;
-			std::cout << watch << std::endl;
+			std::cout << "Advance complete" << std::endl;
 #endif
-
 			return triangles;
 		}
 

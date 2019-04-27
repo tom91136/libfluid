@@ -195,7 +195,8 @@ void run() {
 #endif
 
 	const std::vector<std::string> signatures = {
-			"gfx906", "Ellesmere", "Quadro", "ATI", "1050", "1080", "980", "NEO", "Tesla"};
+			"Oclgrind", "gfx906", "Ellesmere", "Quadro", "ATI", "1050", "1080", "980", "NEO",
+			"Tesla"};
 	clutil::enumeratePlatformToCout();
 	const auto device = resolveDeviceVerbose(signatures);
 
@@ -276,7 +277,7 @@ void run() {
 
 
 			hrc::time_point xferStart = hrc::now();
-			strucures::writeParticles(particleSink, particlesBuffer);
+//			strucures::writeParticles(particleSink, particlesBuffer);
 			strucures::writeTriangles(triangleSink, trianglesBuffer);
 			hrc::time_point xferEnd = hrc::now();
 
@@ -305,6 +306,7 @@ void run() {
 				static_cast<num_t>(0.0083 * scene.meta.solverStep),
 				scene.meta.solverScale,
 				scene.meta.surfaceRes,
+				100,
 				scene.meta.solverIter,
 				tvec3<num_t>(0, scene.meta.gravity, 0),
 				// copy , gets modified in xfer thread
