@@ -230,7 +230,8 @@ namespace clutil {
 		const size_t length;
 
 	private:
-		TypedBuffer(const cl::Context &context, T &t) : actual(
+		// XXX last parameter is there to disambiguate cases where T = size_t
+		TypedBuffer(const cl::Context &context, T &t, int) : actual(
 				cl::Buffer(context, B | CL_MEM_COPY_HOST_PTR, sizeof(T), &t)), length(1) {}
 
 	public:
@@ -249,7 +250,7 @@ namespace clutil {
 		}
 
 		static TypedBuffer<T, B> ofStruct(const cl::Context &context, T &t) {
-			return TypedBuffer<T, B>(context, t);
+			return TypedBuffer<T, B>(context, t, 0);
 		}
 
 
