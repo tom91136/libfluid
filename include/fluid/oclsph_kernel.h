@@ -507,24 +507,24 @@ kernel void mc_size(
 
 
 	const uint3 marchRange = sizes - (uint3) (1);
+
+	uint nVert = 0;
 	// because global size needs to be divisible by local group size (CL1.2), we discard the padding
 	if (get_global_id(0) >= (marchRange.x * marchRange.y * marchRange.z)) {
-		return;
+		// NOOP
+	}else{
+		const uint3 pos = to3d(get_global_id(0), marchRange.x, marchRange.y, marchRange.z);
+		const float isolevel = mcConfig->isolevel;
+		uint ci = 0u;
+
+		for (int i = 0; i < 8; ++i) {
+			const uint3 offset = CUBE_OFFSETS[i] + pos;
+			const float v = values[index3d(
+					offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)].s0;
+			ci = select(ci, ci | (1 << i), v < isolevel);
+		}
+		nVert = select((uint) NumVertsTable[ci] / 3, 0u, EdgeTable[ci] == 0);
 	}
-
-	const uint3 pos = to3d(get_global_id(0), marchRange.x, marchRange.y, marchRange.z);
-	const float isolevel = mcConfig->isolevel;
-
-
-	uint ci = 0u;
-	for (int i = 0; i < 8; ++i) {
-		const uint3 offset = CUBE_OFFSETS[i] + pos;
-		const float v = values[index3d(
-				offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)].s0;
-		ci = select(ci, ci | (1 << i), v < isolevel);
-	}
-
-	const uint nVert = select((uint) NumVertsTable[ci] / 3, 0u, EdgeTable[ci] == 0);
 
 	const uint localId = get_local_id(0);
 	const uint groupSize = get_local_size(0);

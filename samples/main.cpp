@@ -284,6 +284,7 @@ void run() {
 			auto solve = duration_cast<nanoseconds>(xferEnd - xferStart).count();
 			auto wait = duration_cast<nanoseconds>(waitEnd - waitStart).count();
 			auto sceneRead = duration_cast<nanoseconds>(sceneEnd - sceneStart).count();
+#ifdef DEBUG
 			std::cout << "\tXfer: " << (solve / 1000000.0) << "ms" <<
 			          " (waited " << (wait / 1000000.0) << "ms)" <<
 			          " Scene read " << (sceneRead / 1000000.0) << "ms (" << suspendTick
@@ -291,6 +292,7 @@ void run() {
 			          " nTriangle:" << trianglesBuffer.size() <<
 			          " nParticle:" << particlesBuffer.size()
 			          << std::endl;
+#endif
 		}
 	});
 
@@ -349,11 +351,13 @@ void run() {
 		copied = false;
 
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
+#ifdef DEBUG
 		std::cout << "[" << j << "]" <<
 		          " Solver:" << (solve / 1000000.0) << "ms " <<
 		          " nTriangle:" << triangles.size() <<
 		          " nParticle:" << particles.size()
 		          << std::endl;
+#endif
 
 	}
 

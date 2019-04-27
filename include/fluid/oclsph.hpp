@@ -344,8 +344,7 @@ namespace ocl {
 
 			const uint gridTableN = static_cast<uint>(gridTable.length);
 
-			TypedBuffer<float4, WO> lattice(ctx, sampleSize.x * sampleSize.y * sampleSize.z);
-
+			TypedBuffer<float4, RW> lattice(ctx, sampleSize.x * sampleSize.y * sampleSize.z);
 
 			const size_t kernelWorkGroupSize = mcSizeKernel
 					.getKernel()
