@@ -36,10 +36,13 @@ else ()
             #            -Wold-style-cast
             -Wcast-align
             -Wpedantic
+
             -Werror=return-type
+            -Wno-unused-parameter
+            -Wno-ignored-attributes
             )
     set(RELEASE_OPTIONS -Ofast -funsafe-math-optimizations -march=native -g)
-    set(DEBUG_OPTIONS  -O2 -fno-omit-frame-pointer -fsanitize=address -march=native)
+    set(DEBUG_OPTIONS -O2 -fno-omit-frame-pointer -fsanitize=address -march=native)
     target_link_libraries(main PUBLIC $<$<CONFIG:DEBUG>:-Wl,-lasan>)
     target_link_libraries(main PUBLIC -latomic)
 

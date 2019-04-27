@@ -37,9 +37,9 @@ namespace ocl {
 
 	using glm::tvec3;
 	using clutil::TypedBuffer;
-	using clutil::BufferType::RW;
-	using clutil::BufferType::RO;
-	using clutil::BufferType::WO;
+	using clutil::RW;
+	using clutil::RO;
+	using clutil::WO;
 
 	typedef cl::Buffer ClSphConfigStruct;
 	typedef cl::Buffer ClMcConfigStruct;
@@ -112,10 +112,10 @@ namespace ocl {
 	};
 
 	struct PartiallyAdvected {
-		uint zIndex;
-		float3 pStar;
+		uint zIndex{};
+		float3 pStar{};
 		fluid::Particle<size_t, float> particle;
-		PartiallyAdvected() {}
+		PartiallyAdvected() = default;
 		explicit PartiallyAdvected(uint zIndex, float3 pStar,
 		                           const fluid::Particle<size_t, float> &particle) :
 				zIndex(zIndex), pStar(pStar), particle(particle) {}
@@ -325,19 +325,11 @@ namespace ocl {
 			                       glm::tvec3<size_t>((maxExtent - minExtent) / h));
 		}
 
-
-		template<typename T>
-		cl::Buffer readOnlyStruct(T &t) {
-			return cl::Buffer(ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(T), &t);
-		}
-
-
 		inline void finishQueue() {
 #ifdef DEBUG
 			queue.finish();
 #endif
 		}
-
 
 		std::vector<geometry::MeshTriangle<float>> runMcKernels(
 				clutil::Stopwatch &watch,

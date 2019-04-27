@@ -222,7 +222,9 @@ namespace clutil {
 
 
 	template<typename T, BufferType B>
-	struct TypedBuffer {
+	class TypedBuffer {
+
+	public:
 
 		cl::Buffer actual;
 		const size_t length;
