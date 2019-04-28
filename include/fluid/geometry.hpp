@@ -8,7 +8,7 @@
 #include "glm/gtx/normal.hpp"
 
 
-namespace geometry{
+namespace geometry {
 
 
 	using glm::tvec3;
@@ -41,12 +41,13 @@ namespace geometry{
 	struct MeshTriangle {
 		tvec3<N> v0, v1, v2;
 		tvec3<N> n0, n1, n2;
+		tvec3<uint32_t> c;
 
 		MeshTriangle() = default;
 
 		explicit MeshTriangle(
 				const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2, const tvec3<N> &normal
-		) : v0(v0), v1(v1), v2(v2), n0(normal), n1(n0), n2(n0) {}
+		) : v0(v0), v1(v1), v2(v2), n0(normal), n1(n0), n2(n0), c(tvec3<uint32_t>(0xFFFFFFFF)) {}
 
 		explicit MeshTriangle(
 				const tvec3<N> &v0, const tvec3<N> &v1, const tvec3<N> &v2) :
@@ -59,13 +60,18 @@ namespace geometry{
 				n0(n0), n1(n1), n2(n2) {}
 
 		friend std::ostream &operator<<(std::ostream &os, const MeshTriangle &triangle) {
-			os << "MT("
+			os << "MT(v=<"
 			   << glm::to_string(triangle.v0) << ","
 			   << glm::to_string(triangle.v1) << ","
-			   << glm::to_string(triangle.v2) << ", n="
+			   << glm::to_string(triangle.v2) << ">"
+			   << " n=<"
 			   << glm::to_string(triangle.n0) << ", "
 			   << glm::to_string(triangle.n1) << ", "
-			   << glm::to_string(triangle.n2)
+			   << glm::to_string(triangle.n2) << ">"
+			   << " c=<0x"
+			   << std::hex << triangle.c.x << ", 0x"
+			   << std::hex << triangle.c.y << ", 0x"
+			   << std::hex << triangle.c.z << ">"
 			   << ")";
 			return os;
 		}

@@ -13,6 +13,7 @@
 namespace fluid {
 
 	using glm::tvec3;
+	using glm::tvec4;
 
 	enum Type {
 		Fluid = 5, Obstacle = 6
@@ -25,18 +26,25 @@ namespace fluid {
 		N mass;
 		tvec3<N> position;
 		tvec3<N> velocity;
+		uint32_t colour;
 
 		Particle() : type(Type::Fluid) {}
 
-		explicit Particle(T t, Type type, N mass, const tvec3<N> &position,
-		                  const tvec3<N> &velocity) :
-				id(t), type(type), mass(mass), position(position), velocity(velocity) {}
+		explicit Particle(T t, Type type, N mass,
+		                  const tvec3<N> &position,
+		                  const tvec3<N> &velocity,
+		                  const uint32_t &colour) :
+				id(t), type(type), mass(mass),
+				position(position),
+				velocity(velocity),
+				colour(colour) {}
 
 		friend std::ostream &operator<<(std::ostream &os, const Particle &particle) {
 			os << "t: " << particle.id
 			   << ", mass: " << particle.mass
 			   << ", pos: " << glm::to_string(particle.position)
-			   << ", vel: " << glm::to_string(particle.velocity);
+			   << ", vel: " << glm::to_string(particle.velocity)
+			   << ", colour: 0x" << std::hex << particle.colour;
 			return os;
 		}
 
@@ -44,7 +52,8 @@ namespace fluid {
 			return id == rhs.id &&
 			       mass == rhs.mass &&
 			       position == rhs.position &&
-			       velocity == rhs.velocity;
+			       velocity == rhs.velocity &&
+			       colour == rhs.colour;
 		}
 
 		bool operator!=(const Particle &rhs) const {
@@ -131,14 +140,14 @@ namespace fluid {
 
 		const tvec3<N> minBound, maxBound;
 
-		explicit Config(N dt, N scale, N resolution, N isolevel,  size_t iteration,
+		explicit Config(N dt, N scale, N resolution, N isolevel, size_t iteration,
 		                const tvec3<N> &constantForce,
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
 		                const std::vector<fluid::Drain<N>> &drains,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
-				  resolution(resolution), isolevel(isolevel),  iteration(iteration),
+				  resolution(resolution), isolevel(isolevel), iteration(iteration),
 				  constantForce(constantForce),
 				  wells(wells), sources(sources), drains(drains),
 				  minBound(min), maxBound(max) {}

@@ -581,7 +581,7 @@ namespace ocl {
 					for (int z = 0; z < depth; ++z) {
 						auto pos = offset + tvec3<float>(x, 0, z) * spacing;
 						xs.emplace_back(source.tag, fluid::Type::Fluid, 1, pos,
-						                config.constantForce);
+						                config.constantForce, 0xFF0000FF);
 					}
 				}
 			}

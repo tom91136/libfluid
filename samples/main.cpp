@@ -44,7 +44,7 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 		for (size_t y = 0; y < len; ++y) {
 			for (size_t z = 0; z < len; ++z) {
 				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
-				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0));
+				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0), 0xFF0000FF);
 			}
 		}
 	}

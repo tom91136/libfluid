@@ -136,6 +136,7 @@ namespace strucures {
 	static const char v2_x_[] = "v2.x";
 	static const char v2_y_[] = "v2.y";
 	static const char v2_z_[] = "v2.z";
+
 	static const char n0_x_[] = "n0.x";
 	static const char n0_y_[] = "n0.y";
 	static const char n0_z_[] = "n0.z";
@@ -145,6 +146,10 @@ namespace strucures {
 	static const char n2_x_[] = "n2.x";
 	static const char n2_y_[] = "n2.y";
 	static const char n2_z_[] = "n2.z";
+
+	static const char c_x_[] = "c.x";
+	static const char c_y_[] = "c.y";
+	static const char c_z_[] = "c.z";
 
 
 	template<typename N>
@@ -182,7 +187,10 @@ namespace strucures {
 				DECL_MEMBER(n1_z_, CLS(geometry::MeshTriangle<N>), n1.z),
 				DECL_MEMBER(n2_x_, CLS(geometry::MeshTriangle<N>), n2.x),
 				DECL_MEMBER(n2_y_, CLS(geometry::MeshTriangle<N>), n2.y),
-				DECL_MEMBER(n2_z_, CLS(geometry::MeshTriangle<N>), n2.z)
+				DECL_MEMBER(n2_z_, CLS(geometry::MeshTriangle<N>), n2.z),
+				DECL_MEMBER(c_x_, CLS(geometry::MeshTriangle<N>), c.x),
+				DECL_MEMBER(c_y_, CLS(geometry::MeshTriangle<N>), c.y),
+				DECL_MEMBER(c_z_, CLS(geometry::MeshTriangle<N>), c.z)
 		);
 	}
 
