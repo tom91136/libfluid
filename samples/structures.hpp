@@ -95,8 +95,12 @@ namespace strucures {
 	static const char source_x_[] = "source.x";
 	static const char source_y_[] = "source.y";
 	static const char source_z_[] = "source.z";
+	static const char source_vel_x_[] = "source.vel.x";
+	static const char source_vel_y_[] = "source.vel.y";
+	static const char source_vel_z_[] = "source.vel.z";
 	static const char source_rate_[] = "rate";
 	static const char source_tag_[] = "tag";
+	static const char source_colour_[] = "colour";
 
 	template<typename N>
 	static inline auto sourceDef() {
@@ -104,8 +108,12 @@ namespace strucures {
 				DECL_MEMBER(source_x_, CLS(fluid::Source<N>), centre.x),
 				DECL_MEMBER(source_y_, CLS(fluid::Source<N>), centre.y),
 				DECL_MEMBER(source_z_, CLS(fluid::Source<N>), centre.z),
+				DECL_MEMBER(source_vel_x_, CLS(fluid::Source<N>), velocity.x),
+				DECL_MEMBER(source_vel_y_, CLS(fluid::Source<N>), velocity.y),
+				DECL_MEMBER(source_vel_z_, CLS(fluid::Source<N>), velocity.z),
 				DECL_MEMBER(source_rate_, CLS(fluid::Source<N>), rate),
-				DECL_MEMBER(source_tag_, CLS(fluid::Source<N>), tag)
+				DECL_MEMBER(source_tag_, CLS(fluid::Source<N>), tag),
+				DECL_MEMBER(source_colour_, CLS(fluid::Source<N>), colour)
 		);
 	}
 

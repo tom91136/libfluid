@@ -278,6 +278,26 @@ kernel void check_size(global size_t *sizes) {
 }
 
 
+kernel void sph_diffuse(
+		const constant ClSphConfig *config,
+		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
+		const global float3 *pStar,
+		const global uchar4 *colour,
+		global uchar4 *diffused
+) {
+
+	const size_t a = get_global_id(0);
+	int N = 0;
+	float4 mixture = (float4) (0);
+	FOR_EACH_NEIGHBOUR__(zIndex[a], gridTable, gridTableN, {
+		mixture += convert_float4(colour[b]);
+		N++;
+
+	});
+	float4 out = mix(convert_float4(colour[a]), (mixture / N) * 1.33f, config->dt / 750.f);
+	diffused[a] = convert_uchar4(clamp(out, 255, 8));
+}
+
 kernel void sph_lambda(
 		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
@@ -384,12 +404,16 @@ kernel void sph_finalise(
 // mcCube -> TrigSumN
 //
 
-kernel void sph_evalLattice(
+kernel void mc_lattice(
 		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const global uint *gridTable, uint gridTableN,
 		const float3 min, const uint3 sizes, const uint3 gridExtent,
 		const global float3 *position,
-		global float4 *lattice) {
+		const global uchar4 *colours,
+
+		global float4 *latticePNs,
+		global uchar4 *latticeCs
+) {
 
 
 	const size_t x = get_global_id(0);
@@ -459,6 +483,8 @@ kernel void sph_evalLattice(
 
 	float v = 0.f;
 	float3 normal = (float3) (0);
+	float4 colour = (float4) (0);
+	size_t N = 0;
 	for (size_t i = 0; i < 27; i++) {
 		const size_t offset = offsets[i];
 		const size_t start = gridTable[offset];
@@ -473,15 +499,19 @@ kernel void sph_evalLattice(
 				          mcConfig->particleSize *
 				          (l / denominator);
 				v += (mcConfig->particleSize / denominator);
+				colour += convert_float4(colours[b]);
+				N++;
 			}
 		}
 	}
 	normal = fast_normalize(normal);
-	global float4 *out = &lattice[index3d(x, y, z, sizes.x, sizes.y, sizes.z)];
-	out->s0 = v;
-	out->s1 = normal.s0;
-	out->s2 = normal.s1;
-	out->s3 = normal.s2;
+
+	const size_t idx = index3d(x, y, z, sizes.x, sizes.y, sizes.z);
+	latticePNs[idx].s0 = v;
+	latticePNs[idx].s1 = normal.s0;
+	latticePNs[idx].s2 = normal.s1;
+	latticePNs[idx].s3 = normal.s2;
+	latticeCs[idx] = convert_uchar4(colour / N);
 }
 
 
@@ -512,7 +542,7 @@ kernel void mc_size(
 	// because global size needs to be divisible by local group size (CL1.2), we discard the padding
 	if (get_global_id(0) >= (marchRange.x * marchRange.y * marchRange.z)) {
 		// NOOP
-	}else{
+	} else {
 		const uint3 pos = to3d(get_global_id(0), marchRange.x, marchRange.y, marchRange.z);
 		const float isolevel = mcConfig->isolevel;
 		uint ci = 0u;
@@ -550,17 +580,47 @@ kernel void mc_size(
 
 }
 
-inline float3 lerp(const float isolevel,
-                   const float3 p1, const float3 p2,
-                   const float v1, const float v2) {
-	return mix(p1, p2, ((isolevel - v1) / (v2 - v1)));
+
+inline float scale(float isolevel, float v1, float v2) {
+	// TODO replace with mix
+	return (isolevel - v1) / (v2 - v1);
+}
+
+//inline uchar4 lerp(const float isolevel,
+//                   const uchar4 p1, const uchar4 p2,
+//                   const float v1, const float v2) {
+//	const float t = ((isolevel - v1) / (v2 - v1));
+//	return convert_uchar4(mix(convert_float4(p1), convert_float4(p2), t));
+//}
+//
+//inline float3 lerp(const float isolevel,
+//                   const float3 p1, const float3 p2,
+//                   const float v1, const float v2) {
+//	return mix(p1, p2, ((isolevel - v1) / (v2 - v1)));
+//}
+
+
+inline void lerpAll(size_t index,
+                    float3 *ts, float3 *ns, uchar4 *cs,
+                    size_t from, size_t to,
+                    const float3 *offsets,
+                    const float3 *normals,
+                    const uchar4 *colours,
+                    float isolevel, float v0, float v1) {
+	const float t = scale(isolevel, v0, v1);
+	ts[index] = mix(offsets[from], offsets[to], t);
+	ns[index] = mix(normals[from], normals[to], t);
+	cs[index] = convert_uchar4(mix(convert_float4(colours[from]), convert_float4(colours[to]), t));
 }
 
 // FIXME nvidia GPUs output broken triangles for some reason, Intel and AMD works fine
 kernel void mc_eval(
 		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const float3 min, const uint3 sizes,
-		const global float4 *values,
+
+		const global float4 *latticePNs,
+		const global uchar4 *latticeCs,
+
 		volatile global uint *trigCounter,
 
 		const uint acc,
@@ -571,83 +631,67 @@ kernel void mc_eval(
 
 		global float3 *outNxs,
 		global float3 *outNys,
-		global float3 *outNzs
+		global float3 *outNzs,
+
+		global uchar4 *outCxs,
+		global uchar4 *outCys,
+		global uchar4 *outCzs
 ) {
 
 	const uint3 pos = to3d(get_global_id(0), sizes.x - 1, sizes.y - 1, sizes.z - 1);
 	const float isolevel = mcConfig->isolevel;
 	const float step = SPH_H / mcConfig->sampleResolution;
 
-	float vertices[8];
-	float3 normals[8];
+	float values[8];
 	float3 offsets[8];
+	float3 normals[8];
+	uchar4 colours[8];
 
 	uint ci = 0;
 	for (int i = 0; i < 8; ++i) {
 		const uint3 offset = CUBE_OFFSETS[i] + pos;
-		const float4 point = values[index3d(
-				offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z)];
+		const size_t idx = index3d(offset.x, offset.y, offset.z, sizes.x, sizes.y, sizes.z);
 
-		vertices[i] = point.s0;
-		normals[i] = (float3) (point.s1, point.s2, point.s3);
+		const float4 point = latticePNs[idx];
+
+		values[i] = point.s0;
 		offsets[i] = (min + (convert_float3(offset) * step)) * config->scale;
+		normals[i] = (float3) (point.s1, point.s2, point.s3);
+		colours[i] = latticeCs[idx];
 
-		ci = select(ci, ci | (1 << i), vertices[i] < isolevel);
+		ci = select(ci, ci | (1 << i), values[i] < isolevel);
 	}
 
 	float3 ts[12];
 	float3 ns[12];
+	uchar4 cs[12];
 
 	const uint edge = EdgeTable[ci];
 
-	if (edge & 1 << 0) {
-		ts[0] = lerp(isolevel, offsets[0], offsets[1], vertices[0], vertices[1]);
-		ns[0] = lerp(isolevel, normals[0], normals[1], vertices[0], vertices[1]);
-	}
-	if (edge & 1 << 1) {
-		ts[1] = lerp(isolevel, offsets[1], offsets[2], vertices[1], vertices[2]);
-		ns[1] = lerp(isolevel, normals[1], normals[2], vertices[1], vertices[2]);
-	}
-	if (edge & 1 << 2) {
-		ts[2] = lerp(isolevel, offsets[2], offsets[3], vertices[2], vertices[3]);
-		ns[2] = lerp(isolevel, normals[2], normals[3], vertices[2], vertices[3]);
-	}
-	if (edge & 1 << 3) {
-		ts[3] = lerp(isolevel, offsets[3], offsets[0], vertices[3], vertices[0]);
-		ns[3] = lerp(isolevel, normals[3], normals[0], vertices[3], vertices[0]);
-	}
-	if (edge & 1 << 4) {
-		ts[4] = lerp(isolevel, offsets[4], offsets[5], vertices[4], vertices[5]);
-		ns[4] = lerp(isolevel, normals[4], normals[5], vertices[4], vertices[5]);
-	}
-	if (edge & 1 << 5) {
-		ts[5] = lerp(isolevel, offsets[5], offsets[6], vertices[5], vertices[6]);
-		ns[5] = lerp(isolevel, normals[5], normals[6], vertices[5], vertices[6]);
-	}
-	if (edge & 1 << 6) {
-		ts[6] = lerp(isolevel, offsets[6], offsets[7], vertices[6], vertices[7]);
-		ns[6] = lerp(isolevel, normals[6], normals[7], vertices[6], vertices[7]);
-	}
-	if (edge & 1 << 7) {
-		ts[7] = lerp(isolevel, offsets[7], offsets[4], vertices[7], vertices[4]);
-		ns[7] = lerp(isolevel, normals[7], normals[4], vertices[7], vertices[4]);
-	}
-	if (edge & 1 << 8) {
-		ts[8] = lerp(isolevel, offsets[0], offsets[4], vertices[0], vertices[4]);
-		ns[8] = lerp(isolevel, normals[0], normals[4], vertices[0], vertices[4]);
-	}
-	if (edge & 1 << 9) {
-		ts[9] = lerp(isolevel, offsets[1], offsets[5], vertices[1], vertices[5]);
-		ns[9] = lerp(isolevel, normals[1], normals[5], vertices[1], vertices[5]);
-	}
-	if (edge & 1 << 10) {
-		ts[10] = lerp(isolevel, offsets[2], offsets[6], vertices[2], vertices[6]);
-		ns[10] = lerp(isolevel, normals[2], normals[6], vertices[2], vertices[6]);
-	}
-	if (edge & 1 << 11) {
-		ts[11] = lerp(isolevel, offsets[3], offsets[7], vertices[3], vertices[7]);
-		ns[11] = lerp(isolevel, normals[3], normals[7], vertices[3], vertices[7]);
-	}
+	if (edge & 1 << 0)
+		lerpAll(0, ts, ns, cs, 0, 1, offsets, normals, colours, isolevel, values[0], values[1]);
+	if (edge & 1 << 1)
+		lerpAll(1, ts, ns, cs, 1, 2, offsets, normals, colours, isolevel, values[1], values[2]);
+	if (edge & 1 << 2)
+		lerpAll(2, ts, ns, cs, 2, 3, offsets, normals, colours, isolevel, values[2], values[3]);
+	if (edge & 1 << 3)
+		lerpAll(3, ts, ns, cs, 3, 0, offsets, normals, colours, isolevel, values[3], values[0]);
+	if (edge & 1 << 4)
+		lerpAll(4, ts, ns, cs, 4, 5, offsets, normals, colours, isolevel, values[4], values[5]);
+	if (edge & 1 << 5)
+		lerpAll(5, ts, ns, cs, 5, 6, offsets, normals, colours, isolevel, values[5], values[6]);
+	if (edge & 1 << 6)
+		lerpAll(6, ts, ns, cs, 6, 7, offsets, normals, colours, isolevel, values[6], values[7]);
+	if (edge & 1 << 7)
+		lerpAll(7, ts, ns, cs, 7, 4, offsets, normals, colours, isolevel, values[7], values[4]);
+	if (edge & 1 << 8)
+		lerpAll(8, ts, ns, cs, 0, 4, offsets, normals, colours, isolevel, values[0], values[4]);
+	if (edge & 1 << 9)
+		lerpAll(9, ts, ns, cs, 1, 5, offsets, normals, colours, isolevel, values[1], values[5]);
+	if (edge & 1 << 10)
+		lerpAll(10, ts, ns, cs, 2, 6, offsets, normals, colours, isolevel, values[2], values[6]);
+	if (edge & 1 << 11)
+		lerpAll(11, ts, ns, cs, 3, 7, offsets, normals, colours, isolevel, values[3], values[7]);
 
 
 	for (size_t i = 0; TriTable[ci][i] != 255; i += 3) {
@@ -655,12 +699,18 @@ kernel void mc_eval(
 		const int x = TriTable[ci][i + 0];
 		const int y = TriTable[ci][i + 1];
 		const int z = TriTable[ci][i + 2];
+
 		outVxs[trigIndex] = ts[x];
 		outVys[trigIndex] = ts[y];
 		outVzs[trigIndex] = ts[z];
+
 		outNxs[trigIndex] = ns[x];
 		outNys[trigIndex] = ns[y];
 		outNzs[trigIndex] = ns[z];
+
+		outCxs[trigIndex] = cs[x];
+		outCys[trigIndex] = cs[y];
+		outCzs[trigIndex] = cs[z];
 	}
 //	printf("trigIdx: %d -> %d", (*trigCounter), trigIndex);
 

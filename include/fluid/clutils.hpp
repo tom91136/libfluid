@@ -199,7 +199,27 @@ namespace clutil {
 	}
 
 	inline cl_float4 float4(float x) { return {{x, x, x, x}}; }
+	inline cl_uchar4 uchar4(uchar x, uchar y, uchar z, uchar w) { return {{x, y, z, w}}; }
 
+
+	inline uint32_t packARGB(cl_uchar4 argb) {
+		return ((argb.s0 & 0xFF) << 24) |
+		       ((argb.s1 & 0xFF) << 16) |
+		       ((argb.s2 & 0xFF) << 8) |
+		       ((argb.s3 & 0xFF) << 0);
+	}
+
+	inline cl_uchar4 unpackARGB(uint32_t argb) {
+		return uchar4((argb >> 24) & 0xFF,
+		              (argb >> 16) & 0xFF,
+		              (argb >> 8) & 0xFF,
+		              (argb >> 0) & 0xFF);
+	}
+
+
+	inline glm::tvec4<uint32_t> v4u32ToGlm(cl_uint4 v) {
+		return glm::tvec4<uint32_t>(v.x, v.y, v.z, v.w);
+	}
 
 	template<typename N>
 	inline glm::tvec3<N> clToVec3(cl_float3 v) {
@@ -209,6 +229,7 @@ namespace clutil {
 	inline cl_float3 vec3ToCl(glm::tvec3<float> v) {
 		return float3(v.x, v.y, v.z);
 	}
+
 
 	inline uint3 uvec3ToCl(glm::tvec3<size_t> v) {
 		return gen_type3<uint, uint3>(v.x, v.y, v.z);

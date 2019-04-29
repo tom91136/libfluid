@@ -19,6 +19,7 @@ typedef cl_float4 float4;
 typedef cl_int3 int3;
 typedef cl_int4 int4;
 typedef cl_uchar uchar;
+typedef cl_uchar4 uchar4;
 typedef cl_char3 char3;
 typedef cl_uint uint;
 typedef cl_uint2 uint2;

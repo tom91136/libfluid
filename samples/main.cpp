@@ -40,11 +40,15 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 
 	auto len = static_cast<size_t>(std::cbrt(count));
 
+	size_t half = count / 2;
+	size_t i = 0;
 	for (size_t x = 0; x < len; ++x) {
 		for (size_t y = 0; y < len; ++y) {
 			for (size_t z = 0; z < len; ++z) {
 				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
-				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0), 0xFF0000FF);
+//				uint32_t colour = i > half ? 0xFFFF0000 : 0xFF00FF00;
+				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0), 0xFF2d1010);
+				i++;
 			}
 		}
 	}
@@ -148,7 +152,7 @@ void run() {
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = 32 * 1000;
+	const size_t pcount = 16 * 1000;
 	const size_t iter = 30000;
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle

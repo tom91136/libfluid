@@ -106,10 +106,15 @@ namespace fluid {
 	template<typename N>
 	struct Source {
 		tvec3<N> centre;
+		tvec3<N> velocity;
 		size_t rate, tag;
+		uint32_t colour;
 		friend std::ostream &operator<<(std::ostream &os, const Source &source) {
-			return os << "Source[ " << source.tag << " ]("
-			          << glm::to_string(source.centre) << " @" << source.rate << "p)";
+			return os << "Source[ " << source.tag
+			          << "(0x" << std::hex << source.colour
+			          << ") ](" << glm::to_string(source.centre)
+			          << "<" << glm::to_string(source.velocity)
+			          << "v @" << source.rate << "p)";
 		}
 	};
 
