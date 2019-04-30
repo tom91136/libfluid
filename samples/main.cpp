@@ -111,6 +111,28 @@ cl::Device resolveDeviceVerbose(const std::vector<std::string> &signatures) {
 	return found.front();
 }
 
+
+void injectRigidBody(std::atomic_long &last, mio::mmap_source &rigidBodySource,
+                     std::vector<fluid::Particle<size_t, num_t >> &particles) {
+	auto header = strucures::readHeader(rigidBodySource);
+	if (last.load() != header.first.timestamp) {
+		last = header.first.timestamp;
+		const std::vector<tvec3<num_t >> obstacles =
+				strucures::readRigidBody<num_t>(rigidBodySource, header).obstacles;
+
+		particles.erase(std::remove_if(particles.begin(), particles.end(),
+		                               [](const auto &x) {
+			                               return x.type == fluid::Type::Obstacle;
+		                               }), particles.end());
+
+		std::transform(obstacles.begin(), obstacles.end(), std::back_inserter(particles),
+		               [](const tvec3<num_t> &v) {
+			               return fluid::Particle<size_t, num_t>(0, fluid::Type::Obstacle, 1, 0,
+			                                                     v, tvec3<num_t>(0));
+		               });
+	}
+}
+
 void run() {
 
 	using mmf::meta::writeMetaPacked;
@@ -122,6 +144,9 @@ void run() {
 	auto sourceType = writeMetaPacked<decltype(strucures::sourceDef<num_t>())>();
 	auto drainType = writeMetaPacked<decltype(strucures::drainDef<num_t>())>();
 	auto sceneMetaType = writeMetaPacked<decltype(strucures::sceneMetaDef<num_t>())>();
+
+
+	auto vec3Type = writeMetaPacked<decltype(strucures::vec3Def<num_t>())>();
 
 	auto particleType = writeMetaPacked<decltype(strucures::particleDef<size_t, num_t>())>();
 	auto triangleType = writeMetaPacked<decltype(strucures::triangleDef<num_t>())>();
@@ -135,6 +160,8 @@ void run() {
 			                       {"source",       sourceType.second},
 			                       {"drain",        drainType.second},
 			                       {"sceneMeta",    sceneMetaType.second},
+
+			                       {"vec3",         vec3Type.second},
 
 			                       {"particle",     particleType.second},
 			                       {"triangle",     triangleType.second},
@@ -179,6 +206,11 @@ void run() {
 
 	auto sceneSource = createSource("scene.mmf");
 	auto colliderSource = createSource("colliders.mmf");
+
+
+//	auto staticBodySource = createSource("static_bodies.mmf");
+	auto dynamicBodySource = createSource("dynamic_bodies.mmf");
+
 
 	auto particleSink = createSink("particles.mmf",
 	                               pcount * 10 * particleType.first + headerType.first);
@@ -300,6 +332,10 @@ void run() {
 		}
 	});
 
+
+	std::atomic_long lastStaticBody;
+	std::atomic_long lastDynamicBody;
+
 	hrc::time_point start = hrc::now();
 	for (size_t j = 0; j < iter; ++j) {
 //		i += glm::pi<num_t>() / 50;
@@ -325,6 +361,12 @@ void run() {
 //		std::cout << "Read collider: start" << std::endl;
 //		auto collider = strucures::readCollider<num_t>(colliderSource);
 //		std::cout << "Read collider: end" << std::endl;
+
+
+		hrc::time_point rbStart = hrc::now();
+//		injectRigidBody(lastStaticBody, staticBodySource, particles);
+		injectRigidBody(lastDynamicBody, dynamicBodySource, particles);
+		hrc::time_point rbEnd = hrc::now();
 
 		const std::vector<fluid::MeshCollider<num_t>> colliders = {
 //				collider,
@@ -355,9 +397,12 @@ void run() {
 		copied = false;
 
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
-#ifdef DEBUG
+		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
+
+		#ifdef DEBUG
 		std::cout << "[" << j << "]" <<
 		          " Solver:" << (solve / 1000000.0) << "ms " <<
+		          " RB handle:" << (rb / 1000000.0) << "ms " <<
 		          " nTriangle:" << triangles.size() <<
 		          " nParticle:" << particles.size()
 		          << std::endl;

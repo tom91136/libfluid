@@ -48,6 +48,8 @@ namespace ocl {
 	typedef cl::KernelFunctor<
 			ClSphConfigStruct &,
 			cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
+			cl::Buffer &, // type
+
 			cl::Buffer &, // pstar
 			cl::Buffer &, // original colour
 			cl::Buffer & // colour
@@ -56,6 +58,7 @@ namespace ocl {
 	typedef cl::KernelFunctor<
 			ClSphConfigStruct &,
 			cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
+			cl::Buffer &, // type
 
 			cl::Buffer &, // pstar
 			cl::Buffer &, // mass
@@ -65,6 +68,8 @@ namespace ocl {
 	typedef cl::KernelFunctor<
 			ClSphConfigStruct &,
 			cl::Buffer &, cl::Buffer &, uint, // zIdx, grid, gridN
+			cl::Buffer &, // type
+
 			cl::Buffer &, uint, // mesh + N
 
 			cl::Buffer &, // pstar
@@ -76,6 +81,7 @@ namespace ocl {
 
 	typedef cl::KernelFunctor<
 			ClSphConfigStruct &,
+			cl::Buffer &, // type
 
 			cl::Buffer &, // pstar
 			cl::Buffer &, // pos
@@ -85,6 +91,8 @@ namespace ocl {
 	typedef cl::KernelFunctor<
 			ClSphConfigStruct &, ClMcConfigStruct &,
 			cl::Buffer &, uint,
+			cl::Buffer &, // type
+
 			float3, uint3, uint3,
 			cl::Buffer &, cl::Buffer &,
 			cl::Buffer &, cl::Buffer &
@@ -116,13 +124,15 @@ namespace ocl {
 	struct ClSphAtoms {
 		const size_t size;
 		std::vector<uint> zIndex;
+		std::vector<ClSphType> type;
 		std::vector<float> mass;
 		std::vector<uchar4> colour;
 		std::vector<float3> pStar;
 		std::vector<float3> position;
 		std::vector<float3> velocity;
 
-		explicit ClSphAtoms(size_t size) : size(size), zIndex(size), mass(size), colour(size),
+		explicit ClSphAtoms(size_t size) : size(size), zIndex(size),
+		                                   type(size), mass(size), colour(size),
 		                                   pStar(size), position(size), velocity(size) {}
 	};
 
@@ -179,7 +189,7 @@ namespace ocl {
 
 	private:
 
-		static inline ClSphType resolve(fluid::Type t) {
+		static inline ClSphType resolveType(fluid::Type t) {
 			switch (t) {
 				case fluid::Type::Fluid: return ClSphType::Fluid;
 				case fluid::Type::Obstacle: return ClSphType::Obstacle;
@@ -187,7 +197,7 @@ namespace ocl {
 			}
 		}
 
-		static inline fluid::Type resolve(ClSphType t) {
+		static inline fluid::Type resolveType(ClSphType t) {
 			switch (t) {
 				case ClSphType::Fluid: return fluid::Type::Fluid;
 				case ClSphType::Obstacle: return fluid::Type::Obstacle;
@@ -283,6 +293,10 @@ namespace ocl {
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				fluid::Particle<size_t, float> &p = xs[i];
+				advected[i].particle = p;
+				advected[i].pStar = clutil::vec3ToCl(p.position / config.scale);
+
+				if (p.type == fluid::Type::Obstacle) continue;
 
 				tvec3<float> combinedForce = p.mass * config.constantForce;
 				for (const fluid::Well<float> &well : config.wells) {
@@ -297,7 +311,7 @@ namespace ocl {
 				p.velocity = combinedForce * config.dt + p.velocity;
 				advected[i].pStar = clutil::vec3ToCl(
 						(p.velocity * config.dt) + (p.position / config.scale));
-				advected[i].particle = p;
+
 			}
 			return advected;
 		}
@@ -354,6 +368,7 @@ namespace ocl {
 				TypedBuffer<ClSphConfig, RO> &sphConfig,
 				TypedBuffer<ClMcConfig, RO> &mcConfig,
 				TypedBuffer<uint, RO> &gridTable,
+				TypedBuffer<ClSphType, RO> type,
 				TypedBuffer<float3, RW> &particlePositions,
 				TypedBuffer<uchar4, RW> &particleColours,
 				const tvec3<float> minExtent,
@@ -390,6 +405,7 @@ namespace ocl {
 					                cl::NDRange(sampleSize.x, sampleSize.y, sampleSize.z)),
 					sphConfig.actual, mcConfig.actual,
 					gridTable.actual, gridTableN,
+					type.actual,
 					clutil::vec3ToCl(minExtent), clutil::uvec3ToCl(sampleSize),
 					clutil::uvec3ToCl(extent),
 					particlePositions.actual, particleColours.actual,
@@ -519,6 +535,7 @@ namespace ocl {
 		                  TypedBuffer<ClSphConfig, RO> &sphConfig,
 		                  TypedBuffer<uint, RO> &gridTable,
 		                  TypedBuffer<uint, RO> &zIndex,
+		                  TypedBuffer<ClSphType, RO> type,
 		                  TypedBuffer<float, RO> &mass,
 		                  TypedBuffer<uchar4, RO> &colour,
 
@@ -555,6 +572,7 @@ namespace ocl {
 
 			sphDiffuseKernel(cl::EnqueueArgs(queue, globalRange, localRange),
 			                 sphConfig.actual, zIndex.actual, gridTable.actual, gridTableN,
+			                 type.actual,
 			                 pStar.actual, colour.actual, diffused.actual
 			);
 
@@ -568,10 +586,12 @@ namespace ocl {
 			for (size_t itr = 0; itr < iterations; ++itr) {
 				sphLambdaKernel(cl::EnqueueArgs(queue, globalRange, localRange),
 				                sphConfig.actual, zIndex.actual, gridTable.actual, gridTableN,
+				                type.actual,
 				                pStar.actual, mass.actual, lambda.actual
 				);
 				sphDeltaKernel(cl::EnqueueArgs(queue, globalRange, localRange),
 				               sphConfig.actual, zIndex.actual, gridTable.actual, gridTableN,
+				               type.actual,
 				               colliderMesh, colliderMeshN,
 				               pStar.actual, lambda.actual, position.actual, velocity.actual,
 				               deltaP.actual
@@ -583,6 +603,7 @@ namespace ocl {
 			auto finalise = watch.start("\t[GPU] sph-finalise");
 			sphFinaliseKernel(cl::EnqueueArgs(queue, globalRange, localRange),
 			                  sphConfig.actual,
+			                  type.actual,
 			                  pStar.actual, position.actual, velocity.actual
 			);
 			finishQueue();
@@ -625,6 +646,8 @@ namespace ocl {
 
 			xs.erase(std::remove_if(xs.begin(), xs.end(),
 			                        [&config](const fluid::Particle<size_t, float> &x) {
+
+										if(x.type == fluid::Type::Obstacle) return false;
 
 				                        for (const fluid::Drain<float> &drain: config.drains) {
 					                        // FIXME needs to actually erase at surface, not shperically
@@ -732,6 +755,7 @@ namespace ocl {
 			for (int i = 0; i < static_cast<int>(advected.size()); ++i) {
 				atoms.zIndex[i] = advected[i].zIndex;
 				atoms.pStar[i] = advected[i].pStar;
+				atoms.type[i] = resolveType(advected[i].particle.type);
 				atoms.mass[i] = advected[i].particle.mass;
 				atoms.colour[i] = clutil::unpackARGB(advected[i].particle.colour);
 				atoms.position[i] = clutil::vec3ToCl(advected[i].particle.position);
@@ -747,6 +771,7 @@ namespace ocl {
 
 				TypedBuffer<uint, RO> gridTable(queue, hostGridTable);
 				TypedBuffer<uint, RO> zIndex(queue, atoms.zIndex);
+				TypedBuffer<ClSphType, RO> type(queue, atoms.type);
 				TypedBuffer<float, RO> mass(queue, atoms.mass);
 				TypedBuffer<uchar4, RO> colour(queue, atoms.colour);
 				TypedBuffer<float3, RW> pStar(queue, atoms.pStar);
@@ -761,13 +786,13 @@ namespace ocl {
 				kernel_alloc();
 
 				runSphKernel(watch, sphConfig.iteration, sphConfig_,
-				             gridTable, zIndex, mass, colour,
+				             gridTable, zIndex, type, mass, colour,
 				             pStar, deltaP, lambda, diffused,
 				             position, velocity,
 				             hostColliderMesh);
 
 				triangles = runMcKernels(watch, sampleSize, sphConfig_, mcConfig_,
-				                         gridTable, position, diffused, minExtent, extent);
+				                         gridTable, type, position, diffused, minExtent, extent);
 
 
 				std::vector<float3> hostPosition(advected.size());
@@ -783,9 +808,17 @@ namespace ocl {
 					xs[i].id = advected[i].particle.id;
 					xs[i].type = advected[i].particle.type;
 					xs[i].mass = advected[i].particle.mass;
-					xs[i].colour = clutil::packARGB(hostDiffused[i]);
-					xs[i].position = clutil::clToVec3<float>(hostPosition[i]);
-					xs[i].velocity = clutil::clToVec3<float>(hostVelocity[i]);
+
+					if (advected[i].particle.type == fluid::Fluid) {
+						xs[i].colour = clutil::packARGB(hostDiffused[i]);
+						xs[i].position = clutil::clToVec3<float>(hostPosition[i]);
+						xs[i].velocity = clutil::clToVec3<float>(hostVelocity[i]);
+					} else {
+						xs[i].colour = advected[i].particle.colour;
+						xs[i].position = advected[i].particle.position;
+						xs[i].velocity = advected[i].particle.velocity;
+					}
+
 				}
 				write_back();
 

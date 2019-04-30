@@ -281,18 +281,22 @@ kernel void check_size(global size_t *sizes) {
 kernel void sph_diffuse(
 		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
+		const global ClSphType *type,
 		const global float3 *pStar,
 		const global uchar4 *colour,
 		global uchar4 *diffused
 ) {
 
 	const size_t a = get_global_id(0);
+	if (type[a] == Obstacle) return;
+
 	int N = 0;
 	float4 mixture = (float4) (0);
 	FOR_EACH_NEIGHBOUR__(zIndex[a], gridTable, gridTableN, {
-		mixture += convert_float4(colour[b]);
-		N++;
-
+		if (type[b] != Obstacle) {
+			mixture += convert_float4(colour[b]);
+			N++;
+		}
 	});
 	float4 out = mix(convert_float4(colour[a]), (mixture / N) * 1.33f, config->dt / 750.f);
 	diffused[a] = convert_uchar4(clamp(out, 255.f, 8.f));
@@ -301,12 +305,17 @@ kernel void sph_diffuse(
 kernel void sph_lambda(
 		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
+		const global ClSphType *type,
 		const global float3 *pStar,
 		const global float *mass,
 		global float *lambda
 ) {
 
 	const size_t a = get_global_id(0);
+	if (type[a] == Obstacle) {
+		lambda[a] = 0;
+		return;
+	}
 
 	float3 norm2V = (float3) (0.f);
 	float rho = 0.f;
@@ -326,6 +335,7 @@ kernel void sph_lambda(
 kernel void sph_delta(
 		const constant ClSphConfig *config,
 		const global uint *zIndex, const global uint *gridTable, const uint gridTableN,
+		const global ClSphType *type,
 		const global ClSphTraiangle *mesh, const uint meshN,
 		global float3 *pStar,
 		const global float *lambda,
@@ -335,6 +345,7 @@ kernel void sph_delta(
 
 ) {
 	const size_t a = get_global_id(0);
+	if (type[a] == Obstacle) return;
 
 	const float p6DeltaQ = poly6Kernel(CorrDeltaQ);
 
@@ -352,6 +363,7 @@ kernel void sph_delta(
 	ClSphResponse resp;
 	resp.position = (pStar[a] + deltaP[a]) * config->scale;
 	resp.velocity = velocity[a];
+
 
 	collideTriangle2(mesh, meshN, position[a], &resp);
 
@@ -391,11 +403,13 @@ kernel void sph_delta(
 
 kernel void sph_finalise(
 		const constant ClSphConfig *config,
+		const global ClSphType *type,
 		const global float3 *pStar,
 		global float3 *position,
 		global float3 *velocity
 ) {
 	const size_t a = get_global_id(0);
+	if (type[a] == Obstacle) return;
 	const float3 deltaX = pStar[a] - position[a] / config->scale;
 	position[a] = pStar[a] * config->scale;
 	velocity[a] = mad(deltaX, (1.f / config->dt), velocity[a]) * VD;
@@ -407,6 +421,7 @@ kernel void sph_finalise(
 kernel void mc_lattice(
 		const constant ClSphConfig *config, const constant ClMcConfig *mcConfig,
 		const global uint *gridTable, uint gridTableN,
+		const global ClSphType *type,
 		const float3 min, const uint3 sizes, const uint3 gridExtent,
 		const global float3 *position,
 		const global uchar4 *colours,
@@ -490,7 +505,7 @@ kernel void mc_lattice(
 		const size_t start = gridTable[offset];
 		const size_t end = (offset + 1 < gridTableN) ? gridTable[offset + 1] : start;
 		for (size_t b = start; b < end; ++b) {
-			if (fast_distance(position[b], a) < threshold) {
+			if (type[b] != Obstacle && fast_distance(position[b], a) < threshold) {
 				const float3 l = (position[b]) - a;
 				const float len = fast_length(l);
 				const float denominator = pow(len, mcConfig->particleInfluence);

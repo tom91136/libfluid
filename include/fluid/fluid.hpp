@@ -16,7 +16,7 @@ namespace fluid {
 	using glm::tvec4;
 
 	enum Type {
-		Fluid = 5, Obstacle = 6
+		Fluid = 0, Obstacle = 1
 	};
 
 	template<typename T, typename N>
@@ -30,7 +30,8 @@ namespace fluid {
 
 		Particle() : type(Type::Fluid) {}
 
-		explicit Particle(T t, Type type, N mass, const uint32_t &colour, const tvec3<N> &position,
+		explicit Particle(T t, Type type, N mass, const uint32_t &colour,
+		                  const tvec3<N> &position,
 		                  const tvec3<N> &velocity) :
 				id(t), type(type), mass(mass),
 				position(position),
@@ -48,6 +49,7 @@ namespace fluid {
 
 		bool operator==(const Particle &rhs) const {
 			return id == rhs.id &&
+			       type == rhs.type &&
 			       mass == rhs.mass &&
 			       colour == rhs.colour &&
 			       position == rhs.position &&
@@ -88,9 +90,18 @@ namespace fluid {
 	struct MeshCollider {
 		const std::vector<geometry::Triangle<N>> triangles;
 
-		explicit MeshCollider(const std::vector<geometry::Triangle<N>> &triangles) : triangles(
-				triangles) {}
+		explicit MeshCollider(const std::vector<geometry::Triangle<N>> &triangles) :
+				triangles(triangles) {}
 	};
+
+
+	template<typename N>
+	struct RigidBody {
+		const std::vector<tvec3<N>> obstacles;
+		explicit RigidBody(const std::vector<tvec3<N>> &obstacles) : obstacles(obstacles) {}
+
+	};
+
 
 	template<typename N>
 	struct Well {

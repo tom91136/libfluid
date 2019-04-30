@@ -177,6 +177,20 @@ namespace strucures {
 		);
 	}
 
+	static const char vec3_x_[] = "vec3.x";
+	static const char vec3_y_[] = "vec3.y";
+	static const char vec3_z_[] = "vec3.z";
+
+	template<typename N>
+	static inline auto vec3Def() {
+		return mmf::makeDef(
+				DECL_MEMBER(vec3_x_, CLS(glm::tvec3<N>), x),
+				DECL_MEMBER(vec3_y_, CLS(glm::tvec3<N>), y),
+				DECL_MEMBER(vec3_z_, CLS(glm::tvec3<N>), z)
+		);
+	}
+
+
 	template<typename N>
 	static inline auto meshTriangleDef() {
 		return mmf::makeDef(
@@ -389,6 +403,23 @@ namespace strucures {
 	}
 
 
+	std::pair<Header, size_t> readHeader(mio::mmap_source &source) {
+		Header header{};
+		size_t offset = mmf::reader::readPacked(source, header, 0, headerDef());
+		return std::make_pair(header, offset);
+	}
+
+	template<typename N>
+	fluid::RigidBody<N> readRigidBody(mio::mmap_source &source, std::pair<Header, size_t> partial) {
+		std::vector<tvec3<N>> ts(partial.first.entries);
+		size_t offset = partial.second;
+		for (size_t i = 0; i < partial.first.entries; ++i) {
+			offset = mmf::reader::readPacked(source, ts[i], offset, vec3Def<N>());
+		}
+		return fluid::RigidBody<N>(ts);
+	}
+
+
 	template<typename N>
 	fluid::MeshCollider<N> readCollider(mio::mmap_source &source) {
 		Header header{};
@@ -396,9 +427,7 @@ namespace strucures {
 		std::cout << header << "\n";
 		std::vector<geometry::Triangle<N>> ts(header.entries);
 		for (size_t i = 0; i < header.entries; ++i) {
-			geometry::Triangle<N> t{};
-			offset = mmf::reader::readPacked(source, t, offset, triangleDef<N>());
-			ts[i] = t;
+			offset = mmf::reader::readPacked(source, ts[i], offset, triangleDef<N>());
 		}
 		return fluid::MeshCollider<N>(ts);
 	}
