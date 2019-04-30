@@ -53,6 +53,7 @@ namespace strucures {
 	static const char id_[] = "id";
 	static const char type_[] = "type";
 	static const char mass_[] = "mass";
+	static const char colour_[] = "colour";
 	static const char position_x_[] = "position.x";
 	static const char position_y_[] = "position.y";
 	static const char position_z_[] = "position.z";
@@ -66,6 +67,7 @@ namespace strucures {
 				DECL_MEMBER(id_, CLS(fluid::Particle<T, N>), id),
 				DECL_MEMBER(type_, CLS(fluid::Particle<T, N>), type),
 				DECL_MEMBER(mass_, CLS(fluid::Particle<T, N>), mass),
+				DECL_MEMBER(colour_, CLS(fluid::Particle<T, N>), colour),
 				DECL_MEMBER(position_x_, CLS(fluid::Particle<T, N>), position.x),
 				DECL_MEMBER(position_y_, CLS(fluid::Particle<T, N>), position.y),
 				DECL_MEMBER(position_z_, CLS(fluid::Particle<T, N>), position.z),

@@ -30,10 +30,8 @@ namespace fluid {
 
 		Particle() : type(Type::Fluid) {}
 
-		explicit Particle(T t, Type type, N mass,
-		                  const tvec3<N> &position,
-		                  const tvec3<N> &velocity,
-		                  const uint32_t &colour) :
+		explicit Particle(T t, Type type, N mass, const uint32_t &colour, const tvec3<N> &position,
+		                  const tvec3<N> &velocity) :
 				id(t), type(type), mass(mass),
 				position(position),
 				velocity(velocity),
@@ -42,18 +40,18 @@ namespace fluid {
 		friend std::ostream &operator<<(std::ostream &os, const Particle &particle) {
 			os << "t: " << particle.id
 			   << ", mass: " << particle.mass
+			   << ", colour: 0x" << std::hex << particle.colour
 			   << ", pos: " << glm::to_string(particle.position)
-			   << ", vel: " << glm::to_string(particle.velocity)
-			   << ", colour: 0x" << std::hex << particle.colour;
+			   << ", vel: " << glm::to_string(particle.velocity);
 			return os;
 		}
 
 		bool operator==(const Particle &rhs) const {
 			return id == rhs.id &&
 			       mass == rhs.mass &&
+			       colour == rhs.colour &&
 			       position == rhs.position &&
-			       velocity == rhs.velocity &&
-			       colour == rhs.colour;
+			       velocity == rhs.velocity;
 		}
 
 		bool operator!=(const Particle &rhs) const {

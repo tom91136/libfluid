@@ -47,7 +47,7 @@ size_t makeCube(size_t offset, N spacing, const size_t count,
 			for (size_t z = 0; z < len; ++z) {
 				auto pos = (tvec3<N>(x, y, z) * spacing) + origin;
 //				uint32_t colour = i > half ? 0xFFFF0000 : 0xFF00FF00;
-				xs.emplace_back(offset++, fluid::Fluid, 1.0, pos, tvec3<num_t>(0), 0xFF2d1010);
+				xs.emplace_back(offset++, fluid::Fluid, 1.0, 0xFF2d1010, pos, tvec3<num_t>(0));
 				i++;
 			}
 		}
@@ -281,7 +281,7 @@ void run() {
 
 
 			hrc::time_point xferStart = hrc::now();
-//			strucures::writeParticles(particleSink, particlesBuffer);
+			strucures::writeParticles(particleSink, particlesBuffer);
 			strucures::writeTriangles(triangleSink, trianglesBuffer);
 			hrc::time_point xferEnd = hrc::now();
 

@@ -617,8 +617,8 @@ namespace ocl {
 				for (int x = 0; x < width; ++x) {
 					for (int z = 0; z < depth; ++z) {
 						auto pos = offset + tvec3<float>(x, 0, z) * spacing;
-						xs.emplace_back(source.tag, fluid::Type::Fluid, 1, pos,
-						                source.velocity, source.colour);
+						xs.emplace_back(source.tag, fluid::Type::Fluid, 1, source.colour,
+						                pos, source.velocity);
 					}
 				}
 			}
@@ -628,7 +628,8 @@ namespace ocl {
 
 				                        for (const fluid::Drain<float> &drain: config.drains) {
 					                        // FIXME needs to actually erase at surface, not shperically
-					                        if (glm::distance(drain.centre, x.position) < drain.width) {
+					                        if (glm::distance(drain.centre, x.position) <
+					                            drain.width) {
 						                        return true;
 					                        }
 				                        }
@@ -638,7 +639,7 @@ namespace ocl {
 			sourceDrain();
 
 
-			if(xs.empty()){
+			if (xs.empty()) {
 				std::cout << "Particles depleted" << std::endl;
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 				return {};
@@ -724,8 +725,6 @@ namespace ocl {
 			const tvec3<size_t> sampleSize = tvec3<size_t>(
 					glm::floor(tvec3<float>(extent) *
 					           mcConfig.sampleResolution)) + tvec3<size_t>(1);
-
-
 
 
 			ClSphAtoms atoms(advected.size());
