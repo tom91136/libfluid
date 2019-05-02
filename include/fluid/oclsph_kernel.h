@@ -299,7 +299,7 @@ kernel void sph_diffuse(
 		}
 	});
 	float4 out = mix(convert_float4(colour[a]), (mixture / N) * 1.33f, config->dt / 750.f);
-	diffused[a] = convert_uchar4(clamp(out, 255.f, 8.f));
+	diffused[a] = convert_uchar4(clamp(out, 8.f, 255.f));
 }
 
 kernel void sph_lambda(

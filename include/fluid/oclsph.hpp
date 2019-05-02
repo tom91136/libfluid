@@ -31,7 +31,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 namespace ocl {
 
@@ -841,9 +841,6 @@ namespace ocl {
 
 
 			total();
-#ifdef DEBUG
-			std::cout << watch << "\n";
-#endif
 
 
 //			std::vector<unsigned short> outIdx;

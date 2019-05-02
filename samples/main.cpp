@@ -119,7 +119,6 @@ void injectRigidBody(std::atomic_long &last, mio::mmap_source &rigidBodySource,
 		last = header.first.timestamp;
 		const std::vector<tvec3<num_t >> obstacles =
 				strucures::readRigidBody<num_t>(rigidBodySource, header).obstacles;
-
 		particles.erase(std::remove_if(particles.begin(), particles.end(),
 		                               [](const auto &x) {
 			                               return x.type == fluid::Type::Obstacle;
@@ -180,7 +179,7 @@ void run() {
 	std::cout << "OMP nCores: " << cores << std::endl;
 
 	const size_t pcount = 16 * 1000;
-	const size_t iter = 30000;
+	const size_t iter = std::numeric_limits<size_t>::max();
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
 
@@ -275,6 +274,7 @@ void run() {
 			                          &sceneSource, &particleSink, &triangleSink,
 			                          &particles, &triangles, &scene] {
 		std::cout << "Xfer thread init" << std::endl;
+		size_t frame = 0;
 		while (!terminate.load()) {
 
 			hrc::time_point waitStart = hrc::now();
@@ -317,18 +317,30 @@ void run() {
 			strucures::writeTriangles(triangleSink, trianglesBuffer);
 			hrc::time_point xferEnd = hrc::now();
 
-			auto solve = duration_cast<nanoseconds>(xferEnd - xferStart).count();
+			auto xfer = duration_cast<nanoseconds>(xferEnd - xferStart).count();
 			auto wait = duration_cast<nanoseconds>(waitEnd - waitStart).count();
 			auto sceneRead = duration_cast<nanoseconds>(sceneEnd - sceneStart).count();
-#ifdef DEBUG
-			std::cout << "\tXfer: " << (solve / 1000000.0) << "ms" <<
-			          " (waited " << (wait / 1000000.0) << "ms)" <<
-			          " Scene read " << (sceneRead / 1000000.0) << "ms (" << suspendTick
-			          << " ticks)" <<
-			          " nTriangle:" << trianglesBuffer.size() <<
-			          " nParticle:" << particlesBuffer.size()
-			          << std::endl;
+
+			const int nParticle = particlesBuffer.size();
+			const int nFluid = std::accumulate(particlesBuffer.begin(), particlesBuffer.end(), 0,
+			                                   [](int acc, const auto &x) {
+				                                   return acc + (x.type == fluid::Fluid ? 1 : 0);
+			                                   });
+			const int nObstacle = nParticle - nFluid;
+
+#ifndef DEBUG
+			if (frame % 100 == 0)
 #endif
+				std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
+				          " (waited " << (wait / 1000000.0) << "ms ~ "
+				          << (1000.0 / (wait / 1000000.0)) << "fps)" <<
+				          " Scene=" << (sceneRead / 1000000.0)
+				          << "ms (" << suspendTick << " ticks)" <<
+				          " nTriangle=" << trianglesBuffer.size() <<
+				          " nParticle=" << particlesBuffer.size()
+				          << "(F/O=" << nFluid << "/" << nObstacle << ")"
+				          << std::endl;
+			frame++;
 		}
 	});
 
@@ -399,13 +411,13 @@ void run() {
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
 		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 
-		#ifdef DEBUG
+#ifdef DEBUG
 		std::cout << "[" << j << "]" <<
-		          " Solver:" << (solve / 1000000.0) << "ms " <<
-		          " RB handle:" << (rb / 1000000.0) << "ms " <<
-		          " nTriangle:" << triangles.size() <<
-		          " nParticle:" << particles.size()
-		          << std::endl;
+				  " Solver:" << (solve / 1000000.0) << "ms " <<
+				  " RB handle:" << (rb / 1000000.0) << "ms " <<
+				  " nTriangle:" << triangles.size() <<
+				  " nParticle:" << particles.size()
+				  << std::endl;
 #endif
 
 	}
