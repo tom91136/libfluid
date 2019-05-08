@@ -31,11 +31,12 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-//#define DEBUG
+#define DEBUG
 
 namespace ocl {
 
 	using glm::tvec3;
+	using glm::tvec4;
 	using clutil::TypedBuffer;
 	using clutil::RW;
 	using clutil::RO;
@@ -316,6 +317,13 @@ namespace ocl {
 			return advected;
 		}
 
+		size_t zCurveGridIndexAtCoordAt(float x, float y, float z) const {
+			return zCurveGridIndexAtCoord(
+					static_cast<size_t>(  x / h),
+					static_cast<size_t>(  y / h),
+					static_cast<size_t>(  z / h));
+		}
+
 		const std::tuple<ClSphConfig, tvec3<float>, tvec3<size_t> > computeBoundAndZindex(
 				const fluid::Config<float> &config,
 				std::vector<PartiallyAdvected> &advection) const {
@@ -340,10 +348,17 @@ namespace ocl {
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
 				const float3 pStar = advection[i].pStar;
-				advection[i].zIndex = zCurveGridIndexAtCoord(
-						static_cast<size_t>((pStar.x - minExtent.x) / h),
-						static_cast<size_t>((pStar.y - minExtent.y) / h),
-						static_cast<size_t>((pStar.z - minExtent.z) / h));
+
+				advection[i].zIndex = zCurveGridIndexAtCoordAt(
+						pStar.x - minExtent.x,
+						pStar.y - minExtent.y,
+						pStar.z - minExtent.z
+				);
+
+//				advection[i].zIndex = zCurveGridIndexAtCoord(
+//						static_cast<size_t>((pStar.x - minExtent.x) / h),
+//						static_cast<size_t>((pStar.y - minExtent.y) / h),
+//						static_cast<size_t>((pStar.z - minExtent.z) / h));
 			}
 
 			ClSphConfig clConfig;
@@ -612,9 +627,10 @@ namespace ocl {
 
 
 	public:
-		std::vector<surface::MeshTriangle<float>> advance(const fluid::Config<float> &config,
-		                                                  std::vector<fluid::Particle<size_t, float>> &xs,
-		                                                  const std::vector<fluid::MeshCollider<float>> &colliders) override {
+		fluid::Result<float> advance(const fluid::Config<float> &config,
+		                             std::vector<fluid::Particle<size_t, float>> &xs,
+		                             const std::vector<tvec3<float>> &queryPoints,
+		                             const std::vector<fluid::MeshCollider<float>> &colliders) override {
 
 
 			clutil::Stopwatch watch = clutil::Stopwatch("CPU advance");
@@ -647,7 +663,7 @@ namespace ocl {
 			xs.erase(std::remove_if(xs.begin(), xs.end(),
 			                        [&config](const fluid::Particle<size_t, float> &x) {
 
-										if(x.type == fluid::Type::Obstacle) return false;
+				                        if (x.type == fluid::Type::Obstacle) return false;
 
 				                        for (const fluid::Drain<float> &drain: config.drains) {
 					                        // FIXME needs to actually erase at surface, not shperically
@@ -665,7 +681,7 @@ namespace ocl {
 			if (xs.empty()) {
 				std::cout << "Particles depleted" << std::endl;
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
-				return {};
+				return fluid::Result<float>({}, {});
 			}
 
 			auto advect = watch.start("CPU advect+copy");
@@ -720,6 +736,23 @@ namespace ocl {
 
 			gridtable();
 
+
+			auto query = watch.start("CPU query(" + std::to_string(queryPoints.size()) + ")");
+
+			std::vector<fluid::Query<float>> queries;
+			for (const tvec3<float> &p : queryPoints) {
+				size_t zIdx = zCurveGridIndexAtCoordAt(p.x, p.y, p.z);
+				if (zIdx < gridTableN && zIdx + 1 < gridTableN) {
+					int N = 0;
+					auto avg = tvec4<float>(0.f);
+					for (size_t a = hostGridTable[zIdx]; a < hostGridTable[zIdx + 1]; a++) {
+						N++;
+						avg += clutil::unpackARGB<float>(advected[a].particle.colour);
+					}
+					queries.emplace_back(p, N, clutil::packARGB(avg / N));
+				}
+			}
+			query();
 
 			auto collider_concat = watch.start("CPU collider++");
 
@@ -861,9 +894,9 @@ namespace ocl {
 			total();
 
 #ifdef DEBUG
-			std::cout << "Advance complete" << std::endl;
+			std::cout << watch << std::endl;
 #endif
-			return triangles;
+			return fluid::Result<float>(triangles, {});
 		}
 
 

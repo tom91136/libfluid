@@ -146,6 +146,7 @@ void run() {
 
 
 	auto vec3Type = writeMetaPacked<decltype(strucures::vec3Def<num_t>())>();
+	auto queryType = writeMetaPacked<decltype(strucures::queryDef<num_t>())>();
 
 	auto particleType = writeMetaPacked<decltype(strucures::particleDef<size_t, num_t>())>();
 	auto triangleType = writeMetaPacked<decltype(strucures::triangleDef<num_t>())>();
@@ -161,6 +162,7 @@ void run() {
 			                       {"sceneMeta",    sceneMetaType.second},
 
 			                       {"vec3",         vec3Type.second},
+			                       {"query",        queryType.second},
 
 			                       {"particle",     particleType.second},
 			                       {"triangle",     triangleType.second},
@@ -216,6 +218,10 @@ void run() {
 	auto triangleSink = createSink("triangles.mmf",
 	                               500000 * 10 * triangleType.first + headerType.first);
 
+	auto querySink = createSink("query.mmf",
+	                            4096 * queryType.first + headerType.first);
+
+
 	std::cout << "Go!" << std::endl;
 
 
@@ -267,12 +273,13 @@ void run() {
 	std::atomic_bool terminate(false);
 
 	std::vector<fluid::Particle<size_t, num_t >> particles(prepared);
-	std::vector<geometry::MeshTriangle<num_t>> triangles;
+	fluid::Result<float> result;
+//	std::vector<geometry::MeshTriangle<num_t>> triangles;
 
 
 	std::thread mmfXferThread([&flush, &m, &ready, &copied, &terminate,
-			                          &sceneSource, &particleSink, &triangleSink,
-			                          &particles, &triangles, &scene] {
+			                          &sceneSource, &querySink, &particleSink, &triangleSink,
+			                          &particles, &result, &scene] {
 		std::cout << "Xfer thread init" << std::endl;
 		size_t frame = 0;
 		while (!terminate.load()) {
@@ -281,8 +288,9 @@ void run() {
 			std::unique_lock<std::mutex> lock(m);
 			flush.wait(lock, [&ready] { return ready.load(); });
 			ready = false;
-			const std::vector<fluid::Particle<size_t, num_t >> particlesBuffer = particles;
-			const std::vector<geometry::MeshTriangle<num_t>> trianglesBuffer = triangles;
+			const auto particlesBuffer = particles;
+			const auto trianglesBuffer = result.triangles;
+			const auto queriesBuffer = result.queries;
 
 			copied = true;
 			lock.unlock();
@@ -313,8 +321,9 @@ void run() {
 
 
 			hrc::time_point xferStart = hrc::now();
-			strucures::writeParticles(particleSink, particlesBuffer);
+//			strucures::writeParticles(particleSink, particlesBuffer);
 			strucures::writeTriangles(triangleSink, trianglesBuffer);
+			strucures::writeQueries(querySink, queriesBuffer);
 			hrc::time_point xferEnd = hrc::now();
 
 			auto xfer = duration_cast<nanoseconds>(xferEnd - xferStart).count();
@@ -329,7 +338,7 @@ void run() {
 			const int nObstacle = nParticle - nFluid;
 
 #ifndef DEBUG
-			if (frame % 100 == 0)
+			if (frame % 60 == 0)
 #endif
 				std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
 				          " (waited " << (wait / 1000000.0) << "ms ~ "
@@ -398,7 +407,7 @@ void run() {
 		};
 
 		hrc::time_point solveStart = hrc::now();
-		triangles = solver->advance(config, particles, colliders);
+		result = solver->advance(config, particles, {}, colliders);
 		hrc::time_point solveEnd = hrc::now();
 		ready = true;
 		flush.notify_one();
@@ -408,14 +417,14 @@ void run() {
 		flush.wait(lock, [&copied] { return copied.load(); });
 		copied = false;
 
-		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
-		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 
 #ifdef DEBUG
+		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
+		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 		std::cout << "[" << j << "]" <<
 				  " Solver:" << (solve / 1000000.0) << "ms " <<
 				  " RB handle:" << (rb / 1000000.0) << "ms " <<
-				  " nTriangle:" << triangles.size() <<
+				  " nTriangle:" << result.triangles.size() <<
 				  " nParticle:" << particles.size()
 				  << std::endl;
 #endif

@@ -19,6 +19,17 @@ namespace fluid {
 		Fluid = 0, Obstacle = 1
 	};
 
+
+	template<typename N>
+	struct Query {
+		tvec3<N> point;
+		size_t neighbours;
+		uint32_t averageColour;
+		Query(tvec3<N> point, size_t neighbours, uint32_t averageColour) :
+				point(point), neighbours(neighbours), averageColour(averageColour) {}
+	};
+
+
 	template<typename T, typename N>
 	struct Particle {
 		T id;
@@ -175,15 +186,26 @@ namespace fluid {
 		}
 	};
 
+
+	template<typename N>
+	struct Result {
+		std::vector<geometry::MeshTriangle<N>> triangles{};
+		std::vector<Query<N>> queries{};
+		Result() = default;
+		Result(const std::vector<geometry::MeshTriangle<N>> &triangles,
+		       const std::vector<Query<N>> &queries) : triangles(triangles), queries(queries) {}
+	};
+
 	template<typename T, typename N>
 	class SphSolver {
 	public :
 
 		virtual ~SphSolver() = default;
 
-		virtual std::vector<geometry::MeshTriangle<N>> advance(
+		virtual Result<N> advance(
 				const Config<N> &config,
 				std::vector<Particle<T, N>> &xs,
+				const std::vector<tvec3<N>> &queries,
 				const std::vector<MeshCollider<N>> &colliders) = 0;
 	};
 

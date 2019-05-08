@@ -190,6 +190,23 @@ namespace strucures {
 		);
 	}
 
+	static const char query_x_[] = "query.x";
+	static const char query_y_[] = "query.y";
+	static const char query_z_[] = "query.z";
+	static const char neighbours_[] = "neighbours";
+	static const char avgcolour_[] = "avgcolour";
+
+	template<typename N>
+	static inline auto queryDef() {
+		return mmf::makeDef(
+				DECL_MEMBER(query_x_, CLS(fluid::Query<N>), point.x),
+				DECL_MEMBER(query_y_, CLS(fluid::Query<N>), point.y),
+				DECL_MEMBER(query_z_, CLS(fluid::Query<N>), point.z),
+				DECL_MEMBER(neighbours_, CLS(fluid::Query<N>), neighbours),
+				DECL_MEMBER(avgcolour_, CLS(fluid::Query<N>), averageColour)
+		);
+	}
+
 
 	template<typename N>
 	static inline auto meshTriangleDef() {
@@ -344,6 +361,18 @@ namespace strucures {
 		);
 	}
 
+	template<typename N>
+	void writeQueries(mio::mmap_sink &sink, const std::vector<fluid::Query<N>> &xs) {
+		Header header = Header(xs.size());
+		size_t offset = mmf::writer::writePacked(sink, header, 0, headerDef());
+		for (const fluid::Query<N> &q :  xs) {
+			offset = mmf::writer::writePacked(sink, q, offset, queryDef<N>());
+		}
+		header.written = xs.size();
+		mmf::writer::writePacked(sink, header, 0, headerDef());
+	}
+
+
 	template<typename T, typename N>
 	void writeParticles(mio::mmap_sink &sink, const std::vector<fluid::Particle<T, N>> &xs) {
 
@@ -366,6 +395,8 @@ namespace strucures {
 		header.written = xs.size();
 		mmf::writer::writePacked(sink, header, 0, headerDef());
 	}
+
+
 
 
 	template<typename N>

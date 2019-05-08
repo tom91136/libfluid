@@ -209,11 +209,28 @@ namespace clutil {
 		       ((argb.s3 & 0xFF) << 0);
 	}
 
+	template<typename N>
+	inline uint32_t packARGB(glm::tvec4<N> argb) {
+		return ((static_cast<uint8_t >(argb.x) & 0xFF) << 24) |
+		       ((static_cast<uint8_t >(argb.y) & 0xFF) << 16) |
+		       ((static_cast<uint8_t >(argb.z) & 0xFF) << 8) |
+		       ((static_cast<uint8_t >(argb.w) & 0xFF) << 0);
+	}
+
+
 	inline cl_uchar4 unpackARGB(uint32_t argb) {
 		return uchar4((argb >> 24) & 0xFF,
 		              (argb >> 16) & 0xFF,
 		              (argb >> 8) & 0xFF,
 		              (argb >> 0) & 0xFF);
+	}
+
+	template<typename N>
+	inline glm::tvec4<N> unpackARGB(uint32_t argb) {
+		return glm::tvec4<N>((argb >> 24) & 0xFF,
+		                     (argb >> 16) & 0xFF,
+		                     (argb >> 8) & 0xFF,
+		                     (argb >> 0) & 0xFF);
 	}
 
 
