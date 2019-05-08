@@ -31,7 +31,7 @@
 #include "mc.h"
 #include "ska_sort.hpp"
 
-#define DEBUG
+//#define DEBUG
 
 namespace ocl {
 
@@ -629,7 +629,6 @@ namespace ocl {
 	public:
 		fluid::Result<float> advance(const fluid::Config<float> &config,
 		                             std::vector<fluid::Particle<size_t, float>> &xs,
-		                             const std::vector<tvec3<float>> &queryPoints,
 		                             const std::vector<fluid::MeshCollider<float>> &colliders) override {
 
 
@@ -737,19 +736,23 @@ namespace ocl {
 			gridtable();
 
 
-			auto query = watch.start("CPU query(" + std::to_string(queryPoints.size()) + ")");
+			auto query = watch.start("CPU query(" + std::to_string(config.queries.size()) + ")");
 
 			std::vector<fluid::Query<float>> queries;
-			for (const tvec3<float> &p : queryPoints) {
-				size_t zIdx = zCurveGridIndexAtCoordAt(p.x, p.y, p.z);
+			for (const tvec3<float> &p : config.queries) {
+
+				auto scaled = (p / config.scale) - minExtent;
+
+				size_t zIdx = zCurveGridIndexAtCoordAt(scaled.x, scaled.y, scaled.z);
 				if (zIdx < gridTableN && zIdx + 1 < gridTableN) {
 					int N = 0;
 					auto avg = tvec4<float>(0.f);
 					for (size_t a = hostGridTable[zIdx]; a < hostGridTable[zIdx + 1]; a++) {
+						if(advected[a].particle.type != fluid::Fluid) continue;
 						N++;
 						avg += clutil::unpackARGB<float>(advected[a].particle.colour);
 					}
-					queries.emplace_back(p, N, clutil::packARGB(avg / N));
+					if(N != 0) queries.emplace_back(p, N, clutil::packARGB(avg / N));
 				}
 			}
 			query();
@@ -896,7 +899,7 @@ namespace ocl {
 #ifdef DEBUG
 			std::cout << watch << std::endl;
 #endif
-			return fluid::Result<float>(triangles, {});
+			return fluid::Result<float>(triangles, queries);
 		}
 
 

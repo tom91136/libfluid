@@ -266,7 +266,7 @@ void run() {
 					solverIter, 1.5, scaling, 1.f, 9.8f,
 					tvec3<num_t>(0, 0, 0),
 					tvec3<num_t>(1000, 1000, 1000)),
-			{}, {}, {});
+			{}, {}, {}, {});
 
 	std::atomic_bool ready(false);
 	std::atomic_bool copied(false);
@@ -376,6 +376,7 @@ void run() {
 				std::vector<fluid::Well<float>>(scene.wells),
 				std::vector<fluid::Source<float>>(scene.sources),
 				std::vector<fluid::Drain<float>>(scene.drains),
+				std::vector<tvec3<float>>(scene.queries),
 				scene.meta.minBound, scene.meta.maxBound
 		);
 
@@ -407,7 +408,7 @@ void run() {
 		};
 
 		hrc::time_point solveStart = hrc::now();
-		result = solver->advance(config, particles, {}, colliders);
+		result = solver->advance(config, particles, colliders);
 		hrc::time_point solveEnd = hrc::now();
 		ready = true;
 		flush.notify_one();

@@ -162,6 +162,7 @@ namespace fluid {
 		const std::vector<fluid::Well<N>> wells;
 		const std::vector<fluid::Source<N>> sources;
 		const std::vector<fluid::Drain<N>> drains;
+		const std::vector<glm::tvec3<N>> queries;
 
 		const tvec3<N> minBound, maxBound;
 
@@ -170,11 +171,12 @@ namespace fluid {
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
 		                const std::vector<fluid::Drain<N>> &drains,
+						const std::vector<glm::tvec3<N>> &queries,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
 				  resolution(resolution), isolevel(isolevel), iteration(iteration),
 				  constantForce(constantForce),
-				  wells(wells), sources(sources), drains(drains),
+				  wells(wells), sources(sources), drains(drains), queries(queries),
 				  minBound(min), maxBound(max) {}
 		friend std::ostream &operator<<(std::ostream &os, const Config &config) {
 			os << "dt: " << config.dt << " scale: " << config.scale << " iteration: "
@@ -205,7 +207,6 @@ namespace fluid {
 		virtual Result<N> advance(
 				const Config<N> &config,
 				std::vector<Particle<T, N>> &xs,
-				const std::vector<tvec3<N>> &queries,
 				const std::vector<MeshCollider<N>> &colliders) = 0;
 	};
 

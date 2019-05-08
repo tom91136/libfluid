@@ -327,17 +327,22 @@ namespace strucures {
 		std::vector<fluid::Well<N>> wells;
 		std::vector<fluid::Source<N>> sources;
 		std::vector<fluid::Drain<N>> drains;
+		std::vector<glm::tvec3<N>> queries;
+
 		explicit Scene(const SceneMeta<N> &meta,
 		               const std::vector<fluid::Well<N>> &wells,
 		               const std::vector<fluid::Source<N>> &sources,
-		               const std::vector<fluid::Drain<N>> &drains) :
-				meta(meta), wells(wells), sources(sources), drains(drains) {}
+		               const std::vector<fluid::Drain<N>> &drains,
+					   std::vector<glm::tvec3<N>> queries
+		               ) :
+				meta(meta), wells(wells), sources(sources), drains(drains) , queries(queries){}
 		friend std::ostream &operator<<(std::ostream &os, const Scene &scene) {
 			return os << "Scene{"
 			          << "\n" << scene.meta
 			          << "\n wells  : " << scene.wells.size()
 			          << "\n sources: " << scene.sources.size()
-			          << "\n drains: " << scene.drains.size()
+			          << "\n drains : " << scene.drains.size()
+			          << "\n queries: " << scene.queries.size()
 			          << "\n}";
 		}
 	};
@@ -430,7 +435,14 @@ namespace strucures {
 			offset = mmf::reader::readPacked(source, drains[i], offset, drainDef<N>());
 		}
 
-		return Scene<N>(meta, wells, sources, drains);
+		offset = mmf::reader::readPacked(source, header, offset, headerDef());
+		std::vector<glm::tvec3<N>> queries(header.entries);
+		for (size_t i = 0; i < header.entries; ++i) {
+			offset = mmf::reader::readPacked(source, queries[i], offset, vec3Def<N>());
+		}
+
+
+		return Scene<N>(meta, wells, sources, drains, queries);
 	}
 
 
