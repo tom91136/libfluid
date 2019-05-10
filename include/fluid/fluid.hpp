@@ -19,13 +19,20 @@ namespace fluid {
 		Fluid = 0, Obstacle = 1
 	};
 
-
 	template<typename N>
 	struct Query {
+		size_t id;
+		tvec3<N> point;
+	};
+
+
+	template<typename N>
+	struct QueryResult {
+		size_t id;
 		tvec3<N> point;
 		size_t neighbours;
 		uint32_t averageColour;
-		Query(tvec3<N> point, size_t neighbours, uint32_t averageColour) :
+		QueryResult(size_t id, tvec3<N> point, size_t neighbours, uint32_t averageColour) :
 				point(point), neighbours(neighbours), averageColour(averageColour) {}
 	};
 
@@ -162,7 +169,7 @@ namespace fluid {
 		const std::vector<fluid::Well<N>> wells;
 		const std::vector<fluid::Source<N>> sources;
 		const std::vector<fluid::Drain<N>> drains;
-		const std::vector<glm::tvec3<N>> queries;
+		const std::vector<fluid::Query<N>> queries;
 
 		const tvec3<N> minBound, maxBound;
 
@@ -171,7 +178,7 @@ namespace fluid {
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
 		                const std::vector<fluid::Drain<N>> &drains,
-						const std::vector<glm::tvec3<N>> &queries,
+						const std::vector<fluid::Query<N>> &queries,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
 				  resolution(resolution), isolevel(isolevel), iteration(iteration),
@@ -192,10 +199,10 @@ namespace fluid {
 	template<typename N>
 	struct Result {
 		std::vector<geometry::MeshTriangle<N>> triangles{};
-		std::vector<Query<N>> queries{};
+		std::vector<QueryResult<N>> queries{};
 		Result() = default;
 		Result(const std::vector<geometry::MeshTriangle<N>> &triangles,
-		       const std::vector<Query<N>> &queries) : triangles(triangles), queries(queries) {}
+		       const std::vector<QueryResult<N>> &queries) : triangles(triangles), queries(queries) {}
 	};
 
 	template<typename T, typename N>

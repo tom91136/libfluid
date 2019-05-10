@@ -190,20 +190,34 @@ namespace strucures {
 		);
 	}
 
+
+	static const char query_id_[] = "query.id";
 	static const char query_x_[] = "query.x";
 	static const char query_y_[] = "query.y";
 	static const char query_z_[] = "query.z";
 	static const char neighbours_[] = "neighbours";
 	static const char avgcolour_[] = "avgcolour";
 
+
 	template<typename N>
 	static inline auto queryDef() {
 		return mmf::makeDef(
+				DECL_MEMBER(query_id_, CLS(fluid::Query<N>), id),
 				DECL_MEMBER(query_x_, CLS(fluid::Query<N>), point.x),
 				DECL_MEMBER(query_y_, CLS(fluid::Query<N>), point.y),
-				DECL_MEMBER(query_z_, CLS(fluid::Query<N>), point.z),
-				DECL_MEMBER(neighbours_, CLS(fluid::Query<N>), neighbours),
-				DECL_MEMBER(avgcolour_, CLS(fluid::Query<N>), averageColour)
+				DECL_MEMBER(query_z_, CLS(fluid::Query<N>), point.z)
+		);
+	}
+
+	template<typename N>
+	static inline auto queryResultDef() {
+		return mmf::makeDef(
+				DECL_MEMBER(query_id_, CLS(fluid::QueryResult<N>), id),
+				DECL_MEMBER(query_x_, CLS(fluid::QueryResult<N>), point.x),
+				DECL_MEMBER(query_y_, CLS(fluid::QueryResult<N>), point.y),
+				DECL_MEMBER(query_z_, CLS(fluid::QueryResult<N>), point.z),
+				DECL_MEMBER(neighbours_, CLS(fluid::QueryResult<N>), neighbours),
+				DECL_MEMBER(avgcolour_, CLS(fluid::QueryResult<N>), averageColour)
 		);
 	}
 
@@ -327,15 +341,15 @@ namespace strucures {
 		std::vector<fluid::Well<N>> wells;
 		std::vector<fluid::Source<N>> sources;
 		std::vector<fluid::Drain<N>> drains;
-		std::vector<glm::tvec3<N>> queries;
+		std::vector<fluid::Query<N>> queries;
 
 		explicit Scene(const SceneMeta<N> &meta,
 		               const std::vector<fluid::Well<N>> &wells,
 		               const std::vector<fluid::Source<N>> &sources,
 		               const std::vector<fluid::Drain<N>> &drains,
-					   std::vector<glm::tvec3<N>> queries
-		               ) :
-				meta(meta), wells(wells), sources(sources), drains(drains) , queries(queries){}
+		               std::vector<fluid::Query<N>> queries
+		) :
+				meta(meta), wells(wells), sources(sources), drains(drains), queries(queries) {}
 		friend std::ostream &operator<<(std::ostream &os, const Scene &scene) {
 			return os << "Scene{"
 			          << "\n" << scene.meta
@@ -367,11 +381,11 @@ namespace strucures {
 	}
 
 	template<typename N>
-	void writeQueries(mio::mmap_sink &sink, const std::vector<fluid::Query<N>> &xs) {
+	void writeQueries(mio::mmap_sink &sink, const std::vector<fluid::QueryResult<N>> &xs) {
 		Header header = Header(xs.size());
 		size_t offset = mmf::writer::writePacked(sink, header, 0, headerDef());
-		for (const fluid::Query<N> &q :  xs) {
-			offset = mmf::writer::writePacked(sink, q, offset, queryDef<N>());
+		for (const fluid::QueryResult<N> &q :  xs) {
+			offset = mmf::writer::writePacked(sink, q, offset, queryResultDef<N>());
 		}
 		header.written = xs.size();
 		mmf::writer::writePacked(sink, header, 0, headerDef());
@@ -400,8 +414,6 @@ namespace strucures {
 		header.written = xs.size();
 		mmf::writer::writePacked(sink, header, 0, headerDef());
 	}
-
-
 
 
 	template<typename N>
@@ -436,9 +448,9 @@ namespace strucures {
 		}
 
 		offset = mmf::reader::readPacked(source, header, offset, headerDef());
-		std::vector<glm::tvec3<N>> queries(header.entries);
+		std::vector<fluid::Query<N>> queries(header.entries);
 		for (size_t i = 0; i < header.entries; ++i) {
-			offset = mmf::reader::readPacked(source, queries[i], offset, vec3Def<N>());
+			offset = mmf::reader::readPacked(source, queries[i], offset, queryDef<N>());
 		}
 
 

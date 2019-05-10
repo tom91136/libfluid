@@ -146,7 +146,9 @@ void run() {
 
 
 	auto vec3Type = writeMetaPacked<decltype(strucures::vec3Def<num_t>())>();
+
 	auto queryType = writeMetaPacked<decltype(strucures::queryDef<num_t>())>();
+	auto queryResultType = writeMetaPacked<decltype(strucures::queryResultDef<num_t>())>();
 
 	auto particleType = writeMetaPacked<decltype(strucures::particleDef<size_t, num_t>())>();
 	auto triangleType = writeMetaPacked<decltype(strucures::triangleDef<num_t>())>();
@@ -163,6 +165,7 @@ void run() {
 
 			                       {"vec3",         vec3Type.second},
 			                       {"query",        queryType.second},
+			                       {"queryResult",  queryResultType.second},
 
 			                       {"particle",     particleType.second},
 			                       {"triangle",     triangleType.second},
@@ -180,7 +183,7 @@ void run() {
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = 16 * 1000;
+	const size_t pcount = 8 * 1000;
 	const size_t iter = std::numeric_limits<size_t>::max();
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
@@ -219,7 +222,7 @@ void run() {
 	                               500000 * 10 * triangleType.first + headerType.first);
 
 	auto querySink = createSink("query.mmf",
-	                            4096 * queryType.first + headerType.first);
+	                            4096 * queryResultType.first + headerType.first);
 
 
 	std::cout << "Go!" << std::endl;
@@ -376,7 +379,7 @@ void run() {
 				std::vector<fluid::Well<float>>(scene.wells),
 				std::vector<fluid::Source<float>>(scene.sources),
 				std::vector<fluid::Drain<float>>(scene.drains),
-				std::vector<tvec3<float>>(scene.queries),
+				std::vector<fluid::Query<float>>(scene.queries),
 				scene.meta.minBound, scene.meta.maxBound
 		);
 

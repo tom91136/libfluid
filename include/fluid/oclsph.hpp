@@ -336,6 +336,7 @@ namespace ocl {
 #pragma omp parallel for reduction(glmMin:minExtent) reduction(glmMax:maxExtent)
 #endif
 			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
+//				if(advection[i].particle.type != fluid::Fluid) continue;
 				const float3 pStar = advection[i].pStar;
 				minExtent = glm::min(clutil::clToVec3<float>(pStar), minExtent);
 				maxExtent = glm::max(clutil::clToVec3<float>(pStar), maxExtent);
@@ -626,6 +627,18 @@ namespace ocl {
 		}
 
 
+		const std::array<tvec3<float>, 27> NEIGHBOUR_OFFSETS = {
+				tvec3<float>(-h, -h, -h), tvec3<float>(+0, -h, -h), tvec3<float>(+h, -h, -h),
+				tvec3<float>(-h, +0, -h), tvec3<float>(+0, +0, -h), tvec3<float>(+h, +0, -h),
+				tvec3<float>(-h, +h, -h), tvec3<float>(+0, +h, -h), tvec3<float>(+h, +h, -h),
+				tvec3<float>(-h, -h, +0), tvec3<float>(+0, -h, +0), tvec3<float>(+h, -h, +0),
+				tvec3<float>(-h, +0, +0), tvec3<float>(+0, +0, +0), tvec3<float>(+h, +0, +0),
+				tvec3<float>(-h, +h, +0), tvec3<float>(+0, +h, +0), tvec3<float>(+h, +h, +0),
+				tvec3<float>(-h, -h, +h), tvec3<float>(+0, -h, +h), tvec3<float>(+h, -h, +h),
+				tvec3<float>(-h, +0, +h), tvec3<float>(+0, +0, +h), tvec3<float>(+h, +0, +h),
+				tvec3<float>(-h, +h, +h), tvec3<float>(+0, +h, +h), tvec3<float>(+h, +h, +h)
+		};
+
 	public:
 		fluid::Result<float> advance(const fluid::Config<float> &config,
 		                             std::vector<fluid::Particle<size_t, float>> &xs,
@@ -738,22 +751,26 @@ namespace ocl {
 
 			auto query = watch.start("CPU query(" + std::to_string(config.queries.size()) + ")");
 
-			std::vector<fluid::Query<float>> queries;
-			for (const tvec3<float> &p : config.queries) {
 
-				auto scaled = (p / config.scale) - minExtent;
 
-				size_t zIdx = zCurveGridIndexAtCoordAt(scaled.x, scaled.y, scaled.z);
-				if (zIdx < gridTableN && zIdx + 1 < gridTableN) {
-					int N = 0;
-					auto avg = tvec4<float>(0.f);
-					for (size_t a = hostGridTable[zIdx]; a < hostGridTable[zIdx + 1]; a++) {
-						if(advected[a].particle.type != fluid::Fluid) continue;
-						N++;
-						avg += clutil::unpackARGB<float>(advected[a].particle.colour);
+
+			std::vector<fluid::QueryResult<float>> queries;
+			for (const fluid::Query<float> &q : config.queries) {
+				auto scaled = (q.point / config.scale) - minExtent;
+				int N = 0;
+				auto avg = tvec4<float>(0.f);
+				for( tvec3 <float> offset : NEIGHBOUR_OFFSETS){
+					auto r = offset + scaled;
+					size_t zIdx = zCurveGridIndexAtCoordAt(r.x, r.y, r.z);
+					if (zIdx < gridTableN && zIdx + 1 < gridTableN) {
+						for (size_t a = hostGridTable[zIdx]; a < hostGridTable[zIdx + 1]; a++) {
+							if(advected[a].particle.type != fluid::Fluid) continue;
+							N++;
+							avg += clutil::unpackARGB<float>(advected[a].particle.colour);
+						}
 					}
-					if(N != 0) queries.emplace_back(p, N, clutil::packARGB(avg / N));
 				}
+				if(N != 0) queries.emplace_back(q.id, q.point, N, clutil::packARGB(avg / N));
 			}
 			query();
 
