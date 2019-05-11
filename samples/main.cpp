@@ -322,6 +322,8 @@ void run() {
 //				for (const auto &x : sceneBuffer.queries) std::cout << x << "\n";
 				while (sceneBuffer.meta.suspend) {
 					suspendTick++;
+					if (suspendTick % 100 == 0)
+						std::cout << "Suspended, tick=" << suspendTick << std::endl;
 					std::this_thread::sleep_for(std::chrono::microseconds(1));
 					strucures::readSceneMeta<num_t>(sceneSource, sceneBuffer.meta);
 				}
@@ -352,15 +354,15 @@ void run() {
 #ifndef DEBUG
 			if (frame % 60 == 0)
 #endif
-				std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
-				          " (waited " << (wait / 1000000.0) << "ms ~ "
-				          << (1000.0 / (wait / 1000000.0)) << "fps)" <<
-				          " Scene=" << (sceneRead / 1000000.0)
-				          << "ms (" << suspendTick << " ticks)" <<
-				          " nTriangle=" << trianglesBuffer.size() <<
-				          " nParticle=" << particlesBuffer.size()
-				          << "(F/O=" << nFluid << "/" << nObstacle << ")"
-				          << std::endl;
+			std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
+			          " (waited " << (wait / 1000000.0) << "ms ~ "
+			          << (1000.0 / (wait / 1000000.0)) << "fps)" <<
+			          " Scene=" << (sceneRead / 1000000.0)
+			          << "ms (" << suspendTick << " ticks)" <<
+			          " nTriangle=" << trianglesBuffer.size() <<
+			          " nParticle=" << particlesBuffer.size()
+			          << "(F/O=" << nFluid << "/" << nObstacle << ")"
+			          << std::endl;
 			frame++;
 		}
 	});
@@ -432,7 +434,7 @@ void run() {
 		copied = false;
 
 
-//#ifdef DEBUG
+#ifdef DEBUG
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
 		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 		std::cout << "[" << j << "]" <<
@@ -441,7 +443,7 @@ void run() {
 		          " nTriangle:" << result.triangles.size() <<
 		          " nParticle:" << particles.size()
 		          << std::endl;
-//#endif
+#endif
 
 	}
 
