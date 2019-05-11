@@ -231,13 +231,13 @@ namespace ocl {
 			}
 
 #ifdef DEBUG
-			std::cout << "Expected(" << _SIZES_LENGTH << ")="
-			          << clutil::mkString<size_t>(expected,
-			                                      [](auto x) { return std::to_string(x); })
-			          << std::endl;
-			std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
-			          << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
-			          << std::endl;
+				std::cout << "Expected(" << _SIZES_LENGTH << ")="
+						  << clutil::mkString<size_t>(expected,
+													  [](auto x) { return std::to_string(x); })
+						  << std::endl;
+				std::cout << "Actual(" << _SIZES_LENGTH << ")  ="
+						  << clutil::mkString<size_t>(actual, [](auto x) { return std::to_string(x); })
+						  << std::endl;
 #endif
 			assert(expected == actual);
 		}
@@ -291,6 +291,9 @@ namespace ocl {
 			std::vector<PartiallyAdvected> advected(xs.size());
 
 
+			const float threshold = 200.f;
+			const float thresholdSquared = threshold * threshold;
+
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(xs.size()); ++i) {
 				fluid::Particle<size_t, float> &p = xs[i];
@@ -299,14 +302,22 @@ namespace ocl {
 
 				if (p.type == fluid::Type::Obstacle) continue;
 
+
 				tvec3<float> combinedForce = p.mass * config.constantForce;
 				for (const fluid::Well<float> &well : config.wells) {
 					const float distSquared = glm::distance2(well.centre, p.position);
-					const tvec3<float> rHat = (well.centre + p.position) / std::sqrt(distSquared);
-					const tvec3<float> forceWell = glm::clamp(
-							(rHat * (well.force * p.mass)) / distSquared,
-							-10.f, 10.f);
-					combinedForce += forceWell;
+
+//					if(i % 1000 == 0)
+//					std::cout << "!!!!! " << distSquared << std::endl;
+
+//					if (distSquared < (200.f*200.f)) {
+
+						const tvec3<float> rHat = glm::normalize(-well.centre - p.position);
+						const tvec3<float> forceWell = glm::clamp(
+								(rHat * (well.force * p.mass)) / distSquared,
+								-10.f, 10.f);
+						combinedForce += forceWell;
+//					}
 				}
 
 				p.velocity = combinedForce * config.dt + p.velocity;
@@ -409,9 +420,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "[<>]Samples:" << glm::to_string(marchRange)
-			          << " MarchVol=" << marchVolume
-			          << " WG:" << kernelWorkGroupSize
-			          << " nWG:" << numWorkGroup << "\n";
+					  << " MarchVol=" << marchVolume
+					  << " WG:" << kernelWorkGroupSize
+					  << " nWG:" << numWorkGroup << "\n";
 
 #endif
 			auto create_field = watch.start("\t[GPU] mc-field");
@@ -627,16 +638,20 @@ namespace ocl {
 		}
 
 
-		const std::array<tvec3<float>, 27> NEIGHBOUR_OFFSETS = {
-				tvec3<float>(-h, -h, -h), tvec3<float>(+0, -h, -h), tvec3<float>(+h, -h, -h),
-				tvec3<float>(-h, +0, -h), tvec3<float>(+0, +0, -h), tvec3<float>(+h, +0, -h),
-				tvec3<float>(-h, +h, -h), tvec3<float>(+0, +h, -h), tvec3<float>(+h, +h, -h),
-				tvec3<float>(-h, -h, +0), tvec3<float>(+0, -h, +0), tvec3<float>(+h, -h, +0),
-				tvec3<float>(-h, +0, +0), tvec3<float>(+0, +0, +0), tvec3<float>(+h, +0, +0),
-				tvec3<float>(-h, +h, +0), tvec3<float>(+0, +h, +0), tvec3<float>(+h, +h, +0),
-				tvec3<float>(-h, -h, +h), tvec3<float>(+0, -h, +h), tvec3<float>(+h, -h, +h),
-				tvec3<float>(-h, +0, +h), tvec3<float>(+0, +0, +h), tvec3<float>(+h, +0, +h),
-				tvec3<float>(-h, +h, +h), tvec3<float>(+0, +h, +h), tvec3<float>(+h, +h, +h)
+//		const std::array<tvec3<float>, 27> NEIGHBOUR_OFFSETS = {
+//				tvec3<float>(-h, -h, -h), tvec3<float>(+0, -h, -h), tvec3<float>(+h, -h, -h),
+//				tvec3<float>(-h, +0, -h), tvec3<float>(+0, +0, -h), tvec3<float>(+h, +0, -h),
+//				tvec3<float>(-h, +h, -h), tvec3<float>(+0, +h, -h), tvec3<float>(+h, +h, -h),
+//				tvec3<float>(-h, -h, +0), tvec3<float>(+0, -h, +0), tvec3<float>(+h, -h, +0),
+//				tvec3<float>(-h, +0, +0), tvec3<float>(+0, +0, +0), tvec3<float>(+h, +0, +0),
+//				tvec3<float>(-h, +h, +0), tvec3<float>(+0, +h, +0), tvec3<float>(+h, +h, +0),
+//				tvec3<float>(-h, -h, +h), tvec3<float>(+0, -h, +h), tvec3<float>(+h, -h, +h),
+//				tvec3<float>(-h, +0, +h), tvec3<float>(+0, +0, +h), tvec3<float>(+h, +0, +h),
+//				tvec3<float>(-h, +h, +h), tvec3<float>(+0, +h, +h), tvec3<float>(+h, +h, +h)
+//		};
+
+		const std::array<tvec3<float>, 1> NEIGHBOUR_OFFSETS = {
+				tvec3<float>(0, 0, 0)
 		};
 
 	public:
@@ -732,9 +747,9 @@ namespace ocl {
 
 #ifdef DEBUG
 			std::cout << "Atoms = " << atomsN
-			          << " Extent = " << glm::to_string(minExtent) << " -> " << to_string(extent)
-			          << " GridTable = " << gridTableN
-			          << std::endl;
+					  << " Extent = " << glm::to_string(minExtent) << " -> " << to_string(extent)
+					  << " GridTable = " << gridTableN
+					  << std::endl;
 #endif
 
 			std::vector<uint> hostGridTable(gridTableN);
@@ -752,25 +767,23 @@ namespace ocl {
 			auto query = watch.start("CPU query(" + std::to_string(config.queries.size()) + ")");
 
 
-
-
 			std::vector<fluid::QueryResult<float>> queries;
 			for (const fluid::Query<float> &q : config.queries) {
 				auto scaled = (q.point / config.scale) - minExtent;
 				int N = 0;
 				auto avg = tvec4<float>(0.f);
-				for( tvec3 <float> offset : NEIGHBOUR_OFFSETS){
+				for (tvec3<float> offset : NEIGHBOUR_OFFSETS) {
 					auto r = offset + scaled;
 					size_t zIdx = zCurveGridIndexAtCoordAt(r.x, r.y, r.z);
 					if (zIdx < gridTableN && zIdx + 1 < gridTableN) {
 						for (size_t a = hostGridTable[zIdx]; a < hostGridTable[zIdx + 1]; a++) {
-							if(advected[a].particle.type != fluid::Fluid) continue;
+							if (advected[a].particle.type != fluid::Fluid) continue;
 							N++;
 							avg += clutil::unpackARGB<float>(advected[a].particle.colour);
 						}
 					}
 				}
-				if(N != 0) queries.emplace_back(q.id, q.point, N, clutil::packARGB(avg / N));
+				if (N != 0) queries.emplace_back(q.id, q.point, N, clutil::packARGB(avg / N));
 			}
 			query();
 

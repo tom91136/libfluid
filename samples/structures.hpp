@@ -9,6 +9,13 @@
 
 
 namespace miommf {
+
+	void padOut(const std::string &path, size_t length) {
+		std::ofstream file(path, std::ios::out | std::ios::trunc);
+		std::string s(std::max<size_t>(1024 * 4, length), ' '); // XXX may fail if than 4k
+		file << s;
+	}
+
 	mio::mmap_source createSource(const std::string &path) {
 
 		std::error_code error;
@@ -25,6 +32,7 @@ namespace miommf {
 	}
 
 	mio::mmap_sink createSink(const std::string &path, const size_t length) {
+		padOut(path, length);
 		std::ofstream file(path, std::ios::out | std::ios::trunc);
 		std::string s(std::max<size_t>(1024 * 4, length), ' '); // XXX may fail if than 4k
 		file << s;
@@ -419,6 +427,15 @@ namespace strucures {
 	template<typename N>
 	void readSceneMeta(mio::mmap_source &source, SceneMeta<N> &scene) {
 		mmf::reader::readPacked(source, scene, 0, sceneMetaDef<N>());
+	}
+
+	template<typename N>
+	void writeEmptyScene(mio::mmap_sink &sink, SceneMeta<N> meta) {
+		size_t offset = mmf::writer::writePacked(sink, meta, 0, sceneMetaDef<N>());
+		offset = mmf::writer::writePacked(sink, Header(0), offset, headerDef());
+		offset = mmf::writer::writePacked(sink, Header(0), offset, headerDef());
+		offset = mmf::writer::writePacked(sink, Header(0), offset, headerDef());
+		offset = mmf::writer::writePacked(sink, Header(0), offset, headerDef());
 	}
 
 

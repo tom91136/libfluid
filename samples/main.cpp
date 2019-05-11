@@ -224,6 +224,24 @@ void run() {
 	auto dynamicBodySource = createSource("dynamic_bodies.mmf");
 
 
+	miommf::padOut("scene.mmf", 1024 * 1024 * 8);
+	miommf::padOut("dynamic_bodies.mmf", vec3Type.first * 512 * 1000);
+
+	const auto defaultScene = strucures::SceneMeta<num_t>(
+			false, false,
+			solverIter, 1.5, scaling, 1.f, 9.8f,
+			tvec3<num_t>(0, 0, 0),
+			tvec3<num_t>(1000, 1000, 1000));
+
+	strucures::writeEmptyScene(createSink("scene.mmf",
+	                                      sceneMetaType.first +
+	                                      headerType.first + wellType.first * 1024 +
+	                                      headerType.first + sourceType.first * 1024 +
+	                                      headerType.first + drainType.first * 1024 +
+	                                      headerType.first + queryType.first * 4096
+	), defaultScene);
+
+
 	auto particleSink = createSink("particles.mmf",
 	                               pcount * 10 * particleType.first + headerType.first);
 	auto triangleSink = createSink("triangles.mmf",
@@ -272,11 +290,7 @@ void run() {
 	std::condition_variable flush;
 
 	strucures::Scene<num_t> scene(
-			strucures::SceneMeta<num_t>(
-					false, false,
-					solverIter, 1.5, scaling, 1.f, 9.8f,
-					tvec3<num_t>(0, 0, 0),
-					tvec3<num_t>(1000, 1000, 1000)),
+			defaultScene,
 			{}, {}, {}, {});
 
 	std::atomic_bool ready(false);
@@ -354,15 +368,15 @@ void run() {
 #ifndef DEBUG
 			if (frame % 60 == 0)
 #endif
-			std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
-			          " (waited " << (wait / 1000000.0) << "ms ~ "
-			          << (1000.0 / (wait / 1000000.0)) << "fps)" <<
-			          " Scene=" << (sceneRead / 1000000.0)
-			          << "ms (" << suspendTick << " ticks)" <<
-			          " nTriangle=" << trianglesBuffer.size() <<
-			          " nParticle=" << particlesBuffer.size()
-			          << "(F/O=" << nFluid << "/" << nObstacle << ")"
-			          << std::endl;
+				std::cout << "[" << frame << "]Xfer: " << (xfer / 1000000.0) << "ms" <<
+				          " (waited " << (wait / 1000000.0) << "ms ~ "
+				          << (1000.0 / (wait / 1000000.0)) << "fps)" <<
+				          " Scene=" << (sceneRead / 1000000.0)
+				          << "ms (" << suspendTick << " ticks)" <<
+				          " nTriangle=" << trianglesBuffer.size() <<
+				          " nParticle=" << particlesBuffer.size()
+				          << "(F/O=" << nFluid << "/" << nObstacle << ")"
+				          << std::endl;
 			frame++;
 		}
 	});
@@ -438,11 +452,11 @@ void run() {
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
 		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 		std::cout << "[" << j << "]" <<
-		          " Solver:" << (solve / 1000000.0) << "ms " <<
-		          " RB handle:" << (rb / 1000000.0) << "ms " <<
-		          " nTriangle:" << result.triangles.size() <<
-		          " nParticle:" << particles.size()
-		          << std::endl;
+				  " Solver:" << (solve / 1000000.0) << "ms " <<
+				  " RB handle:" << (rb / 1000000.0) << "ms " <<
+				  " nTriangle:" << result.triangles.size() <<
+				  " nParticle:" << particles.size()
+				  << std::endl;
 #endif
 
 	}
