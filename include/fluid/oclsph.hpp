@@ -305,19 +305,15 @@ namespace ocl {
 
 				tvec3<float> combinedForce = p.mass * config.constantForce;
 				for (const fluid::Well<float> &well : config.wells) {
-					const float distSquared = glm::distance2(well.centre, p.position);
+					const float dist = glm::distance( p.position, well.centre);
 
-//					if(i % 1000 == 0)
-//					std::cout << "!!!!! " << distSquared << std::endl;
-
-//					if (distSquared < (200.f*200.f)) {
-
-						const tvec3<float> rHat = glm::normalize(-well.centre - p.position);
+					if (dist < 75.f) {
+						const tvec3<float> rHat = glm::normalize(well.centre - p.position);
 						const tvec3<float> forceWell = glm::clamp(
-								(rHat * (well.force * p.mass)) / distSquared,
+								(rHat * well.force * p.mass) / (dist * dist),
 								-10.f, 10.f);
 						combinedForce += forceWell;
-//					}
+					}
 				}
 
 				p.velocity = combinedForce * config.dt + p.velocity;
@@ -341,21 +337,28 @@ namespace ocl {
 
 			tvec3<float> minExtent(std::numeric_limits<float>::max());
 			tvec3<float> maxExtent(std::numeric_limits<float>::min());
-#if _OPENMP > 201307
-#pragma omp declare reduction(glmMin: tvec3<float>: omp_out = glm::min(omp_in, omp_out))
-#pragma omp declare reduction(glmMax: tvec3<float>: omp_out = glm::max(omp_in, omp_out))
-#pragma omp parallel for reduction(glmMin:minExtent) reduction(glmMax:maxExtent)
-#endif
-			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
-//				if(advection[i].particle.type != fluid::Fluid) continue;
-				const float3 pStar = advection[i].pStar;
-				minExtent = glm::min(clutil::clToVec3<float>(pStar), minExtent);
-				maxExtent = glm::max(clutil::clToVec3<float>(pStar), maxExtent);
-			}
-
 			const float padding = h * 2;
-			minExtent -= padding;
-			maxExtent += padding;
+
+
+
+//#if _OPENMP > 201307
+//#pragma omp declare reduction(glmMin: tvec3<float>: omp_out = glm::min(omp_in, omp_out))
+//#pragma omp declare reduction(glmMax: tvec3<float>: omp_out = glm::max(omp_in, omp_out))
+//#pragma omp parallel for reduction(glmMin:minExtent) reduction(glmMax:maxExtent)
+//#endif
+//			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
+////				if(advection[i].particle.type != fluid::Fluid) continue;
+//				const float3 pStar = advection[i].pStar;
+//				minExtent = glm::min(clutil::clToVec3<float>(pStar), minExtent);
+//				maxExtent = glm::max(clutil::clToVec3<float>(pStar), maxExtent);
+//			}
+//
+//			minExtent -= padding;
+//			maxExtent += padding;
+
+			minExtent = (config.minBound / config.scale) - padding;
+			maxExtent = (config.maxBound / config.scale) + padding;
+
 
 #pragma omp parallel for
 			for (int i = 0; i < static_cast<int>(advection.size()); ++i) {
@@ -666,7 +669,7 @@ namespace ocl {
 			ClMcConfig mcConfig;
 			mcConfig.isolevel = config.isolevel;
 			mcConfig.sampleResolution = config.resolution;
-			mcConfig.particleSize = 60.f;
+			mcConfig.particleSize = 25.f;
 			mcConfig.particleInfluence = 0.5;
 
 			auto sourceDrain = watch.start("CPU source+drain");
