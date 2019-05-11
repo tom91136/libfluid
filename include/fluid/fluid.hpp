@@ -23,6 +23,10 @@ namespace fluid {
 	struct Query {
 		size_t id;
 		tvec3<N> point;
+
+		friend std::ostream &operator<<(std::ostream &os, const Query &query) {
+			return os << "Query[" << query.id << "](" << glm::to_string(query.point) << ")";
+		}
 	};
 
 
@@ -32,8 +36,17 @@ namespace fluid {
 		tvec3<N> point;
 		size_t neighbours;
 		uint32_t averageColour;
-		QueryResult(size_t id, tvec3<N> point, size_t neighbours, uint32_t averageColour) :
-				point(point), neighbours(neighbours), averageColour(averageColour) {}
+
+		explicit QueryResult(size_t id, tvec3<N> point, size_t neighbours, uint32_t averageColour) :
+				id(id), point(point), neighbours(neighbours), averageColour(averageColour) {}
+
+		friend std::ostream &operator<<(std::ostream &os, const QueryResult &result) {
+			os << "QueryResult[" << result.id << "](" << glm::to_string(result.point) << " = "
+			   << " N: " << result.neighbours
+			   << " avgcolour: " << result.averageColour << ")";
+			return os;
+		}
+
 	};
 
 
@@ -178,7 +191,7 @@ namespace fluid {
 		                const std::vector<fluid::Well<N>> &wells,
 		                const std::vector<fluid::Source<N>> &sources,
 		                const std::vector<fluid::Drain<N>> &drains,
-						const std::vector<fluid::Query<N>> &queries,
+		                const std::vector<fluid::Query<N>> &queries,
 		                const tvec3<N> &min, const tvec3<N> &max)
 				: dt(dt), scale(scale),
 				  resolution(resolution), isolevel(isolevel), iteration(iteration),
@@ -202,7 +215,8 @@ namespace fluid {
 		std::vector<QueryResult<N>> queries{};
 		Result() = default;
 		Result(const std::vector<geometry::MeshTriangle<N>> &triangles,
-		       const std::vector<QueryResult<N>> &queries) : triangles(triangles), queries(queries) {}
+		       const std::vector<QueryResult<N>> &queries) : triangles(triangles),
+		                                                     queries(queries) {}
 	};
 
 	template<typename T, typename N>

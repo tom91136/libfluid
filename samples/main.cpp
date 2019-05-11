@@ -311,6 +311,7 @@ void run() {
 //				for (const auto &x : sceneBuffer.wells) std::cout << x << "\n";
 //				for (const auto &x : sceneBuffer.sources) std::cout << x << "\n";
 //				for (const auto &x : sceneBuffer.drains) std::cout << x << "\n";
+//				for (const auto &x : sceneBuffer.queries) std::cout << x << "\n";
 				while (sceneBuffer.meta.suspend) {
 					suspendTick++;
 					std::this_thread::sleep_for(std::chrono::microseconds(1));
