@@ -112,7 +112,8 @@ cl::Device resolveDeviceVerbose(const std::vector<std::string> &signatures) {
 }
 
 
-void injectRigidBody(std::atomic_long &last, mio::mmap_source &rigidBodySource,
+void injectRigidBody(const fluid::Config<num_t> &config,
+                     std::atomic_long &last, mio::mmap_source &rigidBodySource,
                      std::vector<fluid::Particle<size_t, num_t >> &particles) {
 	auto header = strucures::readHeader(rigidBodySource);
 	if (last.load() != header.first.timestamp) {
@@ -123,12 +124,19 @@ void injectRigidBody(std::atomic_long &last, mio::mmap_source &rigidBodySource,
 		                               [](const auto &x) {
 			                               return x.type == fluid::Type::Obstacle;
 		                               }), particles.end());
+		for (const tvec3<num_t> &v : obstacles) {
+			if (glm::any(glm::lessThan(v, config.minBound)) ||
+			    glm::any(glm::greaterThan(v, config.maxBound)))
+				continue;
+			particles.emplace_back(0, fluid::Type::Obstacle, 1, 0,
+			                       v, tvec3<num_t>(0));
+		}
 
-		std::transform(obstacles.begin(), obstacles.end(), std::back_inserter(particles),
-		               [](const tvec3<num_t> &v) {
-			               return fluid::Particle<size_t, num_t>(0, fluid::Type::Obstacle, 1, 0,
-			                                                     v, tvec3<num_t>(0));
-		               });
+//		std::transform(obstacles.begin(), obstacles.end(), std::back_inserter(particles),
+//		               [](const tvec3<num_t> &v) {
+//			               return fluid::Particle<size_t, num_t>(0, fluid::Type::Obstacle, 1, 0,
+//			                                                     v, tvec3<num_t>(0));
+//		               });
 	}
 }
 
@@ -209,7 +217,7 @@ void run() {
 	std::cout << "Creating mmf sink+source" << std::endl;
 
 	auto sceneSource = createSource("scene.mmf");
-	auto colliderSource = createSource("colliders.mmf");
+//	auto colliderSource = createSource("colliders.mmf");
 
 
 //	auto staticBodySource = createSource("static_bodies.mmf");
@@ -391,8 +399,9 @@ void run() {
 
 		hrc::time_point rbStart = hrc::now();
 //		injectRigidBody(lastStaticBody, staticBodySource, particles);
-		injectRigidBody(lastDynamicBody, dynamicBodySource, particles);
+		injectRigidBody(config, lastDynamicBody, dynamicBodySource, particles);
 		hrc::time_point rbEnd = hrc::now();
+
 
 		const std::vector<fluid::MeshCollider<num_t>> colliders = {
 //				collider,
@@ -423,16 +432,16 @@ void run() {
 		copied = false;
 
 
-#ifdef DEBUG
+//#ifdef DEBUG
 		auto solve = duration_cast<nanoseconds>(solveEnd - solveStart).count();
 		auto rb = duration_cast<nanoseconds>(rbEnd - rbStart).count();
 		std::cout << "[" << j << "]" <<
-				  " Solver:" << (solve / 1000000.0) << "ms " <<
-				  " RB handle:" << (rb / 1000000.0) << "ms " <<
-				  " nTriangle:" << result.triangles.size() <<
-				  " nParticle:" << particles.size()
-				  << std::endl;
-#endif
+		          " Solver:" << (solve / 1000000.0) << "ms " <<
+		          " RB handle:" << (rb / 1000000.0) << "ms " <<
+		          " nTriangle:" << result.triangles.size() <<
+		          " nParticle:" << particles.size()
+		          << std::endl;
+//#endif
 
 	}
 
