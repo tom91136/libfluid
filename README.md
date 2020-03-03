@@ -1,7 +1,11 @@
 libfluid
 ========
 
-Generic fluid simulation solver based on SPH method as described in [Position Based Fluids(ACM TOG 32)](http://mmacklin.com/pbf_sig_preprint.pdf)
+Generic fluid simulation solver based on SPH method as described in [Position Based Fluids(ACM TOG 32)](http://mmacklin.com/pbf_sig_preprint.pdf).
+
+![](a.gif)
+
+![](b.gif)
 
 ## Build dependencies
 

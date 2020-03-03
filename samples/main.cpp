@@ -187,11 +187,11 @@ void run() {
 	using namespace std::chrono;
 	using hrc = high_resolution_clock;
 
-	size_t cores = std::max<size_t>(1, std::thread::hardware_concurrency() / 2);
+	size_t cores = std::max<size_t>(1, 8);
 	omp_set_num_threads(cores);
 	std::cout << "OMP nCores: " << cores << std::endl;
 
-	const size_t pcount = 8 * 1000;
+	const size_t pcount = 64 * 1000;
 	const size_t iter = std::numeric_limits<size_t>::max();
 	const size_t solverIter = 5;
 	const num_t scaling = 1000; // less = less space between particle
@@ -233,13 +233,15 @@ void run() {
 			tvec3<num_t>(0, 0, 0),
 			tvec3<num_t>(1000, 1000, 1000));
 
-	strucures::writeEmptyScene(createSink("scene.mmf",
-	                                      sceneMetaType.first +
-	                                      headerType.first + wellType.first * 1024 +
-	                                      headerType.first + sourceType.first * 1024 +
-	                                      headerType.first + drainType.first * 1024 +
-	                                      headerType.first + queryType.first * 4096
-	), defaultScene);
+
+	auto sink = createSink("scene.mmf",
+	                       sceneMetaType.first +
+	                       headerType.first + wellType.first * 1024 +
+	                       headerType.first + sourceType.first * 1024 +
+	                       headerType.first + drainType.first * 1024 +
+	                       headerType.first + queryType.first * 4096
+	);
+	strucures::writeEmptyScene(sink, defaultScene);
 
 
 	auto particleSink = createSink("particles.mmf",
@@ -415,7 +417,7 @@ void run() {
 
 		hrc::time_point rbStart = hrc::now();
 //		injectRigidBody(lastStaticBody, staticBodySource, particles);
-		injectRigidBody(config, lastDynamicBody, dynamicBodySource, particles);
+//		injectRigidBody(config, lastDynamicBody, dynamicBodySource, particles);
 		hrc::time_point rbEnd = hrc::now();
 
 

@@ -466,9 +466,9 @@ namespace strucures {
 
 		offset = mmf::reader::readPacked(source, header, offset, headerDef());
 		std::vector<fluid::Query<N>> queries(header.entries);
-		for (size_t i = 0; i < header.entries; ++i) {
-			offset = mmf::reader::readPacked(source, queries[i], offset, queryDef<N>());
-		}
+//		for (size_t i = 0; i < header.entries; ++i) {
+//			offset = mmf::reader::readPacked(source, queries[i], offset, queryDef<N>());
+//		}
 
 
 		return Scene<N>(meta, wells, sources, drains, queries);
